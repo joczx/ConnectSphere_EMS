@@ -17,6 +17,7 @@ backend/.pytest_cache/
 backend/.mypy_cache/
 backend/.coverage
 backend/htmlcov/
+.venv/
 
 # Editors and operating systems
 .vscode/
