@@ -5,3 +5,31 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   background-color: #f8fafc;
 }
+
+* { box-sizing: border-box; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 20px max(24px, calc((100% - 1100px)/2)); background: white; border-bottom: 1px solid #e2e8f0; }
+.brand { color: #0f766e; font-weight: 800; font-size: 22px; text-decoration: none; }
+.container { max-width: 1100px; margin: 40px auto; padding: 0 24px; }
+h1 { font-size: 32px; font-weight: 700; color: #0f172a; }
+h2 { font-size: 22px; font-weight: 700; color: #0f172a; }
+p { color: #475569; margin: 10px 0 20px; }
+a { color: #0f766e; }
+.heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 24px; }
+.eyebrow { font-size: 12px; letter-spacing: 2px; font-weight: 700; margin-bottom: 6px; }
+.panel { padding: 28px; border: 1px solid #e2e8f0; background: white; border-radius: 12px; }
+.event-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px; }
+.event-link { text-decoration: none; }
+.event-link:hover { border-color: #0f766e; }
+dl { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 28px; }
+dt { color: #475569; font-size: 14px; margin-bottom: 8px; }
+dd { margin: 0; color: #0f172a; white-space: pre-wrap; overflow-wrap: anywhere; }
+.metadata { font-size: 14px; }
+button { background: #0f766e; color: white; padding: 10px 18px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; font-weight: 600; }
+button.secondary { background: white; border-color: #cbd5e1; color: #334155; }
+button:disabled { opacity: .6; cursor: wait; }
+:focus-visible { outline: 3px solid #14b8a6; outline-offset: 3px; }
+.login-card { max-width: 440px; margin: 12vh auto; }
+label { display: block; margin: 20px 0; color: #334155; }
+input { display: block; width: 100%; border: 1px solid #94a3b8; padding: 12px; border-radius: 6px; margin-top: 8px; }
+.error { color: #b91c1c; }
+@media (max-width: 600px) { dl { grid-template-columns: 1fr; } .login-card { margin: 32px 16px; } .panel { padding: 20px; } }
