@@ -48,21 +48,18 @@ export default function Events({ token, onSignOut }) {
       {state.error && <div role="alert" className="panel error">{state.error} Use Refresh to try again.</div>}
       {data?.events && <section className="event-list" aria-label="Your events">
         {data.events.length === 0 && <div className="panel">No events are available to you yet. Contact your event organiser or coordinator to arrange access.</div>}
-        {data.events.map(item => <Link className="panel event-link" key={item.event_id} to={'/events/' + item.event_id}><h2>{item.event_name}</h2><p>{date(item.starts_at)}</p><span>View event information →</span></Link>)}
+        {data.events.map(item => <Link className="panel event-link" key={item.event_id} to={'/events/' + item.event_id}><h2>{item.event_name}</h2><p>{date(item.start_datetime)}</p><p className="metadata">Status: {item.status || 'Not specified'}</p><span>View event information →</span></Link>)}
       </section>}
       {event && <article className="panel">
-        <h2>{event.event_name}</h2><p className="metadata">Version {event.version} · Last updated {date(event.updated_at)}</p>
+        <h2>{event.event_name}</h2>
         <dl>
-          <Detail label="Purpose" value={event.purpose} />
-          <Detail label="Description" value={event.description} />
-          <Detail label="Start date and time" value={date(event.starts_at)} />
-          <Detail label="End date and time" value={date(event.ends_at)} />
-          <Detail label="Expected attendance" value={event.expected_attendance} />
-          <Detail label="Venue requirements" value={event.venue_requirements} />
-          <Detail label="Accessibility needs" value={event.accessibility_needs} />
-          <Detail label="Equipment requirements" value={event.equipment_requirements} />
-          <Detail label="Registration required" value={event.registration_required == null ? null : event.registration_required ? 'Yes' : 'No'} />
-          {event.registration_required !== false && <Detail label="Registration needs" value={event.registration_needs} />}
+          <Detail label="Status" value={event.status} />
+          <Detail label="Start date and time" value={date(event.start_datetime)} />
+          <Detail label="End date and time" value={date(event.end_datetime)} />
+          <Detail label="Event organiser ID" value={event.event_organiser_id} />
+          <Detail label="Event coordinator ID" value={event.event_coordinator_id} />
+          <Detail label="Technical support ID" value={event.technical_support_id} />
+          <Detail label="Venue staff ID" value={event.venue_staff_id} />
         </dl>
       </article>}
     </main>

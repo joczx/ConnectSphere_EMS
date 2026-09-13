@@ -38,15 +38,15 @@ class EventViewTests(unittest.TestCase):
         response = self.client.get('/api/events', headers=self.headers)
         self.assertEqual(response.json['events'], [{'event_id': EVENT_ID}])
         self.assertEqual(query.call_args.kwargs['token'], 'user-token')
+        self.assertEqual(query.call_args.args[0], '/rest/v1/events?select=event_id,event_name,status,start_datetime,end_datetime&order=start_datetime.asc.nullslast')
 
     @patch('app.routes.events.supabase_request')
-    def test_repeated_reads_return_latest_version_and_all_fields(self, query):
-        event = dict(event_id=EVENT_ID, event_name='Workshop', purpose='Training',
-                     description='Team training', starts_at=None, ends_at=None,
-                     expected_attendance=0, venue_requirements='Classroom',
-                     accessibility_needs='Step-free', equipment_requirements='Projector',
-                     registration_required=False, registration_needs=None, version=1)
-        updated = dict(event, version=2, expected_attendance=50)
+    def test_repeated_reads_return_latest_event_fields(self, query):
+        event = dict(event_id=EVENT_ID, event_name='Workshop', status='planning',
+                     start_datetime=None, end_datetime=None,
+                     event_organiser_id='organiser', event_coordinator_id=None,
+                     technical_support_id=None, venue_staff_id=None)
+        updated = dict(event, status='confirmed')
         query.side_effect = [{'id': 'user'}, [event], {'id': 'user'}, [updated]]
         first = self.client.get('/api/events/' + EVENT_ID, headers=self.headers)
         second = self.client.get('/api/events/' + EVENT_ID, headers=self.headers)
