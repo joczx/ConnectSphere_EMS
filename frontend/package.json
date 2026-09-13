@@ -9,19 +9,20 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
-    "@tailwindcss/postcss": "^4.3.3",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.116.0",
     "@tailwindcss/vite": "^4.3.3",
     "axios": "^1.7.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0",
-    "tailwind": "^4.0.0"
+    "tailwind": "^4.0.0",
+    "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.3.3",
-    "vite": "^5.4.10"
+    "vite": "^8.3.0"
   }
 }
