@@ -1,0 +1,107 @@
+# ConnectSphere EMS — Implemented User Stories
+
+A map from each completed user story to the files that implement it, so you can
+find the relevant code without reading the whole backend.
+
+All work so far is **backend only**. The React frontend has not been wired up to
+any of these endpoints yet.
+
+---
+
+## Shared foundation
+
+These are used by every story below.
+
+- **[backend/app/__init__.py](backend/app/__init__.py)** — Flask app factory. Loads `backend/.env`, enables CORS for the React dev server, and registers the route blueprints.
+- **[backend/app/services/supabase_client.py](backend/app/services/supabase_client.py)** — Builds the shared Supabase client once from `SUPABASE_URL` and `SUPABASE_KEY`, and fails loudly if either is missing.
+- **[backend/app/services/db.py](backend/app/services/db.py)** — Runs Supabase calls and hands database errors to each service's own translator, so error wording stays close to the feature it belongs to.
+- **[backend/app/routes/event_requests.py](backend/app/routes/event_requests.py)** — Every `/api/event-requests` endpoint. Kept thin: parses the body, calls a service, shapes the response.
+- **[backend/app/schemas/event_request.py](backend/app/schemas/event_request.py)** — All validation for event request fields. Imports no Flask or Supabase, so the rules can be unit tested without a database.
+- **[backend/app/services/event_request_service.py](backend/app/services/event_request_service.py)** — The primitives every story builds on: create, fetch, edit, mark submitted, list.
+
+---
+
+## 1. Create and Submit Event Request
+
+> As the Event Organiser, I want to create and submit an event request so that the Event Coordinator can process my event request.
+
+**Endpoints:** `POST /api/event-requests`, `GET /api/event-requests/<id>`
+
+- **[backend/app/schemas/event_request.py](backend/app/schemas/event_request.py)** — `parse_payload()` checks every field's type and range; `find_missing()` enforces the mandatory fields before submission; `check_timing()` rejects an event that ends before it starts or starts in the past.
+- **[backend/app/services/event_request_service.py](backend/app/services/event_request_service.py)** — `create_event_request()` writes the row, sets the status, and stamps `submitted_at`.
+- **[backend/tests/test_event_request_schema.py](backend/tests/test_event_request_schema.py)** — Unit tests, each labelled with the acceptance criterion it covers.
+- **[supabase/002_add_event_request_equipment_and_registration.sql](supabase/002_add_event_request_equipment_and_registration.sql)** — Adds `equipment_requirements` (JSON array) and `registration_needs` (text), which the original table had no columns for.
+
+**Note:** the acceptance criteria say the initial status should be `Pending`, but no such value exists in the `request_status` enum. The code uses `submitted`, matching the Event Status Management story's `Draft → Submitted` transition.
+
+---
+
+## 2. Draft Event Requests
+
+> As an Event Organiser, I want to create and save an incomplete event request so that I can submit an event for processing.
+
+**Endpoints:** `POST /api/event-requests` with `"save_as_draft": true`, `GET /api/event-requests?event_organiser_id=&status=draft`, `PATCH /api/event-requests/<id>`
+
+- **[backend/app/schemas/event_request.py](backend/app/schemas/event_request.py)** — The split between `parse_payload()` (always enforced) and `find_missing()` (only at submission) is what lets a draft be incomplete but never malformed. `_is_cleared()` treats `null` as "empty this field" so an Organiser can undo an earlier entry.
+- **[backend/app/services/event_request_service.py](backend/app/services/event_request_service.py)** — `apply_edit()` writes a partial change and returns what actually differed; `list_event_requests()` filters by organiser and status so drafts stay distinguishable from submitted requests.
+- **[backend/app/services/event_request_workflow.py](backend/app/services/event_request_workflow.py)** — Decides whether an edit is allowed at all based on the request's current state.
+- **[backend/tests/test_event_request_schema.py](backend/tests/test_event_request_schema.py)** — Covers clearing each optional field and confirms a partial edit leaves other fields untouched.
+
+---
+
+## 3. Review and Approve Event Request
+
+> As an Event Coordinator, I want to review submitted event requests so that I can clarify requirements and determine whether the request can proceed.
+
+**Endpoints:** `GET /api/event-requests?status=submitted`, `POST /api/event-requests/<id>/review`, `GET /api/event-requests/<id>/reviews`, `GET /api/notifications?recipient_id=`
+
+- **[backend/app/schemas/event_request_review.py](backend/app/schemas/event_request_review.py)** — Validates the review body, maps each outcome to the resulting status, and writes the notification wording for both parties. A comment is required when rejecting or asking for clarification, optional when approving.
+- **[backend/app/services/event_request_review_service.py](backend/app/services/event_request_review_service.py)** — Records the review, updates the request's status, and triggers the notifications. Refuses to review a draft or an already-decided request.
+- **[backend/app/services/notification_service.py](backend/app/services/notification_service.py)** — Builds and writes notification rows, one per recipient.
+- **[backend/app/routes/notifications.py](backend/app/routes/notifications.py)** — Read-only listing so a user can see what they were notified about.
+- **[backend/tests/test_event_request_review_schema.py](backend/tests/test_event_request_review_schema.py)** — Unit tests for the outcome rules and the comment requirement.
+- **[supabase/003_create_review_and_notification.sql](supabase/003_create_review_and_notification.sql)** — Creates `event_request_review` (append-only audit trail) and `notification`.
+
+**Note:** requesting clarification does not get its own status. The customer confirmed it "can be a sub-state of under_review", so the request stays `under_review` and the latest review row records what was asked.
+
+---
+
+## 4. Amend Event Request
+
+> As an Event Organiser, I want to amend my event request when clarification or changes are requested by the Event Coordinator so that I can provide the required information and proceed with the event planning process.
+
+**Endpoints:** `PATCH /api/event-requests/<id>` (with optional `note`), `POST /api/event-requests/<id>/submit`, `GET /api/event-requests/<id>/amendments`
+
+- **[backend/app/services/event_request_workflow.py](backend/app/services/event_request_workflow.py)** — The lifecycle rules. `is_awaiting_clarification()` derives that state from the latest review rather than a status column; `edit()` and `send_for_review()` dispatch between draft handling and amendment handling so the client keeps using the same two endpoints.
+- **[backend/app/schemas/event_request.py](backend/app/schemas/event_request.py)** — `diff()` records the before and after of each changed field, since the previous value is lost once the row is updated.
+- **[backend/app/services/notification_service.py](backend/app/services/notification_service.py)** — Notifies the Coordinator who asked for clarification that a reply has arrived.
+- **[backend/tests/test_event_request_amendment.py](backend/tests/test_event_request_amendment.py)** — Unit tests for the change record and for separating the Organiser's note from the request fields.
+- **[supabase/004_create_event_request_amendment.sql](supabase/004_create_event_request_amendment.sql)** — Creates `event_request_amendment`, recording who changed what, when, and why.
+
+---
+
+## Known gaps
+
+Carry these into sprint planning; they are not oversights.
+
+- **No authentication.** `event_organiser_id`, `reviewer_id` and `recipient_id` all come from the client, so anyone can act as anyone. Marked `TODO` at each site. Depends on the User Authorisation and Authentication story.
+- **Row Level Security is incomplete.** `users`, `roles`, `user_roles`, `events`, `equipment` and `equipment_request` are still reachable with the publishable key, which is public by design. `users` holds a `password` column. Fix with `alter table <name> enable row level security;` once the team agrees.
+- **No notification on submission.** The Coordinator is not told when a request arrives, because no coordinator is assigned yet. Depends on the Coordinator Assignment story.
+- **Database schema is only partly in the repo.** `supabase/` covers `venues` and everything added during these stories, but `users`, `roles`, `user_roles`, `events`, `equipment` and `equipment_request` were created through the Supabase dashboard and have no migration file.
+- **Frontend is untouched.** No page calls any of these endpoints.
+- **[backend/app/routes/events.py](backend/app/routes/events.py) is an empty placeholder.** The `events` table is separate from `event_request` and nothing uses it yet.
+
+---
+
+## Running it
+
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m pytest tests/     # 94 tests, no database needed
+.venv\Scripts\python run.py               # http://localhost:5000
+```
+
+Requires `backend/.env` with `SUPABASE_URL` and `SUPABASE_KEY`. See
+[backend/.env.example](backend/.env.example).
