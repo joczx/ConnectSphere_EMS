@@ -35,8 +35,8 @@ insert into public.venues (
 select
     'Suntec Singapore Auditorium - Halls 602 to 604', 4200, '039593', '1',
     'Raffles Boulevard', 'Suntec Singapore Convention & Exhibition Centre',
-    'Level 6 - Halls 602 to 604', true, true,
-    'Development assumption: confirm venue-specific accessibility services.',
+    'Level 6 - Halls 602 to 604', false, true,
+    'Development test case: blind-friendly only; not wheelchair-friendly.',
     array['stage', 'sound_system', 'lighting', 'built_in_av', 'wifi', 'catering', 'parking', 'air_conditioning'],
     array['theatre'],
     '{"monday":{"open":"08:00","close":"22:00"},"tuesday":{"open":"08:00","close":"22:00"},"wednesday":{"open":"08:00","close":"22:00"},"thursday":{"open":"08:00","close":"22:00"},"friday":{"open":"08:00","close":"22:00"},"saturday":{"open":"09:00","close":"18:00"},"sunday":{"closed":true}}'::jsonb,
@@ -112,8 +112,8 @@ insert into public.venues (
 )
 select
     'Fairmont Ballroom', 3000, '189560', '80', 'Bras Basah Road', 'Fairmont Singapore',
-    'Fairmont Ballroom', true, true,
-    'Development assumption: confirm venue-specific accessibility services.',
+    'Fairmont Ballroom', false, false,
+    'Development test case: neither wheelchair-friendly nor blind-friendly.',
     array['stage', 'audio_visual', 'wifi', 'catering', 'parking', 'air_conditioning'],
     array['theatre', 'classroom', 'banquet', 'cabaret', 'cocktail'],
     '{"monday":{"open":"08:00","close":"23:00"},"tuesday":{"open":"08:00","close":"23:00"},"wednesday":{"open":"08:00","close":"23:00"},"thursday":{"open":"08:00","close":"23:00"},"friday":{"open":"08:00","close":"23:00"},"saturday":{"open":"09:00","close":"23:00"},"sunday":{"open":"09:00","close":"20:00"}}'::jsonb,
