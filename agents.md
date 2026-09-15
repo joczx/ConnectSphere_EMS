@@ -3,8 +3,9 @@
 A map from each completed user story to the files that implement it, so you can
 find the relevant code without reading the whole backend.
 
-All work so far is **backend only**. The React frontend has not been wired up to
-any of these endpoints yet.
+Most implemented user-story work is currently in the backend. The frontend now
+has a small authenticated home-page launcher, documented below, but its app tiles
+are not yet wired to feature pages.
 
 ---
 
@@ -88,7 +89,8 @@ Carry these into sprint planning; they are not oversights.
 - **Row Level Security is incomplete.** `users`, `roles`, `user_roles`, `events`, `equipment` and `equipment_request` are still reachable with the publishable key, which is public by design. `users` holds a `password` column. Fix with `alter table <name> enable row level security;` once the team agrees.
 - **No notification on submission.** The Coordinator is not told when a request arrives, because no coordinator is assigned yet. Depends on the Coordinator Assignment story.
 - **Database schema is only partly in the repo.** `supabase/` covers `venues` and everything added during these stories, but `users`, `roles`, `user_roles`, `events`, `equipment` and `equipment_request` were created through the Supabase dashboard and have no migration file.
-- **Frontend is untouched.** No page calls any of these endpoints.
+- **Frontend feature integration is incomplete.** The home launcher exists, but
+  its tiles intentionally return to the home page until feature pages are ready.
 - **[backend/app/routes/events.py](backend/app/routes/events.py) is an empty placeholder.** The `events` table is separate from `event_request` and nothing uses it yet.
 
 ---
@@ -105,3 +107,51 @@ python -m venv .venv
 
 Requires `backend/.env` with `SUPABASE_URL` and `SUPABASE_KEY`. See
 [backend/.env.example](backend/.env.example).
+
+---
+
+## Frontend Home page
+
+The authenticated home page is an app launcher. It deliberately contains no
+feature implementation, so other developers can build their pages independently.
+All unfinished tiles currently link to `/home`.
+
+### Files and purpose
+
+- **[frontend/src/pages/Home.jsx](frontend/src/pages/Home.jsx)** — Composes the
+  navbar, page heading and application grid. Keep feature-specific logic out of
+  this file.
+- **[frontend/src/components/Navbar.jsx](frontend/src/components/Navbar.jsx)** —
+  Reusable top navigation containing the ConnectSphere home link and account menu.
+- **[frontend/src/components/AccountMenu.jsx](frontend/src/components/AccountMenu.jsx)** —
+  Reusable account control. It currently shows signed-in state and sign out.
+- **[frontend/src/components/AppGrid.jsx](frontend/src/components/AppGrid.jsx)** —
+  Reusable grid that converts app configuration entries into tiles.
+- **[frontend/src/components/AppTile.jsx](frontend/src/components/AppTile.jsx)** —
+  Reusable tile displaying an icon with its app name underneath.
+- **[frontend/src/config/apps.js](frontend/src/config/apps.js)** — The single list
+  of home-page applications. Tiles should be added here, not hard-coded in
+  `Home.jsx` or `AppGrid.jsx`.
+- **[frontend/src/index.css](frontend/src/index.css)** — Shared visual tokens and
+  home-page styles. Change the `--cs-*` variables to update the common colours,
+  typography, borders and corner radii.
+
+### Adding a new tile
+
+Add one object to `HOME_APPS` in `frontend/src/config/apps.js`:
+
+```js
+{
+  id: 'equipment',
+  label: 'Equipment',
+  description: 'Open Equipment',
+  path: '/home',
+  icon: '🖥️',
+  roles: [],
+}
+```
+
+`id` must be unique. `AppGrid` renders the new entry automatically. Keep `path`
+as `/home` while the feature is unfinished; change it to the registered route
+when the responsible developer completes that page. `roles` is reserved for
+future role-based filtering; backend authorization must still enforce access.
