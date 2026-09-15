@@ -6,6 +6,7 @@ preferences and delivery channels belong to the Notification System story.
 
 from flask import Blueprint, jsonify, request
 
+from app.schemas.event_request import clean_user_id
 from app.services import notification_service
 from app.services.event_request_service import EventRequestError
 from app.services.supabase_client import get_supabase
@@ -21,12 +22,17 @@ def handle_error(error):
 @notifications_bp.get("")
 def index():
     """Return a user's notifications, newest first."""
-    # TODO: take the recipient from the authenticated session once the User
-    # Authorisation story lands, rather than trusting a query parameter.
-    recipient_id = request.args.get("recipient_id", type=int)
+    # TODO: take the recipient from the authenticated Supabase session rather
+    # than trusting a query parameter.
+    raw_recipient_id = request.args.get("recipient_id")
+
+    if raw_recipient_id is None:
+        raise EventRequestError("A recipient is required to list notifications.")
+
+    recipient_id = clean_user_id(raw_recipient_id)
 
     if recipient_id is None:
-        raise EventRequestError("A recipient is required to list notifications.")
+        raise EventRequestError("recipient_id must be a user id (a UUID).")
 
     unread_only = request.args.get("unread", "").lower() in {"1", "true", "yes"}
 

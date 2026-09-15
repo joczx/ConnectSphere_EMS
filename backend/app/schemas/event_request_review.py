@@ -53,9 +53,11 @@ def parse_payload(payload):
 
     record = {}
 
-    reviewer_id = payload.get("reviewer_id")
-    if isinstance(reviewer_id, bool) or not isinstance(reviewer_id, int):
-        errors["reviewer_id"] = "The reviewing Event Coordinator is required."
+    reviewer_id = request_schema.clean_user_id(payload.get("reviewer_id"))
+    if reviewer_id is None:
+        errors["reviewer_id"] = (
+            "The reviewing Event Coordinator is required, as a user id (a UUID)."
+        )
     else:
         record["reviewer_id"] = reviewer_id
 
