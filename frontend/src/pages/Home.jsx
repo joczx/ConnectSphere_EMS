@@ -1,13 +1,17 @@
-export default function Home() {
-  return (
-    <main>
-      <h1 className="text-3xl font-bold text-slate-900">
-        Dashboard
-      </h1>
+import Navbar from '../components/Navbar';
+import AppGrid from '../components/AppGrid';
+import { HOME_APPS } from '../config/apps';
 
-      <p className="mt-2 text-sm text-slate-500">
-        Welcome to the ConnectSphere Portal.
-      </p>
-    </main>
+export default function Home({ onSignOut }) {
+  return (
+    <div className="home-page">
+      <Navbar onSignOut={onSignOut} />
+
+      <main className="home-content">
+        <h1>ConnectSphere applications</h1>
+        <p>Select an application to continue.</p>
+        <AppGrid apps={HOME_APPS} />
+      </main>
+    </div>
   );
 }

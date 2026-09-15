@@ -19,7 +19,7 @@
     "tailwind": "^4.0.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^5.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.3.3",
