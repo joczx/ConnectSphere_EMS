@@ -13,8 +13,9 @@ create table if not exists public.event_request_amendment (
     event_request_id bigint not null
         references public.event_request(event_request_id) on delete cascade,
 
-    -- The Event Organiser who made the change.
-    amended_by bigint not null references public.users(user_id),
+    -- The Event Organiser who made the change. Users come from Supabase Auth,
+    -- so this is a UUID.
+    amended_by uuid not null references public.users(user_id),
 
     -- What actually changed, as {"field": {"from": old, "to": new}}. This is
     -- the "records the updated information" half of the requirement: the

@@ -2,6 +2,7 @@
 
 from flask import Blueprint, jsonify, request
 
+from app.schemas.event_request import clean_user_id
 from app.schemas import event_request_review as review_schema
 from app.services.event_request_review_service import (
     list_reviews,
@@ -67,9 +68,18 @@ def index():
     Filter with ?status=draft to show only drafts, which is what keeps them
     distinguishable from requests already submitted for review.
     """
-    # TODO: take the organiser from the authenticated session once the User
-    # Authorisation story lands, rather than trusting a query parameter.
-    organiser_id = request.args.get("event_organiser_id", type=int)
+    # TODO: take the organiser from the authenticated Supabase session rather
+    # than trusting a query parameter.
+    raw_organiser_id = request.args.get("event_organiser_id")
+    organiser_id = None
+
+    if raw_organiser_id is not None:
+        organiser_id = clean_user_id(raw_organiser_id)
+        if organiser_id is None:
+            raise EventRequestError(
+                "event_organiser_id must be a user id (a UUID)."
+            )
+
     status = request.args.get("status")
 
     rows = list_event_requests(organiser_id, status)

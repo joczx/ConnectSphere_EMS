@@ -13,13 +13,16 @@ from app.schemas import event_request as schema
 
 FUTURE = datetime.now(timezone.utc) + timedelta(days=30)
 
+# Users are managed by Supabase Auth, so ids are UUIDs.
+ORGANISER = "8c2d7e15-4b93-4a06-8f21-6e0b3d9a7c54"
+
 
 def valid_payload(**overrides):
     payload = {
         "event_name": "Orientation Night",
         "purpose": "Welcome incoming students",
         "description": "An evening of introductions and campus tours.",
-        "event_organiser_id": 1,
+        "event_organiser_id": ORGANISER,
         "start_datetime": FUTURE.isoformat(),
         "end_datetime": (FUTURE + timedelta(hours=3)).isoformat(),
         "capacity_needed": 120,
@@ -65,6 +68,30 @@ def test_a_blank_mandatory_field_counts_as_missing():
     record, _ = schema.parse_payload(valid_payload(event_name="   "))
 
     assert "event_name" in schema.find_missing(record)
+
+
+# Users are managed by Supabase Auth, so user_id is a UUID, not a number.
+def test_an_organiser_id_must_be_a_uuid():
+    _, errors = schema.parse_payload(valid_payload(event_organiser_id=1))
+
+    assert "event_organiser_id" in errors
+    assert "UUID" in errors["event_organiser_id"]
+
+
+def test_an_organiser_id_that_is_not_a_valid_uuid_is_rejected():
+    _, errors = schema.parse_payload(valid_payload(event_organiser_id="not-a-uuid"))
+
+    assert "event_organiser_id" in errors
+
+
+def test_an_organiser_id_is_normalised_to_canonical_form():
+    """Upper case and braces are accepted spellings of the same UUID."""
+    record, errors = schema.parse_payload(
+        valid_payload(event_organiser_id=ORGANISER.upper())
+    )
+
+    assert errors == {}
+    assert record["event_organiser_id"] == ORGANISER
 
 
 def test_the_organiser_is_required_before_submitting():

@@ -7,6 +7,7 @@ Column names and enum values mirror the public.event_request table in
 Supabase.
 """
 
+import uuid
 from datetime import datetime, timezone
 
 TABLE_NAME = "event_request"
@@ -107,9 +108,11 @@ def parse_payload(payload):
                 errors[field] = f"{_LABELS[field]} must be text."
 
     if "event_organiser_id" in payload:
-        organiser_id = _clean_int(payload["event_organiser_id"])
+        organiser_id = clean_user_id(payload["event_organiser_id"])
         if organiser_id is None:
-            errors["event_organiser_id"] = "Event organiser must be a user id."
+            errors["event_organiser_id"] = (
+                "Event organiser must be a user id (a UUID)."
+            )
         else:
             record["event_organiser_id"] = organiser_id
 
@@ -239,6 +242,22 @@ def check_timing(record, now=None):
         )
 
     return errors
+
+
+def clean_user_id(value):
+    """Return a canonical user id string, or None if it is not a valid one.
+
+    Users are managed by Supabase Auth, so a user id is a UUID rather than a
+    number. Normalising here means a caller may send any accepted UUID spelling
+    (upper case, or wrapped in braces) and the stored value is still canonical.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+
+    try:
+        return str(uuid.UUID(value.strip()))
+    except ValueError:
+        return None
 
 
 def _is_cleared(value):

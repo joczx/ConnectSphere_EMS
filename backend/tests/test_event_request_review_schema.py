@@ -9,27 +9,30 @@ import pytest
 from app.schemas import event_request as request_schema
 from app.schemas import event_request_review as review
 
+# Users are managed by Supabase Auth, so ids are UUIDs.
+COORDINATOR = "3f1b9c64-7a2e-4d51-9b0f-2c8e5a6d4f10"
+
 
 # AC: The Event Coordinator can approve, reject, or request clarification.
 @pytest.mark.parametrize("outcome", sorted(review.OUTCOMES))
 def test_each_outcome_is_accepted(outcome):
     record, errors = review.parse_payload(
-        {"reviewer_id": 7, "outcome": outcome, "comments": "Looks reasonable."}
+        {"reviewer_id": COORDINATOR, "outcome": outcome, "comments": "Looks reasonable."}
     )
 
     assert errors == {}
     assert record["outcome"] == outcome
-    assert record["reviewer_id"] == 7
+    assert record["reviewer_id"] == COORDINATOR
 
 
 def test_an_unknown_outcome_is_rejected():
-    _, errors = review.parse_payload({"reviewer_id": 7, "outcome": "maybe"})
+    _, errors = review.parse_payload({"reviewer_id": COORDINATOR, "outcome": "maybe"})
 
     assert "outcome" in errors
 
 
 def test_an_outcome_is_required():
-    _, errors = review.parse_payload({"reviewer_id": 7})
+    _, errors = review.parse_payload({"reviewer_id": COORDINATOR})
 
     assert "outcome" in errors
 
@@ -49,7 +52,7 @@ def test_the_reviewer_must_be_a_user_id():
 # AC: The Event Coordinator can add comments along with the outcome.
 def test_comments_are_kept_with_the_outcome():
     record, errors = review.parse_payload(
-        {"reviewer_id": 7, "outcome": "approved", "comments": "  Approved for Hall A. "}
+        {"reviewer_id": COORDINATOR, "outcome": "approved", "comments": "  Approved for Hall A. "}
     )
 
     assert errors == {}
@@ -57,7 +60,7 @@ def test_comments_are_kept_with_the_outcome():
 
 
 def test_approving_without_a_comment_is_allowed():
-    record, errors = review.parse_payload({"reviewer_id": 7, "outcome": "approved"})
+    record, errors = review.parse_payload({"reviewer_id": COORDINATOR, "outcome": "approved"})
 
     assert errors == {}
     assert record["comments"] is None
@@ -66,7 +69,7 @@ def test_approving_without_a_comment_is_allowed():
 @pytest.mark.parametrize("outcome", sorted(review.OUTCOMES_NEEDING_COMMENTS))
 def test_a_reason_is_required_when_not_approving(outcome):
     """An Organiser told "rejected" with no reason has nothing to act on."""
-    _, errors = review.parse_payload({"reviewer_id": 7, "outcome": outcome})
+    _, errors = review.parse_payload({"reviewer_id": COORDINATOR, "outcome": outcome})
 
     assert "comments" in errors
 
@@ -74,7 +77,7 @@ def test_a_reason_is_required_when_not_approving(outcome):
 @pytest.mark.parametrize("outcome", sorted(review.OUTCOMES_NEEDING_COMMENTS))
 def test_a_blank_reason_does_not_count(outcome):
     _, errors = review.parse_payload(
-        {"reviewer_id": 7, "outcome": outcome, "comments": "   "}
+        {"reviewer_id": COORDINATOR, "outcome": outcome, "comments": "   "}
     )
 
     assert "comments" in errors
@@ -82,7 +85,7 @@ def test_a_blank_reason_does_not_count(outcome):
 
 def test_comments_must_be_text():
     _, errors = review.parse_payload(
-        {"reviewer_id": 7, "outcome": "approved", "comments": 42}
+        {"reviewer_id": COORDINATOR, "outcome": "approved", "comments": 42}
     )
 
     assert "comments" in errors
@@ -90,7 +93,7 @@ def test_comments_must_be_text():
 
 def test_unknown_fields_are_rejected():
     _, errors = review.parse_payload(
-        {"reviewer_id": 7, "outcome": "approved", "decision": "yes"}
+        {"reviewer_id": COORDINATOR, "outcome": "approved", "decision": "yes"}
     )
 
     assert "_body" in errors
