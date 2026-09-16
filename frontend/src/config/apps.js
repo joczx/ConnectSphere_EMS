@@ -22,8 +22,16 @@ export const HOME_APPS = [
     id: 'event-requests',
     label: 'Event Requests',
     description: 'Open Event Requests',
-    path: '/home',
+    path: '/event-requests',
     icon: '📝',
+    roles: [],
+  },
+  {
+    id: 'review-event-requests',
+    label: 'Review Event Requests',
+    description: 'Open Review Event Requests',
+    path: '/review-event-requests',
+    icon: '📋',
     roles: [],
   },
   {

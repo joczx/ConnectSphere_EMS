@@ -11,6 +11,7 @@ from app.services.event_request_review_service import (
 from app.services.event_request_service import (
     EventRequestError,
     create_event_request,
+    delete_draft,
     get_event_request,
     list_event_requests,
 )
@@ -115,6 +116,14 @@ def edit(event_request_id):
         body["amendment"] = amendment
 
     return jsonify(body)
+
+
+@event_requests_bp.delete("/<int:event_request_id>")
+def delete(event_request_id):
+    """Delete an unsubmitted draft."""
+    delete_draft(event_request_id)
+
+    return jsonify({"message": "Draft event request deleted."})
 
 
 @event_requests_bp.get("/<int:event_request_id>")

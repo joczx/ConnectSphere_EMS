@@ -44,8 +44,6 @@ def create_event_request(payload, submit=True):
 
     # The database requires these columns, so send an explicit value rather
     # than relying on whatever the caller happened to include.
-    record.setdefault("required_facilities", [])
-    record.setdefault("equipment_requirements", [])
     record.setdefault("need_wheelchair_accessibility", False)
     record.setdefault("need_blind_accessibility", False)
 
@@ -160,6 +158,30 @@ def require_event_request(event_request_id):
         )
 
     return existing
+
+
+def delete_draft(event_request_id):
+    """Delete a draft. Anything submitted is part of the record and is kept."""
+    existing = require_event_request(event_request_id)
+    not_a_draft = EventRequestError(
+        f"Only a draft can be deleted. This request has been {existing.get('status')}.",
+        status_code=409,
+    )
+
+    if existing.get("status") != schema.STATUS_DRAFT:
+        raise not_a_draft
+
+    # Filtering on status too means a request submitted in the meantime is not deleted.
+    rows = _execute(
+        lambda table: table.delete()
+        .eq("event_request_id", event_request_id)
+        .eq("status", schema.STATUS_DRAFT)
+        .execute(),
+        action="delete the draft",
+    )
+
+    if not rows:
+        raise not_a_draft
 
 
 def list_event_requests(event_organiser_id=None, status=None):
