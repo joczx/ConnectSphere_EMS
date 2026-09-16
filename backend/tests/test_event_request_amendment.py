@@ -1,4 +1,4 @@
-"""Unit tests for amending an event request after a clarification request.
+"""Unit tests for amending an event request after it is sent back to the Organiser.
 
 Traces to the "Amend Event Request" user story. These tests do not touch
 Supabase.
@@ -7,9 +7,8 @@ Supabase.
 import pytest
 
 from app.schemas import event_request as schema
-from app.schemas import event_request_review as review_schema
 from app.services.event_request_service import EventRequestError
-from app.services.event_request_workflow import _split_note
+from app.services.event_request_workflow import _split_note, can_amend
 
 
 # AC: The system records the updated information and the amendment.
@@ -83,18 +82,10 @@ def test_splitting_a_note_does_not_mutate_the_caller_s_payload():
     assert original == {"capacity_needed": 150, "note": "Reduced."}
 
 
-# AC: amending is only possible when clarification was requested.
-def test_clarification_is_the_outcome_that_reopens_a_request():
-    """Approval and rejection are final; only clarification invites a reply."""
-    assert review_schema.OUTCOME_TO_STATUS[
-        review_schema.OUTCOME_CLARIFICATION
-    ] == schema.STATUS_UNDER_REVIEW
-
-    assert (
-        review_schema.OUTCOME_TO_STATUS[review_schema.OUTCOME_APPROVED]
-        == schema.STATUS_APPROVED
-    )
-    assert (
-        review_schema.OUTCOME_TO_STATUS[review_schema.OUTCOME_REJECTED]
-        == schema.STATUS_REJECTED
-    )
+# AC: a rejected request can be amended and resubmitted; approval is final.
+@pytest.mark.parametrize("status, allowed", [
+    ("rejected", True), ("approved", False), ("submitted", False), ("draft", False),
+])
+def test_only_a_request_sent_back_to_the_organiser_can_be_amended(status, allowed):
+    """The customer confirmed rejection "is not necessarily final"."""
+    assert can_amend({"event_request_id": 1, "status": status}) is allowed

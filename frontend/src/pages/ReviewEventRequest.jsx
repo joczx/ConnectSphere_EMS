@@ -13,7 +13,10 @@ export default function ReviewEventRequest({ token, onSignOut }) {
   const [state, setState] = useState({ loading: true });
   useEffect(() => {
     (async () => {
-      try { setState({ request: await api('/' + requestId, token) }); }
+      try {
+        const [request, { reviews }] = await Promise.all([api('/' + requestId, token), api(`/${requestId}/reviews`, token)]);
+        setState({ request, reviews });
+      }
       catch (err) { setState({ error: err.message || 'Unable to load this event request.' }); }
     })();
   }, [requestId, token, location.key]);
@@ -33,6 +36,8 @@ export default function ReviewEventRequest({ token, onSignOut }) {
   }
 
   const request = state.request;
+  const errorBox = state.error && <div role="alert" className="panel error">{state.error}
+    {state.details && <ul>{Object.values(state.details).map(message => <li key={message}>{message}</li>)}</ul>}</div>;
   return <>
     <Navbar onSignOut={onSignOut} />
     <main className="container">
@@ -40,8 +45,7 @@ export default function ReviewEventRequest({ token, onSignOut }) {
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{request?.event_name || 'Event request'}</h1></div></div>
       {location.state?.message && <p role="status" className="panel">{location.state.message}</p>}
       {state.loading && <p role="status">Loading event request…</p>}
-      {state.error && <div role="alert" className="panel error">{state.error}
-        {state.details && <ul>{Object.values(state.details).map(message => <li key={message}>{message}</li>)}</ul>}</div>}
+      {!request && errorBox}
       {request && <article className="panel"><dl>{[
         ['Status', humanise(request.status)],
         ['Submitted', when(request.submitted_at)],
@@ -57,8 +61,12 @@ export default function ReviewEventRequest({ token, onSignOut }) {
         ['Accessibility for blind attendees needed', request.need_blind_accessibility ? 'Yes' : 'No'],
         ['Registration needs', request.registration_needs],
       ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || 'Not specified'}</dd></div>)}</dl></article>}
+      {state.reviews?.length > 0 && <section className="panel"><h2>Review history</h2><dl>
+        {state.reviews.map(review => <div key={review.review_id}><dt>{humanise(review.outcome)} on {when(review.created_at)}</dt><dd>{review.comments || 'No remarks'}</dd></div>)}
+      </dl></section>}
       {['submitted', 'under_review'].includes(request?.status) && <form className="panel" onSubmit={review}>
         <fieldset disabled={state.busy}>
+          {errorBox}
           <label>Remarks (required when rejecting)<textarea name="comments" rows="4" /></label>
           <div className="heading">
             <button type="submit" value="rejected" className="secondary">Reject</button>

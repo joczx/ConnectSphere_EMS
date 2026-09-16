@@ -26,7 +26,7 @@ export default function EventRequests({ token, onSignOut }) {
       <Link className="panel event-link" to={'/event-requests/' + item.event_request_id}>
         <h2>{item.event_name || 'Untitled request'}</h2>
         <p className="metadata">Status: {humanise(item.status)}</p>
-        <span>{item.status === 'draft' ? 'Continue editing →' : 'View request →'}</span>
+        <span>{item.status === 'draft' ? 'Continue editing →' : item.status === 'rejected' ? 'Amend and resubmit →' : 'View request →'}</span>
       </Link>
       {item.status === 'draft' && <button className="delete-draft" title="Delete draft" aria-label={`Delete draft ${item.event_name || 'Untitled request'}`} onClick={() => remove(item)}>−</button>}
     </div>)}</div>
@@ -39,7 +39,9 @@ export default function EventRequests({ token, onSignOut }) {
       {state.loading && <p role="status">Loading your event requests…</p>}
       {state.error && <div role="alert" className="panel error">{state.error}</div>}
       {section('Drafts', requests.filter(item => item.status === 'draft'))}
-      {section('Submitted', requests.filter(item => item.status !== 'draft'))}
+      {section('Submitted', requests.filter(item => ['submitted', 'under_review'].includes(item.status)))}
+      {section('Approved', requests.filter(item => item.status === 'approved'))}
+      {section('Rejected', requests.filter(item => item.status === 'rejected'))}
     </main>
   </>;
 }

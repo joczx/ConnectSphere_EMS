@@ -25,7 +25,11 @@ export default function EventRequest({ token, onSignOut }) {
   useEffect(() => {
     if (isNew) return setState({});
     (async () => {
-      try { setState({ request: await api('/' + requestId, token) }); }
+      try {
+        const request = await api('/' + requestId, token);
+        // A rejected request shows the Coordinator's remarks, so the Organiser knows what to amend.
+        setState({ request, remarks: request.status === 'rejected' && (await api(`/${requestId}/reviews`, token)).reviews[0]?.comments });
+      }
       catch (err) { setState({ error: err.message || 'Unable to load this event request.' }); }
     })();
   }, [requestId, token, isNew, location.key]);
@@ -56,7 +60,8 @@ export default function EventRequest({ token, onSignOut }) {
 
   const request = state.request || {};
   const value = (name) => request[name] ?? '';
-  const editable = isNew || request.status === 'draft';
+  const rejected = request.status === 'rejected';
+  const editable = isNew || request.status === 'draft' || rejected;
   return <>
     <Navbar onSignOut={onSignOut} />
     <main className="container">
@@ -64,6 +69,7 @@ export default function EventRequest({ token, onSignOut }) {
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{isNew ? 'New event request' : request.event_name || 'Event request'}</h1></div></div>
       {request.status && <p className="metadata">Status: {humanise(request.status)}</p>}
       {location.state?.message && <p role="status" className="panel">{location.state.message}</p>}
+      {state.remarks && <div className="panel"><p className="eyebrow">COORDINATOR REMARKS</p><p>{state.remarks}</p></div>}
       {state.loading && <p role="status">Loading event request…</p>}
       {state.error && <div role="alert" className="panel error">{state.error}
         {state.details && <ul>{Object.values(state.details).map(message => <li key={message}>{message}</li>)}</ul>}</div>}
@@ -86,8 +92,8 @@ export default function EventRequest({ token, onSignOut }) {
           <label>Equipment requirements (one per line: type, quantity, notes — or write "none")<textarea name="equipment_requirements" rows="3" required placeholder="projector, 2, HDMI input" defaultValue={toLines(request.equipment_requirements)} /></label>
           <label>Registration needs (write "none" if not needed)<textarea name="registration_needs" rows="3" required defaultValue={value('registration_needs')} /></label>
           {editable && <div className="heading">
-            <button type="submit" value="draft" className="secondary" formNoValidate>{state.busy ? 'Saving…' : 'Save draft'}</button>
-            <button type="submit" value="submit">Submit request</button>
+            <button type="submit" value="draft" className="secondary" formNoValidate>{state.busy ? 'Saving…' : rejected ? 'Save changes' : 'Save draft'}</button>
+            <button type="submit" value="submit">{rejected ? 'Resubmit request' : 'Submit request'}</button>
           </div>}
         </fieldset>
       </form>}

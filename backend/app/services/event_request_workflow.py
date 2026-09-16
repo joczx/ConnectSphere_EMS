@@ -1,7 +1,8 @@
 """Editing and submitting an event request, wherever it is in its lifecycle.
 
-A request can be worked on at two points: while it is still a draft, and after
-an Event Coordinator has asked the Organiser for clarification. Everywhere
+A request can be worked on while it is still a draft, and after an Event
+Coordinator sends it back, either by asking for clarification or by rejecting
+it (the customer confirmed rejection "is not necessarily final"). Everywhere
 else it is read only, because the customer was explicit that an Organiser
 "cannot directly edit after submission; must request via Coordinator".
 
@@ -37,7 +38,7 @@ def edit(event_request_id, payload):
         row, _ = requests.apply_edit(existing, payload)
         return row, None
 
-    if not is_awaiting_clarification(existing):
+    if not can_amend(existing):
         raise EventRequestError(_why_not_editable(existing), status_code=409)
 
     row, changes = requests.apply_edit(existing, payload)
@@ -53,7 +54,7 @@ def send_for_review(event_request_id):
 
     is_resubmission = status != schema.STATUS_DRAFT
 
-    if is_resubmission and not is_awaiting_clarification(existing):
+    if is_resubmission and not can_amend(existing):
         raise EventRequestError(_why_not_submittable(existing), status_code=409)
 
     errors = requests.find_blocking_errors(existing)
@@ -69,6 +70,15 @@ def send_for_review(event_request_id):
     notified = _notify_resubmission(row) if is_resubmission else []
 
     return row, is_resubmission, notified
+
+
+def can_amend(event_request):
+    """True when a Coordinator has sent the request back to the Organiser.
+
+    The status stays "rejected" while the Organiser amends it, and only becomes
+    "submitted" again on resubmission.
+    """
+    return event_request.get("status") == schema.STATUS_REJECTED or is_awaiting_clarification(event_request)
 
 
 def is_awaiting_clarification(event_request):
@@ -133,7 +143,7 @@ def _record_amendment(existing, changes, note):
 
 
 def _notify_resubmission(event_request):
-    """Tell the Coordinator who asked for clarification that a reply has arrived.
+    """Tell the Coordinator who sent the request back that a reply has arrived.
 
     Best effort, as elsewhere: the resubmission is already recorded, so a
     failed notification is logged rather than raised.
@@ -143,7 +153,7 @@ def _notify_resubmission(event_request):
 
     recipients = []
     for review in reviews.list_reviews(event_request["event_request_id"]):
-        if review["outcome"] == review_schema.OUTCOME_CLARIFICATION:
+        if review["outcome"] in (review_schema.OUTCOME_CLARIFICATION, review_schema.OUTCOME_REJECTED):
             recipients.append(review["reviewer_id"])
 
     assigned = event_request.get("event_coordinator_id")
