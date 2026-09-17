@@ -10,6 +10,7 @@ from app.routes.events import events
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 
 from app.routes.event_requests import event_requests_bp  # noqa: E402
+from app.routes.login import login_bp  # noqa: E402
 from app.routes.notifications import notifications_bp  # noqa: E402
 
 
@@ -21,6 +22,7 @@ def create_app():
     # Allow requests from the React frontend
     CORS(app, origins=["http://localhost:5173"])
 
+    app.register_blueprint(login_bp)
     app.register_blueprint(event_requests_bp)
     app.register_blueprint(notifications_bp)
 
