@@ -14,7 +14,7 @@ export const HOME_APPS = [
     id: 'events',
     label: 'Events',
     description: 'Open Events',
-    path: '/home',
+    path: '/events',
     icon: '📅',
     roles: [],
   },

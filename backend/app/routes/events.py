@@ -17,17 +17,6 @@ def store_error(error):
     return jsonify(error=message), error.status
 
 
-@events.post('/login')
-def login():
-    body = request.get_json(silent=True) or {}
-    if not isinstance(body, dict) or not isinstance(body.get('email'), str) or not isinstance(body.get('password'), str):
-        return jsonify(error='Email and password are required.'), 400
-    result = supabase_request('/auth/v1/token?grant_type=password', payload={
-        'email': body['email'], 'password': body['password'],
-    })
-    return jsonify(access_token=result['access_token'])
-
-
 def authenticated_token():
     scheme, _, token = request.headers.get('Authorization', '').partition(' ')
     if scheme.lower() != 'bearer' or not token.strip():
@@ -49,7 +38,7 @@ def list_events():
 def view_event(event_id):
     token = authenticated_token()
     try:
-        event_id = str(UUID(event_id))
+        event_id = int(event_id)
     except ValueError:
         return jsonify(error='Event not found or access unavailable.'), 404
     rows = supabase_request(f'/rest/v1/events?select=*&event_id=eq.{event_id}', token=token)
