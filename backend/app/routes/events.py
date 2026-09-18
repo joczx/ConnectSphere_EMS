@@ -38,7 +38,7 @@ def list_events():
 def view_event(event_id):
     token = authenticated_token()
     try:
-        event_id = str(UUID(event_id))
+        event_id = int(event_id)
     except ValueError:
         return jsonify(error='Event not found or access unavailable.'), 404
     rows = supabase_request(f'/rest/v1/events?select=*&event_id=eq.{event_id}', token=token)

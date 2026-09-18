@@ -1,0 +1,8 @@
+create table public.equipment (
+  equipment_id serial not null,
+  equipment_type character varying(100) not null,
+  equipment_model character varying(100) not null,
+  total_quantity integer not null default 0,
+  constraint equipment_pkey primary key (equipment_id),
+  constraint equipment_total_quantity_check check ((total_quantity >= 0))
+) TABLESPACE pg_default;
