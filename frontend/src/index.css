@@ -13,6 +13,7 @@
   --cs-color-border: #e2e8f0;
   --cs-color-border-strong: #cbd5e1;
   --cs-color-danger: #b91c1c;
+  --cs-color-danger-soft: #fee2e2;
   --cs-font-family: Arial, Helvetica, sans-serif;
   --cs-radius-control: 6px;
   --cs-radius-panel: 12px;
@@ -38,6 +39,9 @@ a { color: var(--cs-color-primary); }
 .event-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px; }
 .event-link { text-decoration: none; }
 .event-link:hover { border-color: var(--cs-color-primary); }
+.request-card { position: relative; }
+.request-card .event-link { display: block; height: 100%; padding-right: 76px; }
+.delete-draft { position: absolute; top: 50%; right: 24px; transform: translateY(-50%); width: 36px; height: 36px; padding: 0; border-radius: 50%; background: var(--cs-color-danger-soft); color: var(--cs-color-danger); font-size: 24px; line-height: 1; }
 dl { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 28px; }
 dt { color: var(--cs-color-text); font-size: 14px; margin-bottom: 8px; }
 dd { margin: 0; color: var(--cs-color-heading); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -48,7 +52,8 @@ button:disabled { opacity: .6; cursor: wait; }
 :focus-visible { outline: 3px solid var(--cs-color-primary-focus); outline-offset: 3px; }
 .login-card { max-width: 440px; margin: 12vh auto; }
 label { display: block; margin: 20px 0; color: var(--cs-color-text); }
-input { display: block; width: 100%; border: 1px solid var(--cs-color-border-strong); padding: 12px; border-radius: var(--cs-radius-control); margin-top: 8px; }
+fieldset { border: 0; padding: 0; margin: 0; }
+input, select, textarea { display: block; width: 100%; border: 1px solid var(--cs-color-border-strong); padding: 12px; border-radius: var(--cs-radius-control); margin-top: 8px; }
 .error { color: var(--cs-color-danger); }
 
 .home-page { min-height: 100vh; }

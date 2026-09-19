@@ -86,12 +86,11 @@ These are used by every story below.
 Carry these into sprint planning; they are not oversights.
 
 - **No authentication.** `event_organiser_id`, `reviewer_id` and `recipient_id` all come from the client, so anyone can act as anyone. Marked `TODO` at each site. Depends on the User Authorisation and Authentication story.
-- **Row Level Security is incomplete.** `users`, `roles`, `user_roles`, `events`, `equipment` and `equipment_request` are still reachable with the publishable key, which is public by design. `users` holds a `password` column. Fix with `alter table <name> enable row level security;` once the team agrees.
+- **Row Level Security is incomplete.** `users`, `roles`, `user_roles`, `events`, `equipment` and `equipment_request` are still reachable with the publishable key, which is public by design. `users` holds names and emails. Fix with `alter table <name> enable row level security;` once the team agrees.
 - **No notification on submission.** The Coordinator is not told when a request arrives, because no coordinator is assigned yet. Depends on the Coordinator Assignment story.
 - **Database schema is only partly in the repo.** `supabase/` covers `venues` and everything added during these stories, but `users`, `roles`, `user_roles`, `events`, `equipment` and `equipment_request` were created through the Supabase dashboard and have no migration file.
 - **Frontend feature integration is incomplete.** The home launcher exists, but
   its tiles intentionally return to the home page until feature pages are ready.
-- **[backend/app/routes/events.py](backend/app/routes/events.py) is an empty placeholder.** The `events` table is separate from `event_request` and nothing uses it yet.
 
 ---
 

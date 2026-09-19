@@ -227,13 +227,21 @@ def test_no_equipment_is_valid():
     assert record["equipment_requirements"] == []
 
 
-def test_equipment_is_not_mandatory_for_submission():
-    payload = valid_payload()
-    del payload["equipment_requirements"]
+# Every field must be answered before submission, but "none" is an answer.
+@pytest.mark.parametrize("field", ["required_facilities", "equipment_requirements"])
+def test_answering_none_satisfies_a_mandatory_list(field):
+    record, _ = schema.parse_payload(valid_payload(**{field: []}))
 
-    record, _ = schema.parse_payload(payload)
+    assert field not in schema.find_missing(record)
 
-    assert "equipment_requirements" not in schema.find_missing(record)
+
+@pytest.mark.parametrize("field", ["required_facilities", "equipment_requirements"])
+def test_a_cleared_list_is_unanswered_and_blocks_submission(field):
+    record, errors = schema.parse_payload(valid_payload(**{field: None}))
+
+    assert errors == {}
+    assert record[field] is None
+    assert field in schema.find_missing(record)
 
 
 def test_equipment_must_be_a_list():
@@ -317,15 +325,6 @@ def test_registration_needs_must_be_text():
     _, errors = schema.parse_payload(valid_payload(registration_needs=["a", "b"]))
 
     assert "registration_needs" in errors
-
-
-def test_registration_needs_are_not_mandatory_for_submission():
-    payload = valid_payload()
-    del payload["registration_needs"]
-
-    record, _ = schema.parse_payload(payload)
-
-    assert "registration_needs" not in schema.find_missing(record)
 
 
 def test_a_partially_filled_draft_produces_no_format_errors():

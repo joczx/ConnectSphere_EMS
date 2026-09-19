@@ -50,10 +50,10 @@ WRITABLE_FIELDS = (
 # technical requirements.
 EQUIPMENT_ITEM_FIELDS = frozenset({"equipment_type", "quantity", "notes"})
 
-# Must be filled in before a request may leave draft. The accessibility flags,
-# required_facilities, equipment_requirements and registration_needs are not
-# listed: the customer asks for equipment and registration "where relevant",
-# and false/[]/null are all meaningful answers meaning "none needed".
+# Must be filled in before a request may leave draft. For facilities and
+# equipment, null means "not answered yet" and [] means "none needed", so an
+# Organiser must answer but may answer none. The accessibility flags are not
+# listed: they are NOT NULL booleans and always hold an answer.
 MANDATORY_FOR_SUBMISSION = (
     "event_name",
     "purpose",
@@ -62,6 +62,9 @@ MANDATORY_FOR_SUBMISSION = (
     "end_datetime",
     "capacity_needed",
     "room_layout",
+    "required_facilities",
+    "equipment_requirements",
+    "registration_needs",
 )
 
 _LABELS = {
@@ -315,7 +318,7 @@ def _to_datetime(iso_string):
 
 def _clean_facilities(value):
     if value is None:
-        return [], None
+        return None, None
     if not isinstance(value, list):
         return None, "Required facilities must be a list."
 
@@ -335,10 +338,11 @@ def _clean_facilities(value):
 def _clean_equipment(value):
     """Return (list of equipment items, problem). Exactly one is ever set.
 
-    An empty list is valid and means the event needs no equipment.
+    An empty list is valid and means the event needs no equipment; None means
+    the question has not been answered yet.
     """
     if value is None:
-        return [], None
+        return None, None
     if not isinstance(value, list):
         return None, (
             "Equipment requirements must be a list, for example "
