@@ -9,6 +9,7 @@ import EventRequest from './pages/EventRequest';
 import ReviewEventRequests from './pages/ReviewEventRequests';
 import ReviewEventRequest from './pages/ReviewEventRequest';
 import VenueSearch from './pages/VenueSearch';
+import VenueSearchResults from './pages/VenueSearchResults';
 import VenueSearchFilters from './pages/VenueSearchFilters';
 import EquipmentAvailability from './pages/EquipmentAvailability';
 
@@ -64,6 +65,7 @@ export default function App() {
     <Route path="/review-event-requests" element={reviewsView} />
     <Route path="/review-event-requests/:requestId" element={reviewView} />
     <Route path="/venue-search" element={token ? <VenueSearch token={token} onRefreshSession={refreshSession} onSignOut={signOut} /> : <Navigate to="/" replace />} />
+    <Route path="/venue-search/results" element={token ? <VenueSearchResults token={token} onRefreshSession={refreshSession} onSignOut={signOut} /> : <Navigate to="/" replace />} />
     <Route path="/venue-search/filters" element={token ? <VenueSearchFilters onSignOut={signOut} /> : <Navigate to="/" replace />} />
     <Route path="/equipment-availability" element={equipmentAvailabilityView} />
     <Route path="*" element={<Navigate to="/" replace />} />

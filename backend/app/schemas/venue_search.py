@@ -21,11 +21,12 @@ FACILITIES = frozenset(
 
 def parse_filters(payload):
     """Return cleaned filters and field errors for an advanced venue search."""
-    filters = {"capacity": None, "location": None, "layouts": [], "facilities": [],
+    filters = {"name": None, "capacity": None, "location": None, "layouts": [], "facilities": [],
                "wheelchair_accessible": None, "blind_accessible": None,
                "start_date": None, "end_date": None}
     errors = {}
 
+    filters["name"] = _text(payload.get("name"), "name", errors)
     filters["capacity"] = _positive_integer(payload.get("capacity"), "capacity", errors)
     filters["location"] = _text(payload.get("location"), "location", errors)
     filters["layouts"] = _choices(payload.get("layouts", []), ROOM_LAYOUTS, "layouts", errors)

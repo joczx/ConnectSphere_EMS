@@ -86,7 +86,7 @@ export default function VenueSearchFilters({ onSignOut }) {
     }
     if (startDate) parameters.append('start_date', startDate);
     if (endDate) parameters.append('end_date', endDate);
-    navigate('/venue-search?' + parameters.toString());
+    navigate('/venue-search/results?' + parameters.toString());
   }
 
   return (

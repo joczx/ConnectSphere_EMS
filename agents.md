@@ -163,9 +163,16 @@ Venue Search supports a simple venue-name search and an advanced filter search.
 It does not assess booking conflicts or produce a suitability verdict.
 
 - **[frontend/src/pages/VenueSearch.jsx](frontend/src/pages/VenueSearch.jsx)** —
-  The Venue Search entry page. It provides a keyword name search, a link to
-  advanced filters and a result list. The keyword search calls
-  `GET /api/venues?name=` and searches `venue_name` only.
+  The Venue Search entry page. It contains the feature heading and a link to
+  advanced filters; search results are intentionally on their own page.
+- **[frontend/src/pages/VenueSearchResults.jsx](frontend/src/pages/VenueSearchResults.jsx)** —
+  Fetches and displays results. A normal search calls `GET /api/venues?name=`;
+  a name entered after filtering remains on the advanced endpoint so every
+  selected condition is retained.
+- **[frontend/src/components/VenueSearchBar.jsx](frontend/src/components/VenueSearchBar.jsx)** —
+  Reusable header search bar with a magnifying-glass submit control and query
+  clear control. It is shown inside the navbar only on Venue Search pages;
+  clearing the input does not navigate or remove active filters.
 - **[frontend/src/pages/VenueSearchFilters.jsx](frontend/src/pages/VenueSearchFilters.jsx)** —
   Advanced filter-conditions form for available start/end dates, expected attendance, location,
   accessibility, one or more acceptable room layouts and required facilities.
@@ -196,8 +203,9 @@ It does not assess booking conflicts or produce a suitability verdict.
 - **[backend/tests/test_filter_search.py](backend/tests/test_filter_search.py)** —
   Tests filter validation, query construction and single/multi-day operating-day
   matching without calling Supabase.
-- **[frontend/src/App.jsx](frontend/src/App.jsx)** — Registers `/venue-search`
-  and `/venue-search/filters`; both require an authenticated session.
+- **[frontend/src/App.jsx](frontend/src/App.jsx)** — Registers `/venue-search`,
+  `/venue-search/results` and `/venue-search/filters`; all require an
+  authenticated session.
 
 Do not add suitability verdicts to this story; they belong
 to the separate Venue Suitability Checking feature.

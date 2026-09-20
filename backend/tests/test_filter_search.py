@@ -27,12 +27,13 @@ class VenueFilterSearchTests(unittest.TestCase):
             return_value=[{"venue_id": "venue-1", "venue_name": "Singapore EXPO Hall 1"}],
         ) as search:
             response = self.client.get(
-                "/api/venues/search?capacity=500&location=Expo&layouts=theatre"
+                "/api/venues/search?name=Singapore&capacity=500&location=Expo&layouts=theatre"
                 "&layouts=classroom&facilities=wifi&wheelchair_accessible=true"
             )
 
         self.assertEqual(response.status_code, 200)
         filters = search.call_args.args[0]
+        self.assertEqual(filters["name"], "Singapore")
         self.assertEqual(filters["capacity"], 500)
         self.assertEqual(filters["location"], "Expo")
         self.assertEqual(filters["layouts"], ["theatre", "classroom"])
@@ -64,7 +65,7 @@ class VenueFilterSearchTests(unittest.TestCase):
     def test_database_query_combines_each_filter_condition(self):
         filters, errors = parse_filters(
             {
-                "capacity": "500", "location": "Expo Drive", "layouts": ["theatre", "classroom"],
+                "name": "Singapore EXPO", "capacity": "500", "location": "Expo Drive", "layouts": ["theatre", "classroom"],
                 "facilities": ["wifi", "stage"], "wheelchair_accessible": "true",
                 "blind_accessible": "true", **valid_dates(),
             }
@@ -73,7 +74,7 @@ class VenueFilterSearchTests(unittest.TestCase):
         self.assertEqual(errors, {})
         path = filter_search_path(filters)
         for condition in (
-            "capacity=gte.500", "venue_name.ilike.*Expo%20Drive*",
+            "venue_name=ilike.*Singapore%20EXPO*", "capacity=gte.500", "venue_name.ilike.*Expo%20Drive*",
             "supported_room_layouts=ov.{theatre,classroom}", "facilities=cs.{wifi,stage}",
             "wheelchair_accessible=eq.true", "blind_accessible=eq.true",
         ):

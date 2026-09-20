@@ -62,6 +62,7 @@ def search_with_filters():
     """Find venues that meet the advanced search conditions."""
     token = authenticated_token()
     payload = {
+        "name": request.args.get("name"),
         "start_date": request.args.get("start_date"),
         "end_date": request.args.get("end_date"),
         "capacity": request.args.get("capacity"),
