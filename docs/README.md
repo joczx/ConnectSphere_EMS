@@ -1,5 +1,7 @@
 # Project documentation
 
+- [Equipment reservations: setup, behaviour and verification](equipment-reservations.md)
+
 Store non-code project evidence here in clearly named folders as the project
 progresses:
 
