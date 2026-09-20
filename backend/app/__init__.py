@@ -5,6 +5,7 @@ from flask import Flask
 from flask_cors import CORS
 from dotenv import load_dotenv
 from app.routes.events import events
+from app.routes.equipment import equipment
 
 # Read backend/.env before anything asks for a credential.
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
@@ -21,6 +22,7 @@ def create_app():
     load_dotenv()
     app = Flask(__name__)
     app.register_blueprint(events)
+    app.register_blueprint(equipment)
 
     # Allow requests from the React frontend
     CORS(app, origins=["http://localhost:5173"])

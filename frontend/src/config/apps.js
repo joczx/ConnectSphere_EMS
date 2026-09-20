@@ -11,6 +11,14 @@
  */
 export const HOME_APPS = [
   {
+    id: 'equipment',
+    label: 'Reserve Equipment',
+    description: 'Check availability and reserve equipment for an event',
+    path: '/equipment',
+    icon: '🛠️',
+    roles: [],
+  },
+  {
     id: 'events',
     label: 'Events',
     description: 'Open Events',

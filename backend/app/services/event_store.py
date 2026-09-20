@@ -21,7 +21,7 @@ def supabase_request(path, token=None, payload=None):
     base = os.environ.get('SUPABASE_URL', '').rstrip('/')
     key = os.environ.get('SUPABASE_ANON_KEY', '')
     if not base or not key:
-        raise StoreError(503, 'Supabase credentials are missing or incomplete. Set SUPABASE_URL and SUPABASE_ANON_KEY (or SUPABASE_KEY) in backend/.env.')
+        raise StoreError(503, 'Supabase credentials are missing or incomplete. Set SUPABASE_URL and SUPABASE_ANON_KEY in backend/.env.')
     headers = {'apikey': key, 'Content-Type': 'application/json'}
     if payload is not None:
         headers['Prefer'] = 'return=representation'
