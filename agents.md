@@ -113,7 +113,7 @@ Requires `backend/.env` with `SUPABASE_URL` and `SUPABASE_KEY`. See
 
 The authenticated home page is an app launcher. It deliberately contains no
 feature implementation, so other developers can build their pages independently.
-All unfinished tiles currently link to `/home`.
+Each tile links to its page when that page is available.
 
 ### Files and purpose
 
@@ -154,3 +154,26 @@ Add one object to `HOME_APPS` in `frontend/src/config/apps.js`:
 as `/home` while the feature is unfinished; change it to the registered route
 when the responsible developer completes that page. `roles` is reserved for
 future role-based filtering; backend authorization must still enforce access.
+
+---
+
+## Frontend Venue Search skeleton
+
+The Venue Search frontend is structural only. It does not call a backend endpoint
+or evaluate venue suitability yet.
+
+- **[frontend/src/pages/VenueSearch.jsx](frontend/src/pages/VenueSearch.jsx)** —
+  The Venue Search entry page. It provides a keyword search for venue name or
+  location, a link to advanced filters and a results placeholder. Searching does
+  not call the backend yet.
+- **[frontend/src/pages/VenueSearchFilters.jsx](frontend/src/pages/VenueSearchFilters.jsx)** —
+  Advanced filter-conditions form for date/time, expected attendance, location,
+  accessibility, room layout and required facilities. Submitting currently opens
+  the results placeholder.
+- **[frontend/src/App.jsx](frontend/src/App.jsx)** — Registers `/venue-search`
+  and `/venue-search/filters`; both require an authenticated session.
+
+When implementing the feature, keep request construction in a dedicated frontend
+service, preserve filters in the URL query string, and replace the placeholder
+with backend results. Do not add suitability verdicts to this story; they belong
+to the separate Venue Suitability Checking feature.

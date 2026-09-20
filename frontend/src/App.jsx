@@ -8,6 +8,8 @@ import EventRequests from './pages/EventRequests';
 import EventRequest from './pages/EventRequest';
 import ReviewEventRequests from './pages/ReviewEventRequests';
 import ReviewEventRequest from './pages/ReviewEventRequest';
+import VenueSearch from './pages/VenueSearch';
+import VenueSearchFilters from './pages/VenueSearchFilters';
 
 export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem('access_token'));
@@ -33,6 +35,8 @@ export default function App() {
     <Route path="/event-requests/:requestId" element={requestView} />
     <Route path="/review-event-requests" element={reviewsView} />
     <Route path="/review-event-requests/:requestId" element={reviewView} />
+    <Route path="/venue-search" element={token ? <VenueSearch onSignOut={signOut} /> : <Navigate to="/" replace />} />
+    <Route path="/venue-search/filters" element={token ? <VenueSearchFilters onSignOut={signOut} /> : <Navigate to="/" replace />} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></HashRouter>;
 }

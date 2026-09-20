@@ -46,7 +46,7 @@ export const HOME_APPS = [
     id: 'venue-search',
     label: 'Venue Search',
     description: 'Open Venue Search',
-    path: '/home',
+    path: '/venue-search',
     icon: '🏢',
     roles: [],
   },
