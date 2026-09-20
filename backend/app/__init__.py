@@ -22,8 +22,7 @@ def create_app():
     load_dotenv()
     app = Flask(__name__)
     app.register_blueprint(events)
-    app.register_blueprint(equipment)
-
+    
     # Allow requests from the React frontend
     CORS(app, origins=["http://localhost:5173"])
 
