@@ -157,23 +157,47 @@ future role-based filtering; backend authorization must still enforce access.
 
 ---
 
-## Frontend Venue Search skeleton
+## Frontend Venue Search
 
-The Venue Search frontend is structural only. It does not call a backend endpoint
-or evaluate venue suitability yet.
+Venue Search supports a simple venue-name search and an advanced filter search.
+It does not assess booking conflicts or produce a suitability verdict.
 
 - **[frontend/src/pages/VenueSearch.jsx](frontend/src/pages/VenueSearch.jsx)** —
-  The Venue Search entry page. It provides a keyword search for venue name or
-  location, a link to advanced filters and a results placeholder. Searching does
-  not call the backend yet.
+  The Venue Search entry page. It provides a keyword name search, a link to
+  advanced filters and a result list. The keyword search calls
+  `GET /api/venues?name=` and searches `venue_name` only.
 - **[frontend/src/pages/VenueSearchFilters.jsx](frontend/src/pages/VenueSearchFilters.jsx)** —
-  Advanced filter-conditions form for date/time, expected attendance, location,
-  accessibility, room layout and required facilities. Submitting currently opens
-  the results placeholder.
+  Advanced filter-conditions form for available start/end dates, expected attendance, location,
+  accessibility, one or more acceptable room layouts and required facilities.
+  It blocks incomplete or invalid date ranges and invalid attendance, then shows
+  a reusable destructive alert below the action buttons before keeping the
+  selected values in the URL. Opening Filters from filtered results restores
+  those values so they can be adjusted.
+- **[frontend/src/components/DateRangeCalendar.jsx](frontend/src/components/DateRangeCalendar.jsx)** —
+  Reusable React Aria `RangeCalendar` wrapper used inside the date picker popup.
+- **[frontend/src/components/DateRangePicker.jsx](frontend/src/components/DateRangePicker.jsx)** —
+  Editable start and end date fields in `DD-MM-YYYY`. Focusing either field
+  opens the range calendar popup; users may type dates or select them there.
+- **[frontend/src/components/Alert.jsx](frontend/src/components/Alert.jsx)** —
+  Browser port of the React Native Reusables Alert API: `Alert`,
+  `AlertTitle` and `AlertDescription`. Use `variant="destructive"` for errors.
+- **[backend/app/routes/venues.py](backend/app/routes/venues.py)** — Authenticated,
+  read-only venue search endpoints. `GET /api/venues?name=` searches names;
+  `GET /api/venues/search` applies advanced filters.
+- **[backend/app/schemas/venue_search.py](backend/app/schemas/venue_search.py)** —
+  Validates filter values, including `DD-MM-YYYY` dates, and makes the allowed
+  layouts and facilities explicit.
+- **[backend/app/services/venue_search_service.py](backend/app/services/venue_search_service.py)** —
+  Builds the Supabase query, applies capacity/location/accessibility/facility/layout
+  filters, and checks that each requested date is an operating day.
+  It cannot check bookings until venue booking and unavailability tables exist.
+- **[backend/tests/test_search_venues.py](backend/tests/test_search_venues.py)** —
+  Tests only normal name-search casing, seeded venues, empty results and validation.
+- **[backend/tests/test_filter_search.py](backend/tests/test_filter_search.py)** —
+  Tests filter validation, query construction and single/multi-day operating-day
+  matching without calling Supabase.
 - **[frontend/src/App.jsx](frontend/src/App.jsx)** — Registers `/venue-search`
   and `/venue-search/filters`; both require an authenticated session.
 
-When implementing the feature, keep request construction in a dedicated frontend
-service, preserve filters in the URL query string, and replace the placeholder
-with backend results. Do not add suitability verdicts to this story; they belong
+Do not add suitability verdicts to this story; they belong
 to the separate Venue Suitability Checking feature.
