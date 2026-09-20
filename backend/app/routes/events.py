@@ -1,6 +1,6 @@
 from uuid import UUID
 from flask import Blueprint, jsonify, request
-from app.services.event_store import StoreError, supabase_request
+from app.services.event_store import StoreError, supabase_request, authenticated_token
 
 events = Blueprint('events', __name__, url_prefix='/api')
 
@@ -16,15 +16,6 @@ def store_error(error):
     message = 'Please sign in again.' if error.status == 401 else 'Event service is temporarily unavailable.'
     return jsonify(error=message), error.status
 
-
-def authenticated_token():
-    scheme, _, token = request.headers.get('Authorization', '').partition(' ')
-    if scheme.lower() != 'bearer' or not token.strip():
-        raise StoreError(401)
-    user = supabase_request('/auth/v1/user', token=token)
-    if not user.get('id'):
-        raise StoreError(401)
-    return token
 
 
 @events.get('/events')

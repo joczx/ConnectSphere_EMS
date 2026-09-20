@@ -35,6 +35,14 @@ export const HOME_APPS = [
     roles: [],
   },
   {
+    id: 'equipment-availability',
+    label: 'Check Equipment Availability',
+    description: 'Open Equipment Availability',
+    path: '/equipment-availability',
+    icon: '🧰',
+    roles: [],
+  },
+  {
     id: 'venue-search',
     label: 'Venue Search',
     description: 'Open Venue Search',

@@ -21,6 +21,7 @@ export default function Events({ token, onSignOut }) {
     technical_requirements: '',
   });
   const [submitState, setSubmitState] = useState({ message: '', error: '' });
+  const [userNames, setUserNames] = useState({});
 
   useEffect(() => {
     const controller = new AbortController();
@@ -63,6 +64,21 @@ export default function Events({ token, onSignOut }) {
     return () => { ignore = true; };
   }, [eventId, token, refresh]);
 
+
+  const [equipmentTypes, setEquipmentTypes] = useState([]);
+
+  useEffect(() => {
+    let ignore = false;
+    fetch('/api/equipment-types', {
+      headers: { Authorization: 'Bearer ' + token },
+      cache: 'no-store',
+    })
+      .then(res => res.json())
+      .then(data => { if (!ignore) setEquipmentTypes(data.equipment_types || []); })
+      .catch(() => {});
+    return () => { ignore = true; };
+  }, [token]);
+
   async function submitEquipmentRequest(event) {
     event.preventDefault();
     setSubmitState({ message: '', error: '' });
@@ -91,9 +107,31 @@ export default function Events({ token, onSignOut }) {
     }
   }
 
+
   const data = state.key === eventId ? state.data : null;
   const event = data?.event;
   const equipmentRequests = state.equipment || [];
+
+  useEffect(() => {
+    if (!event) return;
+
+    const ids = [
+      event.event_organiser_id,
+      event.event_coordinator_id,
+      event.technical_support_id,
+      event.venue_staff_id,
+    ].filter(Boolean).join(',');
+
+    if (!ids) return;
+
+    fetch(`/api/users?ids=${encodeURIComponent(ids)}`, {
+      headers: { Authorization: 'Bearer ' + token },
+      cache: 'no-store',
+    })
+      .then((res) => res.json())
+      .then((data) => setUserNames(data.users || {}))
+      .catch(() => setUserNames({}));
+  }, [event, token]);
 
   return <>
     <Navbar onSignOut={onSignOut} />
@@ -114,10 +152,10 @@ export default function Events({ token, onSignOut }) {
           <Detail label="Status" value={event.status.charAt(0).toUpperCase() + event.status.slice(1)} />
           <Detail label="Start date and time" value={date(event.start_datetime)} />
           <Detail label="End date and time" value={date(event.end_datetime)} />
-          <Detail label="Event organiser ID" value={event.event_organiser_id} />
-          <Detail label="Event coordinator ID" value={event.event_coordinator_id} />
-          <Detail label="Technical support ID" value={event.technical_support_id} />
-          <Detail label="Venue staff ID" value={event.venue_staff_id} />
+          <Detail label="Event organiser" value={userNames[event.event_organiser_id] || (event.event_organiser_id ? event.event_organiser_id.slice(0, 8) : 'Not specified')} />
+          <Detail label="Event coordinator" value={userNames[event.event_coordinator_id] || (event.event_coordinator_id ? event.event_coordinator_id.slice(0, 8) : 'Not specified')} />
+          <Detail label="Technical support" value={userNames[event.technical_support_id] || (event.technical_support_id ? event.technical_support_id.slice(0, 8) : 'Not specified')} />
+          <Detail label="Venue staff" value={userNames[event.venue_staff_id] || (event.venue_staff_id ? event.venue_staff_id.slice(0, 8) : 'Not specified')} />
         </dl>
       </article>}
 
@@ -130,7 +168,11 @@ export default function Events({ token, onSignOut }) {
         <form onSubmit={submitEquipmentRequest} style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
           <label>
             Equipment Type
-            <input value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required />
+            {/* <input value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required /> */}
+            <select value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required>
+              <option value="">Select</option>
+              {equipmentTypes.map(type => <option key={type} value={type}>{type}</option>)}
+            </select>
           </label>
           <label>
             Quantity
