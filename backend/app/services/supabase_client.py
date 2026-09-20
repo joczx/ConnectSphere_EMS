@@ -19,13 +19,13 @@ def get_supabase() -> Client:
 
     if _client is None:
         url = os.environ.get("SUPABASE_URL")
-        key = os.environ.get("SUPABASE_KEY")
+        key = os.environ.get("SUPABASE_ANON_KEY")
 
         # Fail loudly and early: a missing key otherwise surfaces much later as
         # a confusing 401 from Supabase.
         if not url or not key:
             raise RuntimeError(
-                "SUPABASE_URL and SUPABASE_KEY must be set. Copy "
+                "SUPABASE_URL and SUPABASE_ANON_KEY must be set. Copy "
                 "backend/.env.example to backend/.env and fill them in using "
                 "the values from Supabase > Project Settings > API Keys."
             )

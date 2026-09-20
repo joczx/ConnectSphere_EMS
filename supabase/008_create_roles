@@ -1,0 +1,5 @@
+create table public.roles (
+  role_id serial not null,
+  role_name character varying(50) not null,
+  constraint roles_pkey primary key (role_id)
+) TABLESPACE pg_default;

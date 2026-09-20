@@ -10,6 +10,7 @@ import ReviewEventRequests from './pages/ReviewEventRequests';
 import ReviewEventRequest from './pages/ReviewEventRequest';
 import VenueSearch from './pages/VenueSearch';
 import VenueSearchFilters from './pages/VenueSearchFilters';
+import EquipmentAvailability from './pages/EquipmentAvailability';
 
 export default function App() {
   const [session, setSession] = useState(() => {
@@ -51,6 +52,7 @@ export default function App() {
   const requestView = token ? <EventRequest token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
   const reviewsView = token ? <ReviewEventRequests token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
   const reviewView = token ? <ReviewEventRequest token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
+  const equipmentAvailabilityView = token ? <EquipmentAvailability token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
   return <HashRouter><Routes>
     <Route path="/" element={token ? <Navigate to="/home" replace /> : <Login onSignIn={signIn} />} />
     <Route path="/home" element={homeView} />
@@ -63,6 +65,7 @@ export default function App() {
     <Route path="/review-event-requests/:requestId" element={reviewView} />
     <Route path="/venue-search" element={token ? <VenueSearch token={token} onRefreshSession={refreshSession} onSignOut={signOut} /> : <Navigate to="/" replace />} />
     <Route path="/venue-search/filters" element={token ? <VenueSearchFilters onSignOut={signOut} /> : <Navigate to="/" replace />} />
+    <Route path="/equipment-availability" element={equipmentAvailabilityView} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></HashRouter>;
 }

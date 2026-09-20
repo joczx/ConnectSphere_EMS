@@ -14,7 +14,7 @@ are not yet wired to feature pages.
 These are used by every story below.
 
 - **[backend/app/__init__.py](backend/app/__init__.py)** — Flask app factory. Loads `backend/.env`, enables CORS for the React dev server, and registers the route blueprints.
-- **[backend/app/services/supabase_client.py](backend/app/services/supabase_client.py)** — Builds the shared Supabase client once from `SUPABASE_URL` and `SUPABASE_KEY`, and fails loudly if either is missing.
+- **[backend/app/services/supabase_client.py](backend/app/services/supabase_client.py)** — Builds the shared Supabase client once from `SUPABASE_URL` and `SUPABASE_ANON_KEY`, and fails loudly if either is missing.
 - **[backend/app/services/db.py](backend/app/services/db.py)** — Runs Supabase calls and hands database errors to each service's own translator, so error wording stays close to the feature it belongs to.
 - **[backend/app/routes/event_requests.py](backend/app/routes/event_requests.py)** — Every `/api/event-requests` endpoint. Kept thin: parses the body, calls a service, shapes the response.
 - **[backend/app/schemas/event_request.py](backend/app/schemas/event_request.py)** — All validation for event request fields. Imports no Flask or Supabase, so the rules can be unit tested without a database.
@@ -104,7 +104,7 @@ python -m venv .venv
 .venv\Scripts\python run.py               # http://localhost:5000
 ```
 
-Requires `backend/.env` with `SUPABASE_URL` and `SUPABASE_KEY`. See
+Requires `backend/.env` with `SUPABASE_URL` and `SUPABASE_ANON_KEY`. See
 [backend/.env.example](backend/.env.example).
 
 ---

@@ -3,6 +3,7 @@ import json
 import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from flask import request
 
 
 class StoreError(Exception):
@@ -20,7 +21,7 @@ def supabase_request(path, token=None, payload=None):
     base = os.environ.get('SUPABASE_URL', '').rstrip('/')
     key = os.environ.get('SUPABASE_ANON_KEY', '')
     if not base or not key:
-        raise StoreError(503, 'Supabase credentials are missing or incomplete. Set SUPABASE_URL and SUPABASE_ANON_KEY (or SUPABASE_KEY) in backend/.env.')
+        raise StoreError(503, 'Supabase credentials are missing or incomplete. Set SUPABASE_URL and SUPABASE_ANON_KEY in backend/.env.')
     headers = {'apikey': key, 'Content-Type': 'application/json'}
     if payload is not None:
         headers['Prefer'] = 'return=representation'
@@ -50,3 +51,13 @@ def supabase_request(path, token=None, payload=None):
         raise StoreError(401 if exc.code in (400, 401, 403) else 503, exc.reason or 'Supabase request failed.') from exc
     except (URLError, TimeoutError) as exc:
         raise StoreError(503, 'Supabase is temporarily unavailable.') from exc
+
+
+def authenticated_token():
+    scheme, _, token = request.headers.get('Authorization', '').partition(' ')
+    if scheme.lower() != 'bearer' or not token.strip():
+        raise StoreError(401)
+    user = supabase_request('/auth/v1/user', token=token)
+    if not user.get('id'):
+        raise StoreError(401)
+    return token
