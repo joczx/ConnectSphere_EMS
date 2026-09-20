@@ -8,6 +8,7 @@ import EventRequests from './pages/EventRequests';
 import EventRequest from './pages/EventRequest';
 import ReviewEventRequests from './pages/ReviewEventRequests';
 import ReviewEventRequest from './pages/ReviewEventRequest';
+import EquipmentAvailability from './pages/EquipmentAvailability';
 
 export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem('access_token'));
@@ -23,6 +24,7 @@ export default function App() {
   const requestView = token ? <EventRequest token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
   const reviewsView = token ? <ReviewEventRequests token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
   const reviewView = token ? <ReviewEventRequest token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
+  const equipmentAvailabilityView = token ? <EquipmentAvailability token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
   return <HashRouter><Routes>
     <Route path="/" element={token ? <Navigate to="/home" replace /> : <Login onSignIn={signIn} />} />
     <Route path="/home" element={homeView} />
@@ -33,6 +35,7 @@ export default function App() {
     <Route path="/event-requests/:requestId" element={requestView} />
     <Route path="/review-event-requests" element={reviewsView} />
     <Route path="/review-event-requests/:requestId" element={reviewView} />
+    <Route path="/equipment-availability" element={equipmentAvailabilityView} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></HashRouter>;
 }

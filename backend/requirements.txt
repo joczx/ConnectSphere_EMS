@@ -1,4 +1,5 @@
 Flask
+Werkzeug<3
 flask-cors
 supabase
 python-dotenv
