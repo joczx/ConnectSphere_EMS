@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import Navbar from '../components/Navbar';
 
 function date(value) {
   return value ? new Intl.DateTimeFormat('en-SG', {
@@ -95,7 +96,7 @@ export default function Events({ token, onSignOut }) {
   const equipmentRequests = state.equipment || [];
 
   return <>
-    <header><Link className="brand" to="/events">ConnectSphere</Link><button className="secondary" onClick={onSignOut}>Sign out</button></header>
+    <Navbar onSignOut={onSignOut} />
     <main className="container">
       {eventId && <Link to="/events">← My events</Link>}
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{eventId ? 'Event information' : 'My events'}</h1></div>
@@ -105,12 +106,12 @@ export default function Events({ token, onSignOut }) {
       {state.error && <div role="alert" className="panel error">{state.error} Use Refresh to try again.</div>}
       {data?.events && <section className="event-list" aria-label="Your events">
         {data.events.length === 0 && <div className="panel">No events are available to you yet. Contact your event organiser or coordinator to arrange access.</div>}
-        {data.events.map(item => <Link className="panel event-link" key={item.event_id} to={'/events/' + item.event_id}><h2>{item.event_name}</h2><p>{date(item.start_datetime)}</p><p className="metadata">Status: {item.status || 'Not specified'}</p><span>View event information →</span></Link>)}
+        {data.events.map(item => <Link className="panel event-link" key={item.event_id} to={'/events/' + item.event_id}><h2>{item.event_name}</h2><p>{date(item.start_datetime)}</p><p className="metadata">Status: {item.status.charAt(0).toUpperCase() + item.status.slice(1) || 'Not specified'}</p><span>View event information →</span></Link>)}
       </section>}
       {event && <article className="panel">
         <h2>{event.event_name}</h2>
         <dl>
-          <Detail label="Status" value={event.status} />
+          <Detail label="Status" value={event.status.charAt(0).toUpperCase() + event.status.slice(1)} />
           <Detail label="Start date and time" value={date(event.start_datetime)} />
           <Detail label="End date and time" value={date(event.end_datetime)} />
           <Detail label="Event organiser ID" value={event.event_organiser_id} />
