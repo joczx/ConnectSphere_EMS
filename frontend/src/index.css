@@ -25,6 +25,11 @@ body {
   background-color: var(--cs-color-page);
 }
 
+select { display: block; width: 100%; padding: 12px; margin-top: 8px; border: 1px solid var(--cs-color-border-strong); border-radius: var(--cs-radius-control); background: var(--cs-color-surface); color: var(--cs-color-heading); }
+.equipment-table { overflow-x: auto; }
+.equipment-table table { width: 100%; border-collapse: collapse; text-align: left; }
+.equipment-table th, .equipment-table td { padding: 12px; border-bottom: 1px solid var(--cs-color-border); }
+
 * { box-sizing: border-box; }
 header { display: flex; justify-content: space-between; align-items: center; padding: 20px max(24px, calc((100% - 1100px)/2)); background: var(--cs-color-surface); border-bottom: 1px solid var(--cs-color-border); }
 .brand { color: var(--cs-color-primary); font-weight: 800; font-size: 22px; text-decoration: none; }
