@@ -25,16 +25,16 @@ export default function Events({ token, onSignOut }) {
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
-      setState({ loading: true });
+      setState((current) => ({ ...current, loading: true, error: null }));
       try {
         const response = await fetch('/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : ''), {
           headers: { Authorization: 'Bearer ' + token }, cache: 'no-store', signal: controller.signal,
         });
         const data = await response.json();
         if (!response.ok) throw new Error(response.status === 401 ? 'Your session has expired. Sign out and sign in again.' : data.error);
-        if (!controller.signal.aborted) setState({ data, key: eventId });
+        if (!controller.signal.aborted) setState((current) => ({ ...current, data, key: eventId, loading: false, error: null }));
       } catch (err) {
-        if (!controller.signal.aborted) setState({ error: err.message || 'Unable to load event information.' });
+        if (!controller.signal.aborted) setState((current) => ({ ...current, loading: false, error: err.message || 'Unable to load event information.' }));
       }
     }
     load();
@@ -54,7 +54,7 @@ export default function Events({ token, onSignOut }) {
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Unable to load equipment requests.');
-        if (!ignore) setState((current) => ({ ...current, equipment: data.equipment_requests || [] }));
+        if (!ignore) setState((current) => ({ ...current, equipment: data.equipment_requests || [], equipmentError: null }));
       } catch (err) {
         if (!ignore) setState((current) => ({ ...current, equipmentError: err.message || 'Unable to load equipment requests.' }));
       }
