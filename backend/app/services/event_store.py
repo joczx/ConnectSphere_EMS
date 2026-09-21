@@ -1,9 +1,12 @@
 """Query Supabase with user credentials so row-level security enforces access."""
 import json
+import logging
 import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from flask import request
+
+logger = logging.getLogger(__name__)
 
 
 class StoreError(Exception):
@@ -42,25 +45,34 @@ def supabase_request(path, token=None, payload=None):
                 raise StoreError(503, f'Supabase returned a non-JSON response. Check the project URL and API key. Raw response: {snippet}') from exc
     except HTTPError as exc:
         error_body = exc.read()
-        code = None
+        code = detail = None
         if error_body:
             try:
-                payload = json.loads(error_body.decode('utf-8'))
-                message = payload.get('message') if isinstance(payload, dict) else None
-                code = payload.get('code') if isinstance(payload, dict) else None
+                upstream = json.loads(error_body.decode('utf-8'))
+                if isinstance(upstream, dict):
+                    detail = upstream.get('message')
+                    code = upstream.get('code')
             except json.JSONDecodeError:
-                message = None
-            raise StoreError(401 if exc.code in (400, 401, 403) else 503, message or exc.reason or 'Supabase request failed.', code=code) from exc
-        raise StoreError(401 if exc.code in (400, 401, 403) else 503, exc.reason or 'Supabase request failed.') from exc
+                pass
+        # Upstream wording can name tables, columns and keys, so it is logged
+        # for developers rather than carried in the error the caller sees.
+        logger.warning('Supabase %s failed for %s: %s', exc.code, path, detail or exc.reason)
+        raise StoreError(401 if exc.code in (400, 401, 403) else 503, code=code) from exc
     except (URLError, TimeoutError) as exc:
         raise StoreError(503, 'Supabase is temporarily unavailable.') from exc
 
 
-def authenticated_token():
+def authenticated_token(query=None):
+    """Return the caller's verified access token.
+
+    `query` lets a blueprint pass its own supabase_request, so a test that
+    patches that module's function also intercepts this user lookup.
+    """
+    query = query or supabase_request
     scheme, _, token = request.headers.get('Authorization', '').partition(' ')
     if scheme.lower() != 'bearer' or not token.strip():
         raise StoreError(401)
-    user = supabase_request('/auth/v1/user', token=token)
+    user = query('/auth/v1/user', token=token)
     if not user.get('id'):
         raise StoreError(401)
     return token
