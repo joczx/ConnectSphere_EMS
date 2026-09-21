@@ -12,6 +12,8 @@ import VenueSearch from './pages/VenueSearch';
 import VenueSearchResults from './pages/VenueSearchResults';
 import VenueSearchFilters from './pages/VenueSearchFilters';
 import EquipmentAvailability from './pages/EquipmentAvailability';
+import VenueSuitability from './pages/VenueSuitability';
+import VenueSuitabilityCheck from './pages/VenueSuitabilityCheck';
 
 export default function App() {
   const [session, setSession] = useState(() => {
@@ -54,6 +56,8 @@ export default function App() {
   const reviewsView = token ? <ReviewEventRequests token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
   const reviewView = token ? <ReviewEventRequest token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
   const equipmentAvailabilityView = token ? <EquipmentAvailability token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
+  const venueSuitabilityView = token ? <VenueSuitability token={token} onRefreshSession={refreshSession} onSignOut={signOut} /> : <Navigate to="/" replace />;
+  const venueSuitabilityCheckView = token ? <VenueSuitabilityCheck onSignOut={signOut} /> : <Navigate to="/" replace />;
   return <HashRouter><Routes>
     <Route path="/" element={token ? <Navigate to="/home" replace /> : <Login onSignIn={signIn} />} />
     <Route path="/home" element={homeView} />
@@ -68,6 +72,8 @@ export default function App() {
     <Route path="/venue-search/results" element={token ? <VenueSearchResults token={token} onRefreshSession={refreshSession} onSignOut={signOut} /> : <Navigate to="/" replace />} />
     <Route path="/venue-search/filters" element={token ? <VenueSearchFilters onSignOut={signOut} /> : <Navigate to="/" replace />} />
     <Route path="/equipment-availability" element={equipmentAvailabilityView} />
+    <Route path="/venue-suitability" element={venueSuitabilityView} />
+    <Route path="/venue-suitability/check/:eventId" element={venueSuitabilityCheckView} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></HashRouter>;
 }
