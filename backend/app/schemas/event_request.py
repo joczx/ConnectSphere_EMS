@@ -24,7 +24,21 @@ ALL_STATUSES = frozenset(
 
 # public.room_layout
 ROOM_LAYOUTS = frozenset(
-    {"theatre", "classroom", "boardroom", "u_shape", "banquet", "standing"}
+    {"theatre", "classroom", "boardroom", "banquet", "exhibition", "u_shape", "cabaret"}
+)
+
+# public.facility; kept aligned with the venue search filters.
+FACILITIES = frozenset(
+    {
+        "stage",
+        "projector",
+        "sound_system",
+        "video_conferencing",
+        "wifi",
+        "parking",
+        "catering_area",
+        "air_conditioning",
+    }
 )
 
 # Fields an Event Organiser is allowed to set. Everything else on the table
@@ -326,7 +340,14 @@ def _clean_facilities(value):
     for item in value:
         if not isinstance(item, str) or not item.strip():
             return None, "Each required facility must be a non-empty name."
-        facilities.append(item.strip())
+        facility = item.strip()
+        if facility not in FACILITIES:
+            return None, (
+                "Required facilities must contain only: "
+                + ", ".join(sorted(FACILITIES))
+                + "."
+            )
+        facilities.append(facility)
 
     duplicates = len(facilities) != len(set(facilities))
     if duplicates:
