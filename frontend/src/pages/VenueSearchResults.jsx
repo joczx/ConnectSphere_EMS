@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import VenueSearchBar from '../components/VenueSearchBar';
+import { useAuth } from '../auth/AuthContext';
 
-export default function VenueSearchResults({ token, onRefreshSession, onSignOut }) {
+export default function VenueSearchResults() {
+  const { api } = useAuth();
   const [venues, setVenues] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,20 +21,9 @@ export default function VenueSearchResults({ token, onRefreshSession, onSignOut 
       const path = isFilterSearch
         ? '/api/venues/search?' + searchParams
         : '/api/venues?name=' + encodeURIComponent(name);
-      const send = (accessToken) => fetch(path, {
-        cache: 'no-store', signal: controller.signal,
-        headers: { Authorization: 'Bearer ' + accessToken },
-      });
       setLoading(true);
       setError('');
-      let response = await send(token);
-      if (response.status === 401) {
-        const refreshedToken = await onRefreshSession();
-        if (!refreshedToken) throw new Error('Your session has expired. Please sign in again.');
-        response = await send(refreshedToken);
-      }
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Unable to search venues. Please try again.');
+      const result = await api(path, { cache: 'no-store', signal: controller.signal });
       if (!controller.signal.aborted) setVenues(result.venues);
     }
 
@@ -43,13 +34,13 @@ export default function VenueSearchResults({ token, onRefreshSession, onSignOut 
       }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [isFilterSearch, name, searchParams, token]);
+  }, [api, isFilterSearch, name, searchParams]);
 
   const filtersPath = searchParams.toString() ? `/venue-search/filters?${searchParams}` : '/venue-search/filters';
 
   return (
     <>
-      <Navbar onSignOut={onSignOut} searchBar={<VenueSearchBar />} />
+      <Navbar searchBar={<VenueSearchBar />} />
       <main className="container">
         <Link to="/home">← Home</Link>
         <div className="heading">

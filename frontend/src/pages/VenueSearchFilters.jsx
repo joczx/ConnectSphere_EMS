@@ -34,7 +34,7 @@ function dateValue(value) {
   return `${year}-${month}-${day}`;
 }
 
-export default function VenueSearchFilters({ onSignOut }) {
+export default function VenueSearchFilters() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [issues, setIssues] = useState([]);
@@ -91,7 +91,7 @@ export default function VenueSearchFilters({ onSignOut }) {
 
   return (
     <>
-      <Navbar onSignOut={onSignOut} />
+      <Navbar />
       <main className="container">
         <Link to="/venue-search">← Back to venue search</Link>
         <div className="heading">

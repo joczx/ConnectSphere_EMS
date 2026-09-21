@@ -1,7 +1,7 @@
-import { readApiResponse } from '../services/http';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useAuth } from '../auth/AuthContext';
 
 const formatDateTime = (value) => {
   if (!value) return 'Not specified';
@@ -12,7 +12,8 @@ const formatDateTime = (value) => {
   }).format(new Date(value));
 };
 
-export default function EquipmentAvailability({ token, onSignOut }) {
+export default function EquipmentAvailability() {
+  const { api } = useAuth();
   const [form, setForm] = useState({
     equipment_type: '',
     quantity: 1,
@@ -25,15 +26,11 @@ export default function EquipmentAvailability({ token, onSignOut }) {
 
   useEffect(() => {
     let ignore = false;
-    fetch('/api/equipment-types', {
-      headers: { Authorization: 'Bearer ' + token },
-      cache: 'no-store',
-    })
-      .then(readApiResponse)
+    api('/api/equipment-types', { cache: 'no-store' })
       .then(data => { if (!ignore) setEquipmentTypes(data.equipment_types || []); })
       .catch(err => { if (!ignore) setState(previous => ({ ...previous, error: err.message })); });
     return () => { ignore = true; };
-  }, [token]);
+  }, [api]);
 
   async function searchAvailability(event) {
     event.preventDefault();
@@ -47,12 +44,7 @@ export default function EquipmentAvailability({ token, onSignOut }) {
         end_datetime: new Date(form.end_datetime).toISOString(),
       });
 
-      const response = await fetch(`/api/equipment-availability?${params.toString()}`, {
-        headers: { Authorization: 'Bearer ' + token },
-        cache: 'no-store',
-      });
-      const data = await readApiResponse(response);
-      if (!response.ok) throw new Error(data.error || 'Unable to check equipment availability.');
+      const data = await api(`/api/equipment-availability?${params.toString()}`, { cache: 'no-store' });
 
       setState({
         loading: false,
@@ -67,7 +59,7 @@ export default function EquipmentAvailability({ token, onSignOut }) {
 
   return (
     <>
-      <Navbar onSignOut={onSignOut} />
+      <Navbar />
       <main className="container">
         {/* <Link to="/home">← Home</Link> */}
         <div className="heading">

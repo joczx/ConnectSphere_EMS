@@ -157,6 +157,30 @@ future role-based filtering; backend authorization must still enforce access.
 
 ---
 
+## Frontend authentication and API requests
+
+Authenticated pages share one session and request implementation. Do not read
+tokens from session storage or implement refresh-and-retry logic inside a page.
+
+- **[frontend/src/auth/AuthContext.jsx](frontend/src/auth/AuthContext.jsx)** —
+  Owns the current Supabase session, sign-in/sign-out state and authenticated API
+  calls. `api()` adds the bearer token, refreshes the session after a `401`, and
+  retries the original request once. Concurrent `401` responses share one refresh
+  request so pages cannot rotate the same refresh token multiple times.
+- **[frontend/src/main.jsx](frontend/src/main.jsx)** — Wraps the application in
+  `AuthProvider`.
+- **[frontend/src/App.jsx](frontend/src/App.jsx)** — Uses the shared session to
+  protect authenticated routes; it does not own token-refresh logic.
+- **[frontend/src/components/AccountMenu.jsx](frontend/src/components/AccountMenu.jsx)** —
+  Signs out through the shared authentication context.
+
+Pages should call `const { api } = useAuth()` and then use
+`api('/api/example', options)`. Pass plain objects as `options.body`; the helper
+serialises them as JSON. Login and token refresh are the only unauthenticated
+requests and remain inside `Login.jsx` and `AuthContext.jsx` respectively.
+
+---
+
 ## Frontend Venue Search
 
 Venue Search supports a simple venue-name search and an advanced filter search.

@@ -58,4 +58,12 @@ export const HOME_APPS = [
     icon: '🏢',
     roles: [],
   },
+  {
+    id: 'venue-suitability',
+    label: 'Venue Suitability',
+    description: 'Check venue suitability for an event',
+    path: '/venue-suitability',
+    icon: '✅',
+    roles: [],
+  },
 ];

@@ -124,5 +124,14 @@ input:not([type="checkbox"]), select, textarea { display: block; width: 100%; bo
 .date-range-day[data-selection-start], .date-range-day[data-selection-end] { background: var(--cs-color-primary); color: white; }
 .date-range-day[data-outside-month] { color: var(--cs-color-border-strong); }
 .search-filter-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.suitability-event-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px; }
+.suitability-event-card { position: relative; display: grid; gap: 8px; width: 100%; background: var(--cs-color-surface); color: var(--cs-color-text); text-align: left; }
+.suitability-event-card:hover { border-color: var(--cs-color-primary); }
+.suitability-event-card.selected { border-color: var(--cs-color-primary); box-shadow: 0 0 0 2px var(--cs-color-primary-focus); }
+.suitability-event-card span { display: block; }
+.suitability-event-name { padding-right: 32px; color: var(--cs-color-heading); font-size: 20px; font-weight: 700; }
+.suitability-event-selection { position: absolute; top: 20px; right: 20px; display: grid !important; place-items: center; width: 24px; height: 24px; border: 2px solid var(--cs-color-border-strong); border-radius: 50%; }
+.suitability-event-card.selected .suitability-event-selection { background: var(--cs-color-primary); border-color: var(--cs-color-primary); color: white; }
+.suitability-actions { display: flex; justify-content: flex-end; margin-top: 28px; }
 
 @media (max-width: 600px) { dl { grid-template-columns: 1fr; } .login-card { margin: 32px 16px; } .panel { padding: 20px; } .heading { align-items: flex-start; flex-direction: column; } .home-navbar-search { flex-wrap: wrap; gap: 16px; } .home-navbar-search .venue-search-bar { order: 3; flex-basis: 100%; } }

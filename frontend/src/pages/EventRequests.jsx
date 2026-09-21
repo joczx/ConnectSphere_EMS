@@ -1,21 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { api, humanise, userId } from '../services/eventRequests';
+import { useAuth } from '../auth/AuthContext';
+import { eventRequestsApi, humanise, userId } from '../services/eventRequests';
 
-export default function EventRequests({ token, onSignOut }) {
+export default function EventRequests() {
+  const { api, token } = useAuth();
   const navigate = useNavigate();
   const [state, setState] = useState({ loading: true });
   useEffect(() => {
     (async () => {
-      try { setState({ requests: (await api('?event_organiser_id=' + userId(token), token)).event_requests }); }
+      try { setState({ requests: (await eventRequestsApi(api, '?event_organiser_id=' + userId(token))).event_requests }); }
       catch (err) { setState({ error: err.message || 'Unable to load your event requests.' }); }
     })();
-  }, [token]);
+  }, [api, token]);
   async function remove(item) {
     if (!window.confirm(`Delete the draft "${item.event_name || 'Untitled request'}"? This cannot be undone.`)) return;
     try {
-      await api('/' + item.event_request_id, token, { method: 'DELETE' });
+      await eventRequestsApi(api, '/' + item.event_request_id, { method: 'DELETE' });
       setState(current => ({ requests: current.requests.filter(r => r.event_request_id !== item.event_request_id) }));
     } catch (err) { setState(current => ({ ...current, error: err.message })); }
   }
@@ -32,7 +34,7 @@ export default function EventRequests({ token, onSignOut }) {
     </div>)}</div>
   </section>;
   return <>
-    <Navbar onSignOut={onSignOut} />
+    <Navbar />
     <main className="container">
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>My event requests</h1></div>
         <button onClick={() => navigate('/event-requests/new')}>New event request</button></div>

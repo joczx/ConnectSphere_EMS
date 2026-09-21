@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
-import { readApiResponse } from '../services/http';
+import { useCallback, useEffect, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
 
 const date = value => new Intl.DateTimeFormat('en-SG', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Singapore',
 }).format(new Date(value));
 
-export default function EquipmentReservations({ token, refresh, onChanged }) {
+export default function EquipmentReservations({ refresh, onChanged }) {
+  const { api } = useAuth();
   const [rows, setRows] = useState([]);
   const [quantities, setQuantities] = useState({});
   const [loading, setLoading] = useState(true);
@@ -15,12 +16,9 @@ export default function EquipmentReservations({ token, refresh, onChanged }) {
   const [confirmId, setConfirmId] = useState(null);
   const [reload, setReload] = useState(0);
 
-  async function api(path = '', options = {}) {
-    return readApiResponse(await fetch('/api/equipment/reservations' + path, {
-      ...options, cache: 'no-store',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    }));
-  }
+  const reservationsApi = useCallback((path = '', options = {}) => (
+    api('/api/equipment/reservations' + path, { cache: 'no-store', ...options })
+  ), [api]);
 
   function showRows(result) {
     setRows(result.reservations);
@@ -32,7 +30,7 @@ export default function EquipmentReservations({ token, refresh, onChanged }) {
     setLoading(true);
     setError('');
     setConfirmId(null);
-    api('', { signal: controller.signal }).then(result => {
+    reservationsApi('', { signal: controller.signal }).then(result => {
       if (!controller.signal.aborted) showRows(result);
     }).catch(err => {
       if (!controller.signal.aborted) { setRows([]); setError(err.message); }
@@ -40,7 +38,7 @@ export default function EquipmentReservations({ token, refresh, onChanged }) {
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, [token, refresh, reload]);
+  }, [reservationsApi, refresh, reload]);
 
   async function change(row, cancel = false) {
     if (busy) return;
@@ -54,9 +52,9 @@ export default function EquipmentReservations({ token, refresh, onChanged }) {
     setMessage('');
     let changed = false;
     try {
-      await api('/' + row.reservation_id, {
+      await reservationsApi('/' + row.reservation_id, {
         method: cancel ? 'DELETE' : 'PATCH',
-        ...(!cancel && { body: JSON.stringify({ quantity }) }),
+        ...(!cancel && { body: { quantity } }),
       });
       changed = true;
       setConfirmId(null);
@@ -65,7 +63,7 @@ export default function EquipmentReservations({ token, refresh, onChanged }) {
       setError(err.message);
     }
     // Refresh after conflicts as well as success, preserving the mutation error.
-    try { showRows(await api()); }
+    try { showRows(await reservationsApi()); }
     catch (err) { setRows([]); setError(previous => previous || err.message); }
     finally { setBusy(false); }
     if (changed) onChanged();

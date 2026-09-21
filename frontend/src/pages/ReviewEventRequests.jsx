@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { api, humanise } from '../services/eventRequests';
+import { useAuth } from '../auth/AuthContext';
+import { eventRequestsApi, humanise } from '../services/eventRequests';
 
-export default function ReviewEventRequests({ token, onSignOut }) {
+export default function ReviewEventRequests() {
+  const { api } = useAuth();
   const [state, setState] = useState({ loading: true });
   useEffect(() => {
     (async () => {
       // One call per status, so Organisers' drafts never reach a Coordinator's browser.
-      try { setState({ sections: await Promise.all([['Received', 'submitted'], ['Approved', 'approved'], ['Rejected', 'rejected']].map(async ([title, status]) => [title, (await api('?status=' + status, token)).event_requests])) }); }
+      try { setState({ sections: await Promise.all([['Received', 'submitted'], ['Approved', 'approved'], ['Rejected', 'rejected']].map(async ([title, status]) => [title, (await eventRequestsApi(api, '?status=' + status)).event_requests])) }); }
       catch (err) { setState({ error: err.message || 'Unable to load event requests.' }); }
     })();
-  }, [token]);
+  }, [api]);
   return <>
-    <Navbar onSignOut={onSignOut} />
+    <Navbar />
     <main className="container">
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>Review event requests</h1></div></div>
       {state.loading && <p role="status">Loading event requests…</p>}
