@@ -12,7 +12,7 @@ function Detail({ label, value }) {
   return <div><dt>{label}</dt><dd>{value === null || value === undefined || value === '' ? 'Not specified' : value}</dd></div>;
 }
 
-export default function Events({ token, onSignOut }) {
+export default function Events({ token, onRefreshSession, onSignOut }) {
   const { eventId } = useParams();
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
@@ -29,11 +29,20 @@ export default function Events({ token, onSignOut }) {
     async function load() {
       setState((current) => ({ ...current, loading: true, error: null }));
       try {
-        const response = await fetch('/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : ''), {
-          headers: { Authorization: 'Bearer ' + token }, cache: 'no-store', signal: controller.signal,
+        const path = '/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : '');
+        const send = accessToken => fetch(path, {
+          headers: { Authorization: 'Bearer ' + accessToken }, cache: 'no-store', signal: controller.signal,
         });
+        let response = await send(token);
+        if (response.status === 401) {
+          const refreshedToken = await onRefreshSession();
+          if (!refreshedToken) {
+            onSignOut();
+            return;
+          }
+          response = await send(refreshedToken);
+        }
         const data = await readApiResponse(response);
-        if (!response.ok) throw new Error(response.status === 401 ? 'Your session has expired. Sign out and sign in again.' : data.error);
         if (!controller.signal.aborted) setState((current) => ({ ...current, data, key: eventId, loading: false, error: null }));
       } catch (err) {
         if (!controller.signal.aborted) setState((current) => ({ ...current, loading: false, error: err.message || 'Unable to load event information.' }));
@@ -44,7 +53,7 @@ export default function Events({ token, onSignOut }) {
     const timer = setInterval(reload, 60000);
     window.addEventListener('focus', reload);
     return () => { controller.abort(); clearInterval(timer); window.removeEventListener('focus', reload); };
-  }, [eventId, token, refresh]);
+  }, [eventId, token, refresh, onRefreshSession, onSignOut]);
 
   useEffect(() => {
     if (!eventId) return;

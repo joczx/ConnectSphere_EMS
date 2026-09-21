@@ -50,7 +50,7 @@ export default function App() {
     return nextSession.access_token;
   }
   const homeView = token ? <Home onSignOut={signOut} /> : <Navigate to="/" replace />;
-  const eventsView = token ? <Events token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
+  const eventsView = token ? <Events token={token} onRefreshSession={refreshSession} onSignOut={signOut} /> : <Navigate to="/" replace />;
   const requestsView = token ? <EventRequests token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
   const requestView = token ? <EventRequest token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
   const reviewsView = token ? <ReviewEventRequests token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
