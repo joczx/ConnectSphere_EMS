@@ -9,14 +9,15 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@internationalized/date": "^3.12.4",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
     "@tailwindcss/vite": "^4.3.3",
     "axios": "^1.7.2",
     "react": "^18.3.1",
+    "react-aria-components": "^1.21.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^7.18.3",
-    "tailwind": "^4.0.0"
+    "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.1",

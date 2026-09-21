@@ -14,7 +14,7 @@ export default function Login({ onSignIn }) {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(response.status === 401 ? 'Unable to sign in. Check your email and password.' : data.error);
-      onSignIn(data.access_token);
+      onSignIn(data);
     } catch (err) { setError(err.message || 'Unable to sign in. Please try again.'); }
     finally { setBusy(false); }
   }

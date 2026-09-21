@@ -113,7 +113,7 @@ Requires `backend/.env` with `SUPABASE_URL` and `SUPABASE_ANON_KEY`. See
 
 The authenticated home page is an app launcher. It deliberately contains no
 feature implementation, so other developers can build their pages independently.
-All unfinished tiles currently link to `/home`.
+Each tile links to its page when that page is available.
 
 ### Files and purpose
 
@@ -154,3 +154,58 @@ Add one object to `HOME_APPS` in `frontend/src/config/apps.js`:
 as `/home` while the feature is unfinished; change it to the registered route
 when the responsible developer completes that page. `roles` is reserved for
 future role-based filtering; backend authorization must still enforce access.
+
+---
+
+## Frontend Venue Search
+
+Venue Search supports a simple venue-name search and an advanced filter search.
+It does not assess booking conflicts or produce a suitability verdict.
+
+- **[frontend/src/pages/VenueSearch.jsx](frontend/src/pages/VenueSearch.jsx)** —
+  The Venue Search entry page. It contains the feature heading and a link to
+  advanced filters; search results are intentionally on their own page.
+- **[frontend/src/pages/VenueSearchResults.jsx](frontend/src/pages/VenueSearchResults.jsx)** —
+  Fetches and displays results. A normal search calls `GET /api/venues?name=`;
+  a name entered after filtering remains on the advanced endpoint so every
+  selected condition is retained.
+- **[frontend/src/components/VenueSearchBar.jsx](frontend/src/components/VenueSearchBar.jsx)** —
+  Reusable header search bar with a magnifying-glass submit control and query
+  clear control. It is shown inside the navbar only on Venue Search pages;
+  clearing the input does not navigate or remove active filters.
+- **[frontend/src/pages/VenueSearchFilters.jsx](frontend/src/pages/VenueSearchFilters.jsx)** —
+  Advanced filter-conditions form for available start/end dates, expected attendance, location,
+  accessibility, one or more acceptable room layouts and required facilities.
+  It blocks incomplete or invalid date ranges and invalid attendance, then shows
+  a reusable destructive alert below the action buttons before keeping the
+  selected values in the URL. Opening Filters from filtered results restores
+  those values so they can be adjusted.
+- **[frontend/src/components/DateRangeCalendar.jsx](frontend/src/components/DateRangeCalendar.jsx)** —
+  Reusable React Aria `RangeCalendar` wrapper used inside the date picker popup.
+- **[frontend/src/components/DateRangePicker.jsx](frontend/src/components/DateRangePicker.jsx)** —
+  Editable start and end date fields in `DD-MM-YYYY`. Focusing either field
+  opens the range calendar popup; users may type dates or select them there.
+- **[frontend/src/components/Alert.jsx](frontend/src/components/Alert.jsx)** —
+  Browser port of the React Native Reusables Alert API: `Alert`,
+  `AlertTitle` and `AlertDescription`. Use `variant="destructive"` for errors.
+- **[backend/app/routes/venues.py](backend/app/routes/venues.py)** — Authenticated,
+  read-only venue search endpoints. `GET /api/venues?name=` searches names;
+  `GET /api/venues/search` applies advanced filters.
+- **[backend/app/schemas/venue_search.py](backend/app/schemas/venue_search.py)** —
+  Validates filter values, including `DD-MM-YYYY` dates, and makes the allowed
+  layouts and facilities explicit.
+- **[backend/app/services/venue_search_service.py](backend/app/services/venue_search_service.py)** —
+  Builds the Supabase query, applies capacity/location/accessibility/facility/layout
+  filters, and checks that each requested date is an operating day.
+  It cannot check bookings until venue booking and unavailability tables exist.
+- **[backend/tests/test_search_venues.py](backend/tests/test_search_venues.py)** —
+  Tests only normal name-search casing, seeded venues, empty results and validation.
+- **[backend/tests/test_filter_search.py](backend/tests/test_filter_search.py)** —
+  Tests filter validation, query construction and single/multi-day operating-day
+  matching without calling Supabase.
+- **[frontend/src/App.jsx](frontend/src/App.jsx)** — Registers `/venue-search`,
+  `/venue-search/results` and `/venue-search/filters`; all require an
+  authenticated session.
+
+Do not add suitability verdicts to this story; they belong
+to the separate Venue Suitability Checking feature.
