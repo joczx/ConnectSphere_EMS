@@ -171,13 +171,13 @@ class SupabaseClientTests(unittest.TestCase):
         self.assertEqual(result.exception.status, 503)
 
     def test_47_invalid_json(self):
-        self.transport.return_value.__enter__.return_value = io.StringIO('<html>Error</html>')
+        self.transport.return_value.__enter__.return_value = io.BytesIO(b'<html>Error</html>')
         with self.assertRaises(StoreError) as result:
             supabase_request('/rest/v1/events')
         self.assertEqual(result.exception.status, 503)
 
     def test_48_get_preserves_user_token_and_timeout(self):
-        self.transport.return_value.__enter__.return_value = io.StringIO('[]')
+        self.transport.return_value.__enter__.return_value = io.BytesIO(b'[]')
         self.assertEqual(supabase_request('/rest/v1/events', token='user-a-token'), [])
         request = self.transport.call_args.args[0]
         self.assertEqual(request.full_url, 'https://example.invalid/rest/v1/events')
@@ -188,11 +188,11 @@ class SupabaseClientTests(unittest.TestCase):
         self.assertEqual(self.transport.call_args.kwargs, {'timeout': 10})
 
     def test_49_json_object_response(self):
-        self.transport.return_value.__enter__.return_value = io.StringIO('{"id":"user-a"}')
+        self.transport.return_value.__enter__.return_value = io.BytesIO(b'{"id":"user-a"}')
         self.assertEqual(supabase_request('/auth/v1/user', token='user-a-token'), {'id': 'user-a'})
 
     def test_50_no_authorization_header_without_user_token(self):
-        self.transport.return_value.__enter__.return_value = io.StringIO('{}')
+        self.transport.return_value.__enter__.return_value = io.BytesIO(b'{}')
         supabase_request('/auth/v1/settings')
         self.assertIsNone(self.transport.call_args.args[0].get_header('Authorization'))
 

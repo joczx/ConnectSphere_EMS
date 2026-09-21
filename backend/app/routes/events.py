@@ -20,14 +20,14 @@ def store_error(error):
 
 @events.get('/events')
 def list_events():
-    token = authenticated_token()
+    token = authenticated_token(supabase_request)
     rows = supabase_request('/rest/v1/events?select=event_id,event_name,status,start_datetime,end_datetime&order=start_datetime.asc.nullslast', token=token)
     return jsonify(events=rows)
 
 
 @events.get('/events/<event_id>')
 def view_event(event_id):
-    token = authenticated_token()
+    token = authenticated_token(supabase_request)
     try:
         event_id = int(event_id)
     except ValueError:
