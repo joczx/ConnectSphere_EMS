@@ -41,7 +41,7 @@ def create_equipment_request(event_id, payload, token):
 
     equipment_type = _clean_text(payload.get('equipment_type'), 'equipment_type', 'Equipment type is required.')
     quantity = payload.get('quantity')
-    if not isinstance(quantity, int) or quantity <= 0:
+    if type(quantity) is not int or quantity <= 0:
         raise EquipmentRequestError('quantity must be a whole number greater than zero.', 400, {'quantity': 'quantity must be a whole number greater than zero.'})
 
     technical_requirements = payload.get('technical_requirements')

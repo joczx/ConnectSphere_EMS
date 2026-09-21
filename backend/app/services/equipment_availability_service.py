@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.services.equipment_request_service import supabase_request
 
@@ -26,13 +26,12 @@ def _parse_datetime(value, field_name, error_message):
     if not isinstance(value, str):
         raise EquipmentAvailabilityError(error_message, 400, {field_name: error_message})
     try:
-        return datetime.fromisoformat(value.replace('Z', '+00:00'))
+        parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        if parsed.tzinfo is None:
+            raise ValueError('Timezone required')
+        return parsed.astimezone(timezone.utc)
     except ValueError as exc:
         raise EquipmentAvailabilityError(error_message, 400, {field_name: error_message}) from exc
-
-
-def _overlaps(start_a, end_a, start_b, end_b):
-    return start_a < end_b and start_b < end_a
 
 
 def _current_user_id(token):
@@ -55,7 +54,7 @@ def check_equipment_availability(payload, token):
         quantity = int(raw_quantity)
     except (TypeError, ValueError):
         raise EquipmentAvailabilityError('quantity must be a whole number greater than zero.', 400, {'quantity': 'quantity must be a whole number greater than zero.'})
-    if quantity <= 0:
+    if isinstance(raw_quantity, bool) or not isinstance(raw_quantity, (str, int)) or quantity <= 0:
         raise EquipmentAvailabilityError('quantity must be a whole number greater than zero.', 400, {'quantity': 'quantity must be a whole number greater than zero.'})
 
     start_str = payload.get('start_datetime')
@@ -67,34 +66,9 @@ def check_equipment_availability(payload, token):
 
     _current_user_id(token)
 
-    equipment_rows = supabase_request('/rest/v1/equipment?select=*', token=token)
-    request_rows = supabase_request('/rest/v1/equipment_request?select=equipment_id,quantity,status,events(start_datetime,end_datetime)', token=token)
-
-    committed_by_equipment = {}
-    for request in request_rows:
-        if not isinstance(request, dict):
-            continue
-        status = str(request.get('status', '')).strip().lower()
-        if status not in {'accepted', 'in_progress', 'partially_accepted', 'completed'}:
-            continue
-        event = request.get('events') or {}
-        if not isinstance(event, dict):
-            continue
-        event_start = event.get('start_datetime')
-        event_end = event.get('end_datetime')
-        if not event_start or not event_end:
-            continue
-        try:
-            event_start_dt = _parse_datetime(str(event_start), 'start_datetime', 'Required event date and time is missing.')
-            event_end_dt = _parse_datetime(str(event_end), 'end_datetime', 'Required event date and time is missing.')
-        except EquipmentAvailabilityError:
-            continue
-        if not _overlaps(required_start, required_end, event_start_dt, event_end_dt):
-            continue
-        equipment_id = request.get('equipment_id')
-        if equipment_id is None:
-            continue
-        committed_by_equipment[equipment_id] = committed_by_equipment.get(equipment_id, 0) + int(request.get('quantity') or 0)
+    equipment_rows = supabase_request('/rest/v1/rpc/equipment_window_availability', token=token, payload={
+        'p_start': required_start.isoformat(), 'p_end': required_end.isoformat(),
+    })
 
     matched_results = []
     for item in equipment_rows:
@@ -107,9 +81,7 @@ def check_equipment_availability(payload, token):
             continue
 
         equipment_id = item.get('equipment_id')
-        total_quantity = int(item.get('total_quantity') or 0)
-        allocated = committed_by_equipment.get(equipment_id, 0)
-        available_quantity = max(0, total_quantity - allocated)
+        available_quantity = max(0, int(item.get('available_quantity') or 0))
         if available_quantity <= 0:
             continue
 

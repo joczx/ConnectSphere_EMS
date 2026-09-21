@@ -5,14 +5,15 @@ or event-membership restrictions on this feature. Existing sign-in is retained.
 
 ## Setup
 
-1. Apply `supabase/005_equipment_reservations.sql` once in the Supabase SQL Editor.
-   It requires the existing `public.events` table and supports either
+1. Apply `supabase/010_equipment_reservations_existing_catalogue.sql` once in the Supabase SQL Editor.
+   Use this instead of the legacy `005_equipment_reservations.sql`, which creates an incompatible UUID catalogue.
+   It preserves the existing integer-ID `equipment` table and requires `equipment_request` and `public.events` and supports either
    `start_datetime` / `end_datetime` or `starts_at` / `ends_at` columns.
 2. Add your actual inventory in the SQL Editor, for example:
 
    ```sql
-   insert into public.equipment (name, total_quantity)
-   values ('Projector', 5), ('Microphone', 10), ('Speaker', 4);
+   insert into public.equipment (equipment_type, equipment_model, total_quantity)
+   values ('Projector', 'PX-500', 5), ('Microphone', 'M-100', 10), ('Speaker', 'S-200', 4);
    ```
 
 3. Configure `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `backend/.env`.
@@ -33,8 +34,7 @@ or event-membership restrictions on this feature. Existing sign-in is retained.
 - Saved quantities appear in the availability table. Refresh retrieves current
   stock; confirmation always rechecks it even if the displayed count is stale.
 - Events with reservations cannot change ID or dates. Deleting an event removes
-  its reservations. Release/edit UI is outside this story; an administrator can
-  remove reservations in Supabase before rescheduling an event.
+  its reservations. The creator can cancel reservations in My equipment reservations before rescheduling an event.
 - Inventory management is performed in Supabase. Do not lower stock below
   existing commitments. Cancellation status does not automatically release stock.
 
@@ -62,3 +62,42 @@ For integration acceptance, reserve the last available units for two overlapping
 events concurrently: exactly one should succeed and the other should report
 insufficient equipment. Also check exact-stock success, over-stock rejection,
 non-overlapping reuse, missing event dates, and access with ordinary user accounts.
+
+## Loading failure diagnosis
+
+The deployed database was reachable during read-only checks, but lacked
+`equipment_reservations` and `equipment_events`. Its catalogue has integer IDs,
+`equipment_type` and `equipment_model`, not the legacy UUID IDs and `name`.
+Missing Flask reservation routes produced HTML 404 responses and the frontend's
+JSON parser reported `Unexpected token '<'`.
+
+The event picker now reads the existing events table directly. Apply migration
+010 through the Supabase SQL Editor to enable availability and reservations;
+the public anon/publishable key cannot apply database migrations. Restart Flask
+and refresh the frontend afterwards. Both availability screens share the database
+peak calculation, including committed equipment requests and reservations.
+Pending equipment requests do not consume stock.
+
+Administrative changes to accepted requests or total inventory must also respect
+existing stock commitments; this feature only serializes reservation confirmations.
+
+## Modify or cancel your reservations
+
+After migration 010, apply `supabase/011_manage_equipment_reservations.sql` once
+in the Supabase SQL Editor. It preserves existing reservations.
+
+Open **Reserve Equipment ? My equipment reservations** to see reservations you
+created across all events. Change the quantity and choose **Save quantity**, or
+choose **Cancel reservation ? Confirm cancellation**. Cancellation removes the
+reservation; it can be booked again later. There is no cancellation history.
+
+The database checks ownership using the authenticated user's ID, including direct
+RPC calls. It serializes updates/cancellations with new reservations using the same
+event and stock locks. Increases account for the existing quantity, reductions
+release only the difference, and cancellation releases the entire quantity. Both
+availability screens use the updated allocation. Role restrictions remain unchanged:
+all signed-in users can reserve, and only the creator can manage a reservation.
+
+Endpoints: `GET /api/equipment/reservations`,
+`PATCH /api/equipment/reservations/<id>` with `{"quantity": 3}`,
+and `DELETE /api/equipment/reservations/<id>`.

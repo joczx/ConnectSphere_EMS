@@ -1,5 +1,7 @@
+import { readApiResponse } from '../services/http';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import EquipmentReservations from '../components/EquipmentReservations';
 
 const formatDate = value => new Intl.DateTimeFormat('en-SG', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Singapore',
@@ -16,13 +18,14 @@ export default function Equipment({ token, onSignOut }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [reservationsRefresh, setReservationsRefresh] = useState(0);
 
   async function api(path, options = {}) {
     const response = await fetch('/api/equipment' + path, {
       ...options, cache: 'no-store',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
     });
-    const result = await response.json();
+    const result = await readApiResponse(response);
     if (!response.ok) throw new Error(result.error || 'Unable to load equipment. Please try again.');
     return result;
   }
@@ -51,7 +54,7 @@ export default function Equipment({ token, onSignOut }) {
     return () => controller.abort();
   }, [eventId, token, refresh]);
 
-  const selected = data?.equipment.find(item => item.equipment_id === equipmentId);
+  const selected = data?.equipment.find(item => String(item.equipment_id) === equipmentId);
   async function reserve(e) {
     e.preventDefault();
     if (saving) return;
@@ -70,6 +73,7 @@ export default function Equipment({ token, onSignOut }) {
       setMessage(`Reserved ${amount} × ${selected.name} for this event.`);
       setEquipmentId('');
       setQuantity('1');
+      setReservationsRefresh(value => value + 1);
     } catch (err) {
       setError(err.message);
     }
@@ -119,6 +123,8 @@ export default function Equipment({ token, onSignOut }) {
           </>}
         </section>
       </>}
+      <EquipmentReservations token={token} refresh={reservationsRefresh}
+        onChanged={() => setRefresh(value => value + 1)} />
     </main>
   </>;
 }

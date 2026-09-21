@@ -7,7 +7,8 @@ from flask import request
 
 
 class StoreError(Exception):
-    def __init__(self, status, message=None):
+    def __init__(self, status, message=None, code=None):
+        self.code = code
         self.status = status
         self.message = message or (
             'Please sign in again.' if status == 401 else 'Event service is temporarily unavailable.'
@@ -41,13 +42,15 @@ def supabase_request(path, token=None, payload=None):
                 raise StoreError(503, f'Supabase returned a non-JSON response. Check the project URL and API key. Raw response: {snippet}') from exc
     except HTTPError as exc:
         error_body = exc.read()
+        code = None
         if error_body:
             try:
                 payload = json.loads(error_body.decode('utf-8'))
                 message = payload.get('message') if isinstance(payload, dict) else None
+                code = payload.get('code') if isinstance(payload, dict) else None
             except json.JSONDecodeError:
                 message = None
-            raise StoreError(401 if exc.code in (400, 401, 403) else 503, message or exc.reason or 'Supabase request failed.') from exc
+            raise StoreError(401 if exc.code in (400, 401, 403) else 503, message or exc.reason or 'Supabase request failed.', code=code) from exc
         raise StoreError(401 if exc.code in (400, 401, 403) else 503, exc.reason or 'Supabase request failed.') from exc
     except (URLError, TimeoutError) as exc:
         raise StoreError(503, 'Supabase is temporarily unavailable.') from exc

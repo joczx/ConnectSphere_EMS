@@ -12,7 +12,7 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 CONTAINER = 'connectsphere-equipment-test'
 ACTOR = '00000000-0000-0000-0000-000000000001'
-ITEM = '00000000-0000-0000-0000-000000000002'
+ITEM = 10
 EVENTS = [f'00000000-0000-0000-0000-{i:012d}' for i in range(10, 16)]
 
 
@@ -42,9 +42,12 @@ def main():
         grant execute on function auth.uid() to authenticated;
     """)
     sql((ROOT / 'supabase/002_create_events.sql').read_text())
-    sql((ROOT / 'supabase/005_equipment_reservations.sql').read_text())
+    sql((ROOT / 'supabase/006_create_equipment').read_text())
+    sql('create table public.equipment_request (equipment_id integer references equipment, event_id uuid references events, quantity integer, status text);')
+    sql((ROOT / 'supabase/010_equipment_reservations_existing_catalogue.sql').read_text())
+    sql((ROOT / 'supabase/011_manage_equipment_reservations.sql').read_text())
     sql((ROOT / 'backend/tests/equipment_overlap.sql').read_text())
-    sql(f"insert into auth.users values ('{ACTOR}'); insert into equipment values ('{ITEM}', 'Projector', 5);")
+    sql(f"insert into auth.users values ('{ACTOR}'); insert into equipment values ('{ITEM}', 'Projector', 'PX-500', 5);")
     for index, event in enumerate(EVENTS):
         start, end = ('09:00', '10:00') if index < 4 else ('10:00', '11:00')
         sql(f"insert into events(event_id, event_name, starts_at, ends_at) values ('{event}', 'Event {index}', '2030-01-01 {start}Z', '2030-01-01 {end}Z');")
@@ -55,6 +58,25 @@ def main():
     assert 'already reserved' in reserve(EVENTS[0], 5)['error']
     assert reserve(EVENTS[4], 5)['reservation']['quantity'] == 5
     assert sql('select count(*) from equipment_reservations;') == '2'
+
+    mine = json.loads(user_query('select my_equipment_reservations();'))
+    assert len(mine) == 2
+    reservation = next(row for row in mine if row['event_id'] == EVENTS[0])['reservation_id']
+    def change(quantity):
+        return json.loads(user_query(f"select update_equipment_reservation('{reservation}', {quantity});"))
+    assert change(3)['reservation']['quantity'] == 3
+    assert json.loads(user_query(f"select equipment_availability('{EVENTS[1]}');"))['equipment'][0]['available_quantity'] == 2
+    assert change(6)['status'] == 409
+    assert change(5)['reservation']['quantity'] == 5
+    outsider = '00000000-0000-0000-0000-000000000099'
+    assert json.loads(sql(f"set role authenticated; set request.jwt.claim.sub = '{outsider}'; select my_equipment_reservations();")) == []
+    for call in (f"update_equipment_reservation('{reservation}', 1)", f"cancel_equipment_reservation('{reservation}')"):
+        assert json.loads(sql(f"set role authenticated; set request.jwt.claim.sub = '{outsider}'; select {call};"))['status'] == 404
+    assert json.loads(user_query(f"select cancel_equipment_reservation('{reservation}');"))['cancelled']
+    assert json.loads(user_query(f"select equipment_availability('{EVENTS[1]}');"))['equipment'][0]['available_quantity'] == 5
+    assert change(1)['status'] == 404
+    assert reserve(EVENTS[0], 5)['reservation']['quantity'] == 5
+
     assert 'error' in reserve(EVENTS[2], 0)
     try:
         sql(f"update events set ends_at = ends_at + interval '1 hour' where event_id = '{EVENTS[0]}';")
@@ -77,6 +99,10 @@ def main():
     sql('alter table events rename column starts_at to start_datetime; alter table events rename column ends_at to end_datetime;')
     result = json.loads(user_query(f"select equipment_availability('{EVENTS[5]}');"))
     assert result['equipment'][0]['available_quantity'] == 5
+    window = json.loads(user_query("select equipment_window_availability('2030-01-01 10:00Z', '2030-01-01 11:00Z');"))
+    assert window[0]['available_quantity'] == 5
+    sql(f"insert into equipment_request values ({ITEM}, '{EVENTS[3]}', 2, 'accepted');")
+    assert sql(f"select equipment_peak({ITEM}, '2030-01-01 09:00Z', '2030-01-01 10:00Z');") == '7'
     sql(f"update events set end_datetime = null where event_id = '{EVENTS[5]}';")
     assert 'valid event start' in reserve(EVENTS[5], 1)['error']
     try:

@@ -1,11 +1,11 @@
--- Run as postgres in a test Supabase database after migration 005.
+-- Run as postgres in a test Supabase database after migration 010.
 -- Rolls back fixtures. These assertions exercise the actual SQL peak calculation.
 begin;
 do $$
-declare item uuid := gen_random_uuid(); actor uuid := gen_random_uuid();
+declare item integer; actor uuid := gen_random_uuid();
 begin
     insert into auth.users(id) values (actor);
-    insert into public.equipment(equipment_id, name, total_quantity) values (item, 'Overlap test ' || item, 10);
+    insert into public.equipment(equipment_type, equipment_model, total_quantity) values ('Overlap test', 'Fixture', 10) returning equipment_id into item;
     insert into public.equipment_reservations(event_id, equipment_id, quantity, starts_at, ends_at, created_by) values
         ('test-a', item, 4, '2030-01-01 09:00Z', '2030-01-01 10:00Z', actor),
         ('test-b', item, 6, '2030-01-01 10:00Z', '2030-01-01 11:00Z', actor);

@@ -1,3 +1,4 @@
+import { readApiResponse } from '../services/http';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -31,7 +32,7 @@ export default function Events({ token, onSignOut }) {
         const response = await fetch('/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : ''), {
           headers: { Authorization: 'Bearer ' + token }, cache: 'no-store', signal: controller.signal,
         });
-        const data = await response.json();
+        const data = await readApiResponse(response);
         if (!response.ok) throw new Error(response.status === 401 ? 'Your session has expired. Sign out and sign in again.' : data.error);
         if (!controller.signal.aborted) setState((current) => ({ ...current, data, key: eventId, loading: false, error: null }));
       } catch (err) {
@@ -53,7 +54,7 @@ export default function Events({ token, onSignOut }) {
         const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/equipment-requests`, {
           headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
         });
-        const data = await response.json();
+        const data = await readApiResponse(response);
         if (!response.ok) throw new Error(data.error || 'Unable to load equipment requests.');
         if (!ignore) setState((current) => ({ ...current, equipment: data.equipment_requests || [], equipmentError: null }));
       } catch (err) {
@@ -73,9 +74,9 @@ export default function Events({ token, onSignOut }) {
       headers: { Authorization: 'Bearer ' + token },
       cache: 'no-store',
     })
-      .then(res => res.json())
+      .then(readApiResponse)
       .then(data => { if (!ignore) setEquipmentTypes(data.equipment_types || []); })
-      .catch(() => {});
+      .catch(err => { if (!ignore) setSubmitState({ message: '', error: err.message }); });
     return () => { ignore = true; };
   }, [token]);
 
@@ -93,7 +94,7 @@ export default function Events({ token, onSignOut }) {
           technical_requirements: form.technical_requirements,
         }),
       });
-      const data = await response.json();
+      const data = await readApiResponse(response);
       // const text = await response.text();
       // console.log("Status:", response.status);
       // console.log("Response:", text);
@@ -128,7 +129,7 @@ export default function Events({ token, onSignOut }) {
       headers: { Authorization: 'Bearer ' + token },
       cache: 'no-store',
     })
-      .then((res) => res.json())
+      .then(readApiResponse)
       .then((data) => setUserNames(data.users || {}))
       .catch(() => setUserNames({}));
   }, [event, token]);

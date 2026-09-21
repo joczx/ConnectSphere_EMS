@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from app import create_app
 
-EQUIPMENT_ID = '76e23d40-5895-4d2e-bcf9-c8625c5dc08d'
+EQUIPMENT_ID = '10'
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def test_success_passes_user_token_without_role_check(client):
     assert result.status_code == 201
     assert result.json['reservation']['quantity'] == 2
     assert rpc.call_args.kwargs == {'token': 'ordinary-user-token', 'payload': {
-        'p_event_id': '1', 'p_equipment_id': EQUIPMENT_ID, 'p_quantity': 2,
+        'p_event_id': '1', 'p_equipment_id': int(EQUIPMENT_ID), 'p_quantity': 2,
     }}
 
 
@@ -63,3 +63,20 @@ def test_availability_and_invalid_dates(client):
         assert response.status_code == 200
         assert response.headers['Cache-Control'] == 'no-store'
         assert client.get('/api/equipment/availability?event_id=2').status_code == 400
+
+
+def test_event_picker_uses_existing_events_table(client):
+    rows = [{'event_id': 1, 'event_name': 'Workshop'}]
+    with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', return_value=rows) as rpc:
+        response = client.get('/api/equipment/events')
+    assert response.status_code == 200
+    assert response.json == {'events': rows}
+    assert rpc.call_args.args[0].startswith('/rest/v1/events?')
+
+
+def test_missing_migration_returns_actionable_json(client):
+    from app.services.event_store import StoreError
+    with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', side_effect=StoreError(503, code='PGRST202')):
+        response = client.get('/api/equipment/availability?event_id=1')
+    assert response.status_code == 503
+    assert 'not configured' in response.json['error']

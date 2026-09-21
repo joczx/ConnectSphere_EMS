@@ -1,3 +1,4 @@
+import { readApiResponse } from '../services/http';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -28,9 +29,9 @@ export default function EquipmentAvailability({ token, onSignOut }) {
       headers: { Authorization: 'Bearer ' + token },
       cache: 'no-store',
     })
-      .then(res => res.json())
+      .then(readApiResponse)
       .then(data => { if (!ignore) setEquipmentTypes(data.equipment_types || []); })
-      .catch(() => {});
+      .catch(err => { if (!ignore) setState(previous => ({ ...previous, error: err.message })); });
     return () => { ignore = true; };
   }, [token]);
 
@@ -42,15 +43,15 @@ export default function EquipmentAvailability({ token, onSignOut }) {
       const params = new URLSearchParams({
         equipment_type: form.equipment_type,
         quantity: String(Number(form.quantity) || 0),
-        start_datetime: form.start_datetime,
-        end_datetime: form.end_datetime,
+        start_datetime: new Date(form.start_datetime).toISOString(),
+        end_datetime: new Date(form.end_datetime).toISOString(),
       });
 
       const response = await fetch(`/api/equipment-availability?${params.toString()}`, {
         headers: { Authorization: 'Bearer ' + token },
         cache: 'no-store',
       });
-      const data = await response.json();
+      const data = await readApiResponse(response);
       if (!response.ok) throw new Error(data.error || 'Unable to check equipment availability.');
 
       setState({
