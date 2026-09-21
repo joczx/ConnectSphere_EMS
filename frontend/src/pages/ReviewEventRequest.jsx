@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { api, humanise, userId } from '../services/eventRequests';
+import { useAuth } from '../auth/AuthContext';
+import { eventRequestsApi, humanise, userId } from '../services/eventRequests';
 
 const when = (iso) => iso && new Intl.DateTimeFormat('en-SG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Singapore' }).format(new Date(iso));
 const list = (items, show) => items?.length ? items.map(show).join(', ') : 'None';
 
-export default function ReviewEventRequest({ token, onSignOut }) {
+export default function ReviewEventRequest() {
+  const { api, token } = useAuth();
   const { requestId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -14,12 +16,12 @@ export default function ReviewEventRequest({ token, onSignOut }) {
   useEffect(() => {
     (async () => {
       try {
-        const [request, { reviews }] = await Promise.all([api('/' + requestId, token), api(`/${requestId}/reviews`, token)]);
+        const [request, { reviews }] = await Promise.all([eventRequestsApi(api, '/' + requestId), eventRequestsApi(api, `/${requestId}/reviews`)]);
         setState({ request, reviews });
       }
       catch (err) { setState({ error: err.message || 'Unable to load this event request.' }); }
     })();
-  }, [requestId, token, location.key]);
+  }, [api, requestId, location.key]);
 
   async function review(e) {
     e.preventDefault();
@@ -28,7 +30,7 @@ export default function ReviewEventRequest({ token, onSignOut }) {
     const comments = new FormData(e.currentTarget).get('comments');
     setState(current => ({ ...current, busy: true, error: null, details: null }));
     try {
-      const data = await api(`/${requestId}/review`, token, { method: 'POST', body: { reviewer_id: userId(token), outcome, comments } });
+      const data = await eventRequestsApi(api, `/${requestId}/review`, { method: 'POST', body: { reviewer_id: userId(token), outcome, comments } });
       navigate('/review-event-requests/' + requestId, { replace: true, state: { message: data.message } });
     } catch (err) {
       setState(current => ({ ...current, busy: false, error: err.message, details: err.details }));
@@ -39,7 +41,7 @@ export default function ReviewEventRequest({ token, onSignOut }) {
   const errorBox = state.error && <div role="alert" className="panel error">{state.error}
     {state.details && <ul>{Object.values(state.details).map(message => <li key={message}>{message}</li>)}</ul>}</div>;
   return <>
-    <Navbar onSignOut={onSignOut} />
+    <Navbar />
     <main className="container">
       <Link to="/review-event-requests">← Review event requests</Link>
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{request?.event_name || 'Event request'}</h1></div></div>

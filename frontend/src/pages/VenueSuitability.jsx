@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { readApiResponse } from '../services/http';
+import { useAuth } from '../auth/AuthContext';
 
 function formatDateTime(value) {
   if (!value) return 'Not specified';
@@ -17,7 +17,8 @@ function formatStatus(value) {
   return value.replaceAll('_', ' ').replace(/^./, character => character.toUpperCase());
 }
 
-export default function VenueSuitability({ token, onRefreshSession, onSignOut }) {
+export default function VenueSuitability() {
+  const { api } = useAuth();
   const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
@@ -27,22 +28,9 @@ export default function VenueSuitability({ token, onRefreshSession, onSignOut })
     const controller = new AbortController();
 
     async function loadEvents() {
-      const send = accessToken => fetch('/api/events', {
-        cache: 'no-store',
-        signal: controller.signal,
-        headers: { Authorization: 'Bearer ' + accessToken },
-      });
-
       setState({ loading: true, error: '' });
       try {
-        let response = await send(token);
-        if (response.status === 401) {
-          const refreshedToken = await onRefreshSession();
-          if (!refreshedToken) throw new Error('Your session has expired. Please sign in again.');
-          response = await send(refreshedToken);
-        }
-        const data = await readApiResponse(response);
-        if (!response.ok) throw new Error(data.error || 'Unable to load events.');
+        const data = await api('/api/events', { cache: 'no-store', signal: controller.signal });
         if (!controller.signal.aborted) {
           setEvents(data.events || []);
           setState({ loading: false, error: '' });
@@ -57,11 +45,11 @@ export default function VenueSuitability({ token, onRefreshSession, onSignOut })
 
     loadEvents();
     return () => controller.abort();
-  }, [token, onRefreshSession]);
+  }, [api]);
 
   return (
     <>
-      <Navbar onSignOut={onSignOut} />
+      <Navbar />
       <main className="container">
         <Link to="/home">← Home</Link>
         <div className="heading">

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { api, humanise, userId } from '../services/eventRequests';
+import { useAuth } from '../auth/AuthContext';
+import { eventRequestsApi, humanise, userId } from '../services/eventRequests';
 
 const LAYOUTS = ['theatre', 'classroom', 'boardroom', 'u_shape', 'banquet', 'standing'];
 const FACILITIES = ['projector', 'sound_system', 'wifi', 'stage', 'microphone', 'whiteboard', 'video_conferencing'];
@@ -16,7 +17,8 @@ const toItems = (text) => !text.trim() ? null : text.trim().toLowerCase() === 'n
   return { equipment_type, quantity: Number(quantity), notes: notes.join(', ') || null };
 });
 
-export default function EventRequest({ token, onSignOut }) {
+export default function EventRequest() {
+  const { api, token } = useAuth();
   const { requestId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -26,13 +28,13 @@ export default function EventRequest({ token, onSignOut }) {
     if (isNew) return setState({});
     (async () => {
       try {
-        const request = await api('/' + requestId, token);
+        const request = await eventRequestsApi(api, '/' + requestId);
         // A rejected request shows the Coordinator's remarks, so the Organiser knows what to amend.
-        setState({ request, remarks: request.status === 'rejected' && (await api(`/${requestId}/reviews`, token)).reviews[0]?.comments });
+        setState({ request, remarks: request.status === 'rejected' && (await eventRequestsApi(api, `/${requestId}/reviews`)).reviews[0]?.comments });
       }
       catch (err) { setState({ error: err.message || 'Unable to load this event request.' }); }
     })();
-  }, [requestId, token, isNew, location.key]);
+  }, [api, requestId, isNew, location.key]);
 
   async function save(e) {
     e.preventDefault();
@@ -49,9 +51,9 @@ export default function EventRequest({ token, onSignOut }) {
     setState(current => ({ ...current, busy: true, error: null, details: null }));
     try {
       let data = isNew
-        ? await api('', token, { method: 'POST', body: { ...body, event_organiser_id: userId(token), save_as_draft: !submit } })
-        : await api('/' + requestId, token, { method: 'PATCH', body });
-      if (submit && !isNew) data = await api(`/${requestId}/submit`, token, { method: 'POST' });
+        ? await eventRequestsApi(api, '', { method: 'POST', body: { ...body, event_organiser_id: userId(token), save_as_draft: !submit } })
+        : await eventRequestsApi(api, '/' + requestId, { method: 'PATCH', body });
+      if (submit && !isNew) data = await eventRequestsApi(api, `/${requestId}/submit`, { method: 'POST' });
       navigate('/event-requests/' + data.event_request.event_request_id, { replace: true, state: { message: data.message } });
     } catch (err) {
       setState(current => ({ ...current, busy: false, error: err.message, details: err.details }));
@@ -63,7 +65,7 @@ export default function EventRequest({ token, onSignOut }) {
   const rejected = request.status === 'rejected';
   const editable = isNew || request.status === 'draft' || rejected;
   return <>
-    <Navbar onSignOut={onSignOut} />
+    <Navbar />
     <main className="container">
       <Link to="/event-requests">← My event requests</Link>
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{isNew ? 'New event request' : request.event_name || 'Event request'}</h1></div></div>

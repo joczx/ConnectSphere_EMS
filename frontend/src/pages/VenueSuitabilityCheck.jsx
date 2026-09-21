@@ -1,14 +1,14 @@
 import { Link, useLocation, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 
-export default function VenueSuitabilityCheck({ onSignOut }) {
+export default function VenueSuitabilityCheck() {
   const { eventId } = useParams();
   const location = useLocation();
   const event = location.state?.event;
 
   return (
     <>
-      <Navbar onSignOut={onSignOut} />
+      <Navbar />
       <main className="container">
         <Link to="/venue-suitability">← Choose another event</Link>
         <div className="heading">

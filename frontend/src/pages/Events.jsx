@@ -1,7 +1,7 @@
-import { readApiResponse } from '../services/http';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useAuth } from '../auth/AuthContext';
 
 function date(value) {
   return value ? new Intl.DateTimeFormat('en-SG', {
@@ -12,7 +12,8 @@ function Detail({ label, value }) {
   return <div><dt>{label}</dt><dd>{value === null || value === undefined || value === '' ? 'Not specified' : value}</dd></div>;
 }
 
-export default function Events({ token, onRefreshSession, onSignOut }) {
+export default function Events() {
+  const { api } = useAuth();
   const { eventId } = useParams();
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
@@ -30,19 +31,7 @@ export default function Events({ token, onRefreshSession, onSignOut }) {
       setState((current) => ({ ...current, loading: true, error: null }));
       try {
         const path = '/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : '');
-        const send = accessToken => fetch(path, {
-          headers: { Authorization: 'Bearer ' + accessToken }, cache: 'no-store', signal: controller.signal,
-        });
-        let response = await send(token);
-        if (response.status === 401) {
-          const refreshedToken = await onRefreshSession();
-          if (!refreshedToken) {
-            onSignOut();
-            return;
-          }
-          response = await send(refreshedToken);
-        }
-        const data = await readApiResponse(response);
+        const data = await api(path, { cache: 'no-store', signal: controller.signal });
         if (!controller.signal.aborted) setState((current) => ({ ...current, data, key: eventId, loading: false, error: null }));
       } catch (err) {
         if (!controller.signal.aborted) setState((current) => ({ ...current, loading: false, error: err.message || 'Unable to load event information.' }));
@@ -53,18 +42,14 @@ export default function Events({ token, onRefreshSession, onSignOut }) {
     const timer = setInterval(reload, 60000);
     window.addEventListener('focus', reload);
     return () => { controller.abort(); clearInterval(timer); window.removeEventListener('focus', reload); };
-  }, [eventId, token, refresh, onRefreshSession, onSignOut]);
+  }, [api, eventId, refresh]);
 
   useEffect(() => {
     if (!eventId) return;
     let ignore = false;
     async function loadEquipment() {
       try {
-        const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/equipment-requests`, {
-          headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
-        });
-        const data = await readApiResponse(response);
-        if (!response.ok) throw new Error(data.error || 'Unable to load equipment requests.');
+        const data = await api(`/api/events/${encodeURIComponent(eventId)}/equipment-requests`, { cache: 'no-store' });
         if (!ignore) setState((current) => ({ ...current, equipment: data.equipment_requests || [], equipmentError: null }));
       } catch (err) {
         if (!ignore) setState((current) => ({ ...current, equipmentError: err.message || 'Unable to load equipment requests.' }));
@@ -72,43 +57,32 @@ export default function Events({ token, onRefreshSession, onSignOut }) {
     }
     loadEquipment();
     return () => { ignore = true; };
-  }, [eventId, token, refresh]);
+  }, [api, eventId, refresh]);
 
 
   const [equipmentTypes, setEquipmentTypes] = useState([]);
 
   useEffect(() => {
     let ignore = false;
-    fetch('/api/equipment-types', {
-      headers: { Authorization: 'Bearer ' + token },
-      cache: 'no-store',
-    })
-      .then(readApiResponse)
+    api('/api/equipment-types', { cache: 'no-store' })
       .then(data => { if (!ignore) setEquipmentTypes(data.equipment_types || []); })
       .catch(err => { if (!ignore) setSubmitState({ message: '', error: err.message }); });
     return () => { ignore = true; };
-  }, [token]);
+  }, [api]);
 
   async function submitEquipmentRequest(event) {
     event.preventDefault();
     setSubmitState({ message: '', error: '' });
 
     try {
-      const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/equipment-requests`, {
+      const data = await api(`/api/events/${encodeURIComponent(eventId)}/equipment-requests`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({
+        body: {
           equipment_type: form.equipment_type,
           quantity: Number(form.quantity),
           technical_requirements: form.technical_requirements,
-        }),
+        },
       });
-      const data = await readApiResponse(response);
-      // const text = await response.text();
-      // console.log("Status:", response.status);
-      // console.log("Response:", text);
-
-      if (!response.ok) throw new Error(data.error || 'Unable to submit equipment request.');
       setSubmitState({ message: data.message || 'Equipment request submitted successfully.', error: '' });
       setForm({ equipment_type: '', quantity: 1, technical_requirements: '' });
       setRefresh(value => value + 1);
@@ -134,17 +108,13 @@ export default function Events({ token, onRefreshSession, onSignOut }) {
 
     if (!ids) return;
 
-    fetch(`/api/users?ids=${encodeURIComponent(ids)}`, {
-      headers: { Authorization: 'Bearer ' + token },
-      cache: 'no-store',
-    })
-      .then(readApiResponse)
+    api(`/api/users?ids=${encodeURIComponent(ids)}`, { cache: 'no-store' })
       .then((data) => setUserNames(data.users || {}))
       .catch(() => setUserNames({}));
-  }, [event, token]);
+  }, [api, event]);
 
   return <>
-    <Navbar onSignOut={onSignOut} />
+    <Navbar />
     <main className="container">
       {eventId && <Link to="/events">← My events</Link>}
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{eventId ? 'Event information' : 'My events'}</h1></div>
@@ -154,12 +124,12 @@ export default function Events({ token, onRefreshSession, onSignOut }) {
       {state.error && <div role="alert" className="panel error">{state.error} Use Refresh to try again.</div>}
       {data?.events && <section className="event-list" aria-label="Your events">
         {data.events.length === 0 && <div className="panel">No events are available to you yet. Contact your event organiser or coordinator to arrange access.</div>}
-        {data.events.map(item => <Link className="panel event-link" key={item.event_id} to={'/events/' + item.event_id}><h2>{item.event_name}</h2><p>{date(item.start_datetime)}</p><p className="metadata">Status: {item.status.charAt(0).toUpperCase() + item.status.slice(1) || 'Not specified'}</p><span>View event information →</span></Link>)}
+        {data.events.map(item => <Link className="panel event-link" key={item.event_id} to={'/events/' + item.event_id}><h2>{item.event_name}</h2><p>{date(item.start_datetime)}</p><p className="metadata">Status: {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : 'Not specified'}</p><span>View event information →</span></Link>)}
       </section>}
       {event && <article className="panel">
         <h2>{event.event_name}</h2>
         <dl>
-          <Detail label="Status" value={event.status.charAt(0).toUpperCase() + event.status.slice(1)} />
+          <Detail label="Status" value={event.status ? event.status.charAt(0).toUpperCase() + event.status.slice(1) : null} />
           <Detail label="Start date and time" value={date(event.start_datetime)} />
           <Detail label="End date and time" value={date(event.end_datetime)} />
           <Detail label="Event organiser" value={userNames[event.event_organiser_id] || (event.event_organiser_id ? event.event_organiser_id.slice(0, 8) : 'Not specified')} />

@@ -4,12 +4,6 @@ export const userId = (token) => JSON.parse(atob(token.split('.')[1].replace(/-/
 // "under_review" -> "Under review", "sound_system" -> "Sound system".
 export const humanise = (value) => value.charAt(0).toUpperCase() + value.slice(1).replace('_', ' ');
 
-export async function api(path, token, { method = 'GET', body } = {}) {
-  const response = await fetch('/api/event-requests' + path, {
-    method, cache: 'no-store', body: body && JSON.stringify(body),
-    headers: { Authorization: 'Bearer ' + token, ...(body && { 'Content-Type': 'application/json' }) },
-  });
-  const data = await response.json();
-  if (!response.ok) throw Object.assign(new Error(data.error || 'Something went wrong. Please try again.'), { details: data.errors });
-  return data;
-}
+export const eventRequestsApi = (api, path, options) => (
+  api('/api/event-requests' + path, { cache: 'no-store', ...options })
+);

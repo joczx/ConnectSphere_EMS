@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { useAuth } from './auth/AuthContext';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Events from './pages/Events';
@@ -16,64 +16,25 @@ import VenueSuitability from './pages/VenueSuitability';
 import VenueSuitabilityCheck from './pages/VenueSuitabilityCheck';
 
 export default function App() {
-  const [session, setSession] = useState(() => {
-    try {
-      const savedSession = sessionStorage.getItem('auth_session');
-      if (savedSession) return JSON.parse(savedSession);
-    } catch {}
-    const accessToken = sessionStorage.getItem('access_token');
-    return accessToken ? { access_token: accessToken } : null;
-  });
-  const token = session?.access_token;
+  const { token } = useAuth();
+  const protectedView = (element) => token ? element : <Navigate to="/" replace />;
 
-  function signIn(nextSession) {
-    if (nextSession?.access_token) {
-      sessionStorage.setItem('auth_session', JSON.stringify(nextSession));
-      sessionStorage.removeItem('access_token');
-    } else {
-      sessionStorage.removeItem('auth_session');
-      sessionStorage.removeItem('access_token');
-    }
-    setSession(nextSession);
-  }
-  const signOut = () => signIn(null);
-  async function refreshSession() {
-    if (!session?.refresh_token) return null;
-    const response = await fetch('/api/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: session.refresh_token }),
-    });
-    if (!response.ok) return null;
-    const nextSession = await response.json();
-    signIn(nextSession);
-    return nextSession.access_token;
-  }
-  const homeView = token ? <Home onSignOut={signOut} /> : <Navigate to="/" replace />;
-  const eventsView = token ? <Events token={token} onRefreshSession={refreshSession} onSignOut={signOut} /> : <Navigate to="/" replace />;
-  const requestsView = token ? <EventRequests token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
-  const requestView = token ? <EventRequest token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
-  const reviewsView = token ? <ReviewEventRequests token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
-  const reviewView = token ? <ReviewEventRequest token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
-  const equipmentAvailabilityView = token ? <EquipmentAvailability token={token} onSignOut={signOut} /> : <Navigate to="/" replace />;
-  const venueSuitabilityView = token ? <VenueSuitability token={token} onRefreshSession={refreshSession} onSignOut={signOut} /> : <Navigate to="/" replace />;
-  const venueSuitabilityCheckView = token ? <VenueSuitabilityCheck onSignOut={signOut} /> : <Navigate to="/" replace />;
   return <HashRouter><Routes>
-    <Route path="/" element={token ? <Navigate to="/home" replace /> : <Login onSignIn={signIn} />} />
-    <Route path="/home" element={homeView} />
-    <Route path="/events" element={eventsView} />
-    <Route path="/events/:eventId" element={eventsView} />
-    <Route path="/equipment" element={token ? <Equipment token={token} onSignOut={signOut} /> : <Navigate to="/" replace />} />
-    <Route path="/event-requests" element={requestsView} />
-    <Route path="/event-requests/:requestId" element={requestView} />
-    <Route path="/review-event-requests" element={reviewsView} />
-    <Route path="/review-event-requests/:requestId" element={reviewView} />
-    <Route path="/venue-search" element={token ? <VenueSearch token={token} onRefreshSession={refreshSession} onSignOut={signOut} /> : <Navigate to="/" replace />} />
-    <Route path="/venue-search/results" element={token ? <VenueSearchResults token={token} onRefreshSession={refreshSession} onSignOut={signOut} /> : <Navigate to="/" replace />} />
-    <Route path="/venue-search/filters" element={token ? <VenueSearchFilters onSignOut={signOut} /> : <Navigate to="/" replace />} />
-    <Route path="/equipment-availability" element={equipmentAvailabilityView} />
-    <Route path="/venue-suitability" element={venueSuitabilityView} />
-    <Route path="/venue-suitability/check/:eventId" element={venueSuitabilityCheckView} />
+    <Route path="/" element={token ? <Navigate to="/home" replace /> : <Login />} />
+    <Route path="/home" element={protectedView(<Home />)} />
+    <Route path="/events" element={protectedView(<Events />)} />
+    <Route path="/events/:eventId" element={protectedView(<Events />)} />
+    <Route path="/equipment" element={protectedView(<Equipment />)} />
+    <Route path="/event-requests" element={protectedView(<EventRequests />)} />
+    <Route path="/event-requests/:requestId" element={protectedView(<EventRequest />)} />
+    <Route path="/review-event-requests" element={protectedView(<ReviewEventRequests />)} />
+    <Route path="/review-event-requests/:requestId" element={protectedView(<ReviewEventRequest />)} />
+    <Route path="/venue-search" element={protectedView(<VenueSearch />)} />
+    <Route path="/venue-search/results" element={protectedView(<VenueSearchResults />)} />
+    <Route path="/venue-search/filters" element={protectedView(<VenueSearchFilters />)} />
+    <Route path="/equipment-availability" element={protectedView(<EquipmentAvailability />)} />
+    <Route path="/venue-suitability" element={protectedView(<VenueSuitability />)} />
+    <Route path="/venue-suitability/check/:eventId" element={protectedView(<VenueSuitabilityCheck />)} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></HashRouter>;
 }

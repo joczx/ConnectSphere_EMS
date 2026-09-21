@@ -1,13 +1,15 @@
-import { readApiResponse } from '../services/http';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import EquipmentReservations from '../components/EquipmentReservations';
+import Navbar from '../components/Navbar';
+import { useAuth } from '../auth/AuthContext';
 
 const formatDate = value => new Intl.DateTimeFormat('en-SG', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Singapore',
 }).format(new Date(value));
 
-export default function Equipment({ token, onSignOut }) {
+export default function Equipment() {
+  const { api } = useAuth();
   const [events, setEvents] = useState([]);
   const [eventId, setEventId] = useState('');
   const [data, setData] = useState(null);
@@ -20,15 +22,9 @@ export default function Equipment({ token, onSignOut }) {
   const [refresh, setRefresh] = useState(0);
   const [reservationsRefresh, setReservationsRefresh] = useState(0);
 
-  async function api(path, options = {}) {
-    const response = await fetch('/api/equipment' + path, {
-      ...options, cache: 'no-store',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    });
-    const result = await readApiResponse(response);
-    if (!response.ok) throw new Error(result.error || 'Unable to load equipment. Please try again.');
-    return result;
-  }
+  const equipmentApi = useCallback((path, options = {}) => (
+    api('/api/equipment' + path, { cache: 'no-store', ...options })
+  ), [api]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -38,8 +34,8 @@ export default function Equipment({ token, onSignOut }) {
     async function load() {
       try {
         const result = eventId
-          ? await api('/availability?event_id=' + encodeURIComponent(eventId), { signal: controller.signal })
-          : await api('/events', { signal: controller.signal });
+          ? await equipmentApi('/availability?event_id=' + encodeURIComponent(eventId), { signal: controller.signal })
+          : await equipmentApi('/events', { signal: controller.signal });
         if (!controller.signal.aborted) {
           if (eventId) setData(result);
           else setEvents(result.events);
@@ -52,7 +48,7 @@ export default function Equipment({ token, onSignOut }) {
     }
     load();
     return () => controller.abort();
-  }, [eventId, token, refresh]);
+  }, [equipmentApi, eventId, refresh]);
 
   const selected = data?.equipment.find(item => String(item.equipment_id) === equipmentId);
   async function reserve(e) {
@@ -67,9 +63,9 @@ export default function Equipment({ token, onSignOut }) {
     setError('');
     setMessage('');
     try {
-      await api('/reservations', { method: 'POST', body: JSON.stringify({
+      await equipmentApi('/reservations', { method: 'POST', body: {
         event_id: eventId, equipment_id: equipmentId, quantity: amount,
-      }) });
+      } });
       setMessage(`Reserved ${amount} × ${selected.name} for this event.`);
       setEquipmentId('');
       setQuantity('1');
@@ -79,7 +75,7 @@ export default function Equipment({ token, onSignOut }) {
     }
     // Recheck after success or conflict without clearing the reservation error.
     try {
-      setData(await api('/availability?event_id=' + encodeURIComponent(eventId)));
+      setData(await equipmentApi('/availability?event_id=' + encodeURIComponent(eventId)));
     } catch {
       setData(null);
       setError(previous => previous || 'Unable to refresh availability. Use Refresh to try again.');
@@ -89,7 +85,7 @@ export default function Equipment({ token, onSignOut }) {
   }
 
   return <>
-    <header><Link className="brand" to="/home">ConnectSphere</Link><button className="secondary" onClick={onSignOut}>Sign out</button></header>
+    <Navbar />
     <main className="container">
       <Link to="/home">← Home</Link>
       <div className="heading"><div><p className="eyebrow">EQUIPMENT</p><h1>Reserve equipment</h1></div>
@@ -123,7 +119,7 @@ export default function Equipment({ token, onSignOut }) {
           </>}
         </section>
       </>}
-      <EquipmentReservations token={token} refresh={reservationsRefresh}
+      <EquipmentReservations refresh={reservationsRefresh}
         onChanged={() => setRefresh(value => value + 1)} />
     </main>
   </>;
