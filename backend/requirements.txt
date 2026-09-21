@@ -1,6 +1,6 @@
 Flask
 Werkzeug<3
 flask-cors
-supabase
+supabase==2.31.0
 python-dotenv
 pytest
