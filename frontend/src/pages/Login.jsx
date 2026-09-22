@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
 
-export default function Login({ onSignIn }) {
+export default function Login() {
+  const { signIn } = useAuth();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   async function submit(e) {
@@ -22,8 +24,8 @@ export default function Login({ onSignIn }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Unable to sign in. Please try again.');
-      onSignIn(data);
+      if (!response.ok) throw new Error(response.status === 401 ? 'Unable to sign in. Check your email and password.' : data.error);
+      signIn(data);
     } catch (err) { setError(err.message || 'Unable to sign in. Please try again.'); }
     finally { setBusy(false); }
   }

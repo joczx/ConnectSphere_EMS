@@ -31,6 +31,7 @@ These are used by every story below.
 - **[backend/app/schemas/event_request.py](backend/app/schemas/event_request.py)** — `parse_payload()` checks every field's type and range; `find_missing()` enforces the mandatory fields before submission; `check_timing()` rejects an event that ends before it starts or starts in the past.
 - **[backend/app/services/event_request_service.py](backend/app/services/event_request_service.py)** — `create_event_request()` writes the row, sets the status, and stamps `submitted_at`.
 - **[backend/tests/test_event_request_schema.py](backend/tests/test_event_request_schema.py)** — Unit tests, each labelled with the acceptance criterion it covers.
+- **[frontend/src/pages/EventRequest.jsx](frontend/src/pages/EventRequest.jsx)** — Event request form. Its room-layout and required-facility choices match the Venue Search filters; equipment such as microphones is entered separately under equipment requirements.
 - **[supabase/002_add_event_request_equipment_and_registration.sql](supabase/002_add_event_request_equipment_and_registration.sql)** — Adds `equipment_requirements` (JSON array) and `registration_needs` (text), which the original table had no columns for.
 
 **Note:** the acceptance criteria say the initial status should be `Pending`, but no such value exists in the `request_status` enum. The code uses `submitted`, matching the Event Status Management story's `Draft → Submitted` transition.
@@ -154,6 +155,30 @@ Add one object to `HOME_APPS` in `frontend/src/config/apps.js`:
 as `/home` while the feature is unfinished; change it to the registered route
 when the responsible developer completes that page. `roles` is reserved for
 future role-based filtering; backend authorization must still enforce access.
+
+---
+
+## Frontend authentication and API requests
+
+Authenticated pages share one session and request implementation. Do not read
+tokens from session storage or implement refresh-and-retry logic inside a page.
+
+- **[frontend/src/auth/AuthContext.jsx](frontend/src/auth/AuthContext.jsx)** —
+  Owns the current Supabase session, sign-in/sign-out state and authenticated API
+  calls. `api()` adds the bearer token, refreshes the session after a `401`, and
+  retries the original request once. Concurrent `401` responses share one refresh
+  request so pages cannot rotate the same refresh token multiple times.
+- **[frontend/src/main.jsx](frontend/src/main.jsx)** — Wraps the application in
+  `AuthProvider`.
+- **[frontend/src/App.jsx](frontend/src/App.jsx)** — Uses the shared session to
+  protect authenticated routes; it does not own token-refresh logic.
+- **[frontend/src/components/AccountMenu.jsx](frontend/src/components/AccountMenu.jsx)** —
+  Signs out through the shared authentication context.
+
+Pages should call `const { api } = useAuth()` and then use
+`api('/api/example', options)`. Pass plain objects as `options.body`; the helper
+serialises them as JSON. Login and token refresh are the only unauthenticated
+requests and remain inside `Login.jsx` and `AuthContext.jsx` respectively.
 
 ---
 

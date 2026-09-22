@@ -2,10 +2,10 @@ import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import VenueSearchBar from '../components/VenueSearchBar';
 
-export default function VenueSearch({ onSignOut }) {
+export default function VenueSearch() {
   return (
     <>
-      <Navbar onSignOut={onSignOut} searchBar={<VenueSearchBar />} />
+      <Navbar searchBar={<VenueSearchBar />} />
       <main className="container">
         <Link to="/home">← Home</Link>
         <div className="heading">

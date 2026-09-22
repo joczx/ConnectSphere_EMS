@@ -2,10 +2,10 @@ import Navbar from '../components/Navbar';
 import AppGrid from '../components/AppGrid';
 import { HOME_APPS } from '../config/apps';
 
-export default function Home({ onSignOut }) {
+export default function Home() {
   return (
     <div className="home-page">
-      <Navbar onSignOut={onSignOut} />
+      <Navbar />
 
       <main className="home-content">
         <h1>ConnectSphere applications</h1>
