@@ -4,8 +4,8 @@ import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext';
 import { eventRequestsApi, humanise, userId } from '../services/eventRequests';
 
-const LAYOUTS = ['theatre', 'classroom', 'boardroom', 'u_shape', 'banquet', 'standing'];
-const FACILITIES = ['projector', 'sound_system', 'wifi', 'stage', 'microphone', 'whiteboard', 'video_conferencing'];
+const LAYOUTS = ['theatre', 'classroom', 'boardroom', 'banquet', 'exhibition', 'u_shape', 'cabaret'];
+const FACILITIES = ['stage', 'projector', 'sound_system', 'video_conferencing', 'wifi', 'parking', 'catering_area', 'air_conditioning'];
 
 // datetime-local inputs use the browser's local time; the API stores UTC.
 const toInput = (iso) => { if (!iso) return ''; const d = new Date(iso); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };

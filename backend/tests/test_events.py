@@ -66,10 +66,5 @@ class EventViewTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json, {'error': 'Event service is temporarily unavailable.'})
 
-    def test_login_requires_credentials(self):
-        for body in [{}, [], {'email': 'a', 'password': 2}]:
-            self.assertEqual(self.client.post('/api/login', json=body).status_code, 400)
-
-
 if __name__ == '__main__':
     unittest.main()

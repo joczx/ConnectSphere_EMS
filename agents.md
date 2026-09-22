@@ -31,6 +31,7 @@ These are used by every story below.
 - **[backend/app/schemas/event_request.py](backend/app/schemas/event_request.py)** — `parse_payload()` checks every field's type and range; `find_missing()` enforces the mandatory fields before submission; `check_timing()` rejects an event that ends before it starts or starts in the past.
 - **[backend/app/services/event_request_service.py](backend/app/services/event_request_service.py)** — `create_event_request()` writes the row, sets the status, and stamps `submitted_at`.
 - **[backend/tests/test_event_request_schema.py](backend/tests/test_event_request_schema.py)** — Unit tests, each labelled with the acceptance criterion it covers.
+- **[frontend/src/pages/EventRequest.jsx](frontend/src/pages/EventRequest.jsx)** — Event request form. Its room-layout and required-facility choices match the Venue Search filters; equipment such as microphones is entered separately under equipment requirements.
 - **[supabase/002_add_event_request_equipment_and_registration.sql](supabase/002_add_event_request_equipment_and_registration.sql)** — Adds `equipment_requirements` (JSON array) and `registration_needs` (text), which the original table had no columns for.
 
 **Note:** the acceptance criteria say the initial status should be `Pending`, but no such value exists in the `request_status` enum. The code uses `submitted`, matching the Event Status Management story's `Draft → Submitted` transition.
