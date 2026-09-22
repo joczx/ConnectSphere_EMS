@@ -149,6 +149,14 @@ def test_room_layout_must_be_one_the_database_recognises():
     assert "theatre" in errors["room_layout"]
 
 
+@pytest.mark.parametrize("room_layout", ["exhibition", "cabaret"])
+def test_new_venue_search_room_layouts_are_accepted(room_layout):
+    record, errors = schema.parse_payload(valid_payload(room_layout=room_layout))
+
+    assert errors == {}
+    assert record["room_layout"] == room_layout
+
+
 def test_a_timestamp_without_a_timezone_is_rejected():
     _, errors = schema.parse_payload(valid_payload(start_datetime="2027-01-01T09:00:00"))
 
@@ -174,6 +182,17 @@ def test_facilities_must_not_repeat():
     )
 
     assert "required_facilities" in errors
+
+
+def test_new_venue_search_facilities_are_accepted():
+    facilities = ["parking", "catering_area", "air_conditioning"]
+
+    record, errors = schema.parse_payload(
+        valid_payload(required_facilities=facilities)
+    )
+
+    assert errors == {}
+    assert record["required_facilities"] == facilities
 
 
 def test_accessibility_flags_must_be_true_or_false():
