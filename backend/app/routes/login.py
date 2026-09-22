@@ -1,8 +1,15 @@
+import re
+
 from flask import Blueprint, jsonify, request
 
-from app.services.event_store import supabase_request
+from app.services.event_store import StoreError, supabase_request
 
 login_bp = Blueprint('login', __name__, url_prefix='/api')
+
+
+@login_bp.errorhandler(StoreError)
+def handle_store_error(error):
+    return jsonify(error.to_dict()), error.status
 
 
 def session_response(result):
@@ -17,9 +24,20 @@ def login():
     if not isinstance(body, dict) or not isinstance(body.get('email'), str) or not isinstance(body.get('password'), str):
         return jsonify(error='Email and password are required.'), 400
 
-    result = supabase_request('/auth/v1/token?grant_type=password', payload={
-        'email': body['email'], 'password': body['password'],
-    })
+    email = body['email'].strip()
+    if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email):
+        return jsonify(error='Invalid email address. Please enter a valid email address.'), 400
+    if not body['password']:
+        return jsonify(error='Please enter your password.'), 400
+
+    try:
+        result = supabase_request('/auth/v1/token?grant_type=password', payload={
+            'email': email, 'password': body['password'],
+        })
+    except StoreError as error:
+        if error.status == 401:
+            return jsonify(error='Incorrect email or password. Please try again.'), 401
+        raise
     return session_response(result)
 
 
