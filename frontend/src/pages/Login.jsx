@@ -14,9 +14,12 @@ export default function Login() {
       const response = await fetch('/api/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
+      if (!response.ok) throw new Error(response.status === 401 ? 'Unable to sign in. Incorrect email or password.' : 'Unable to sign in. Please try again.');
+
       const data = await response.json();
-      if (!response.ok) throw new Error(response.status === 401 ? 'Unable to sign in. Check your email and password.' : data.error);
+
       signIn(data);
+
     } catch (err) { setError(err.message || 'Unable to sign in. Please try again.'); }
     finally { setBusy(false); }
   }

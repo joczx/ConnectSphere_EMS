@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from app.services.event_store import supabase_request
+from app.services.event_store import supabase_request, StoreError
 
 login_bp = Blueprint('login', __name__, url_prefix='/api')
 
@@ -10,6 +10,11 @@ def session_response(result):
         access_token=result['access_token'], refresh_token=result['refresh_token']
     )
 
+@login_bp.errorhandler(StoreError)
+def handle_store_error(error):
+    status = getattr(error, "status", 500)
+    message = getattr(error, "message", "Authentication failed.")
+    return jsonify(error=message), status
 
 @login_bp.post('/login')
 def login():
