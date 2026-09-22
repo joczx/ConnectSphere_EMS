@@ -13,7 +13,7 @@ export const HOME_APPS = [
   {
     id: 'equipment',
     label: 'Reserve Equipment',
-    description: 'Check availability and reserve equipment for an event',
+    description: 'Review equipment requests and accept or reject reservations',
     path: '/equipment',
     icon: '🛠️',
     roles: [],

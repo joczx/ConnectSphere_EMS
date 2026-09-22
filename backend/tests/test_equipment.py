@@ -28,12 +28,12 @@ def test_bad_request(client, payload):
     rpc.assert_not_called()
 
 
-def test_success_passes_user_token_without_role_check(client):
-    with patch('app.routes.equipment.authenticated_token', return_value='ordinary-user-token'), patch('app.routes.equipment.supabase_request', return_value={'reservation': {'quantity': 2}}) as rpc:
+def test_success_passes_user_token_to_assignment_checked_rpc(client):
+    with patch('app.routes.equipment.authenticated_token', return_value='technical-support-token'), patch('app.routes.equipment.supabase_request', return_value={'reservation': {'quantity': 2}}) as rpc:
         result = client.post('/api/equipment/reservations', json={'event_id': '1', 'equipment_id': EQUIPMENT_ID, 'quantity': 2})
     assert result.status_code == 201
     assert result.json['reservation']['quantity'] == 2
-    assert rpc.call_args.kwargs == {'token': 'ordinary-user-token', 'payload': {
+    assert rpc.call_args.kwargs == {'token': 'technical-support-token', 'payload': {
         'p_event_id': '1', 'p_equipment_id': int(EQUIPMENT_ID), 'p_quantity': 2,
     }}
 
@@ -80,3 +80,11 @@ def test_missing_migration_returns_actionable_json(client):
         response = client.get('/api/equipment/availability?event_id=1')
     assert response.status_code == 503
     assert 'not configured' in response.json['error']
+
+
+def test_database_permission_error_is_preserved(client):
+    message = 'Reservation is not permitted.'
+    with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', return_value={'error': message, 'status': 403}):
+        response = client.post('/api/equipment/reservations', json={'event_id': '1', 'equipment_id': EQUIPMENT_ID, 'quantity': 2})
+    assert response.status_code == 403
+    assert response.json['error'] == message

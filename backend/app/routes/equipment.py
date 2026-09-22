@@ -4,9 +4,31 @@ from flask import Blueprint, jsonify, request
 from app.services.equipment_availability_service import EquipmentAvailabilityError, check_equipment_availability
 from app.services.equipment_request_service import supabase_request
 from app.services.event_store import StoreError, authenticated_token
+from app.services.equipment_review_service import review_equipment_request
+from app.services.equipment_request_service import EquipmentRequestError
 
 
 equipment = Blueprint('equipment', __name__, url_prefix='/api')
+
+
+@equipment.errorhandler(EquipmentRequestError)
+def review_error(error):
+    return jsonify(error.to_dict()), error.status
+
+
+@equipment.get('/equipment-request-reviews')
+def review_queue():
+    token = authenticated_token()
+    rows = supabase_request('/rest/v1/rpc/equipment_request_review_queue', token=token, payload={})
+    catalogue = supabase_request('/rest/v1/equipment?select=equipment_id,equipment_type,equipment_model', token=token)
+    event_rows = supabase_request('/rest/v1/rpc/my_equipment_request_events', token=token, payload={})
+    return jsonify(equipment_requests=rows, equipment=catalogue, events=event_rows)
+
+
+@equipment.post('/equipment-request-reviews/<int:request_id>')
+def review_request(request_id):
+    token = authenticated_token()
+    return jsonify(review_equipment_request(request_id, request.get_json(silent=True), token))
 
 
 @equipment.after_request
@@ -92,7 +114,7 @@ def reserve():
     result = supabase_request('/rest/v1/rpc/reserve_equipment', token=token, payload={
         'p_event_id': event_id.strip(), 'p_equipment_id': equipment_id, 'p_quantity': quantity,
     })
-    return jsonify(result), (409 if result.get('error') else 201)
+    return jsonify(result), (result.get('status', 409) if result.get('error') else 201)
 
 
 @equipment.get('/equipment/reservations')

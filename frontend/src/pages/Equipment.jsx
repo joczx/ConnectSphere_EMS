@@ -1,126 +1,121 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import EquipmentReservations from '../components/EquipmentReservations';
 import Navbar from '../components/Navbar';
+import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import { useAuth } from '../auth/AuthContext';
 
-const formatDate = value => new Intl.DateTimeFormat('en-SG', {
-  dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Singapore',
-}).format(new Date(value));
+function ReviewForm({ request, equipment, onReviewed }) {
+  const { api } = useAuth();
+  const [outcome, setOutcome] = useState('');
+  const [equipmentId, setEquipmentId] = useState('');
+  const [quantity, setQuantity] = useState('1');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const matching = equipment.filter(item => item.equipment_type.trim().toLowerCase() === request.equipment_type.trim().toLowerCase());
+
+  async function submit(e) {
+    e.preventDefault();
+    if (busy) return;
+    const amount = Number(quantity);
+    if (outcome === 'partially_accepted' && (!Number.isInteger(amount) || amount < 1 || amount >= request.quantity)) {
+      setError('Enter a quantity greater than zero and less than the requested quantity.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const result = await api(`/api/equipment-request-reviews/${request.equipment_request_id}`, {
+        method: 'POST', body: { outcome, equipment_id: Number(equipmentId), accepted_quantity: amount, reason },
+      });
+      onReviewed(result.equipment_request);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <div>
+    {!outcome ? <div className="heading">
+      <button onClick={() => setOutcome('accepted')}>Accept</button>
+      <button className="secondary" disabled={request.quantity <= 1} onClick={() => setOutcome('partially_accepted')}>Partially accept</button>
+      <button className="secondary" onClick={() => setOutcome('rejected')}>Reject</button>
+    </div> : <form onSubmit={submit}>
+      <h4>{outcome === 'accepted' ? 'Accept request' : outcome === 'rejected' ? 'Reject request' : 'Partially accept request'}</h4>
+      {outcome !== 'rejected' && <>
+        <label>Equipment model<select required value={equipmentId} disabled={busy} onChange={e => setEquipmentId(e.target.value)}>
+          <option value="">Select equipment</option>{matching.map(item => <option key={item.equipment_id} value={item.equipment_id}>{item.equipment_model}</option>)}
+        </select></label>
+        {!matching.length && <p>No matching equipment is in the catalogue.</p>}
+        {outcome === 'partially_accepted' ? <label>Quantity to accept<input autoFocus type="number" required min="1" max={request.quantity - 1} step="1" value={quantity} disabled={busy} onChange={e => setQuantity(e.target.value)} /></label>
+          : <p>Accept all {request.quantity} requested units.</p>}
+      </>}
+      {outcome === 'rejected' && <label>Reason for rejection<textarea required value={reason} disabled={busy} onChange={e => setReason(e.target.value)} /></label>}
+      {error && <p role="alert" className="error">{error}</p>}
+      <button disabled={busy || (outcome !== 'rejected' && !equipmentId)}>{busy ? 'Saving...' : 'Confirm decision'}</button>
+      <button type="button" className="secondary" disabled={busy} onClick={() => { setOutcome(''); setError(''); }}>Cancel</button>
+    </form>}
+  </div>;
+}
 
 export default function Equipment() {
   const { api } = useAuth();
+  const [requests, setRequests] = useState([]);
   const [events, setEvents] = useState([]);
+  const [equipment, setEquipment] = useState([]);
   const [eventId, setEventId] = useState('');
-  const [data, setData] = useState(null);
-  const [equipmentId, setEquipmentId] = useState('');
-  const [quantity, setQuantity] = useState('1');
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [refresh, setRefresh] = useState(0);
-  const [reservationsRefresh, setReservationsRefresh] = useState(0);
-
-  const equipmentApi = useCallback((path, options = {}) => (
-    api('/api/equipment' + path, { cache: 'no-store', ...options })
-  ), [api]);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError('');
-    setData(null);
-    async function load() {
-      try {
-        const result = eventId
-          ? await equipmentApi('/availability?event_id=' + encodeURIComponent(eventId), { signal: controller.signal })
-          : await equipmentApi('/events', { signal: controller.signal });
-        if (!controller.signal.aborted) {
-          if (eventId) setData(result);
-          else setEvents(result.events);
-        }
-      } catch (err) {
-        if (!controller.signal.aborted) setError(err.message);
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    }
-    load();
+    api('/api/equipment-request-reviews', { cache: 'no-store', signal: controller.signal }).then(result => {
+      if (controller.signal.aborted) return;
+      setRequests(result.equipment_requests);
+      setEquipment(result.equipment);
+      setEvents(result.events);
+    }).catch(err => {
+      if (!controller.signal.aborted) { setError(err.message); setRequests([]); }
+    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [equipmentApi, eventId, refresh]);
+  }, [api, refresh]);
 
-  const selected = data?.equipment.find(item => String(item.equipment_id) === equipmentId);
-  async function reserve(e) {
-    e.preventDefault();
-    if (saving) return;
-    const amount = Number(quantity);
-    if (!Number.isInteger(amount) || amount < 1) {
-      setError('Quantity must be a positive whole number.');
-      return;
-    }
-    setSaving(true);
-    setError('');
-    setMessage('');
-    try {
-      await equipmentApi('/reservations', { method: 'POST', body: {
-        event_id: eventId, equipment_id: equipmentId, quantity: amount,
-      } });
-      setMessage(`Reserved ${amount} × ${selected.name} for this event.`);
-      setEquipmentId('');
-      setQuantity('1');
-      setReservationsRefresh(value => value + 1);
-    } catch (err) {
-      setError(err.message);
-    }
-    // Recheck after success or conflict without clearing the reservation error.
-    try {
-      setData(await equipmentApi('/availability?event_id=' + encodeURIComponent(eventId)));
-    } catch {
-      setData(null);
-      setError(previous => previous || 'Unable to refresh availability. Use Refresh to try again.');
-    } finally {
-      setSaving(false);
-    }
+  const groups = events.map(event => [String(event.event_id), event.event_name]);
+  function reviewed(row) {
+    setRequests(rows => rows.map(current => current.equipment_request_id === row.equipment_request_id ? { ...current, ...row } : current));
+    setMessage('Decision saved. The event page now shows the updated equipment request.');
   }
 
   return <>
     <Navbar />
     <main className="container">
-      <Link to="/home">← Home</Link>
+      <Link to="/home">Home</Link>
       <div className="heading"><div><p className="eyebrow">EQUIPMENT</p><h1>Reserve equipment</h1></div>
-        <button className="secondary" disabled={loading || saving} onClick={() => setRefresh(v => v + 1)}>Refresh</button></div>
-      <p>Available to all signed-in users. Availability covers the full event duration. All times are in Singapore time (SGT).</p>
-      <label>Event<select value={eventId} disabled={saving || (loading && !events.length)} onChange={e => {
-        setEventId(e.target.value); setData(null); setEquipmentId(''); setMessage(''); setError('');
-      }}><option value="">Select an event</option>{events.map(event =>
-        <option key={event.event_id} value={event.event_id}>{event.event_name}</option>)}</select></label>
-      {loading && <p role="status">Loading availability…</p>}
-      {!loading && !events.length && !error && <p>No events found. Create an event before reserving equipment.</p>}
-      {error && <p className="panel error" role="alert">{error}</p>}
-      {message && <p className="panel" role="status">{message}</p>}
-      {data && <>
-        <p>{formatDate(data.starts_at)} – {formatDate(data.ends_at)}</p>
-        <section className="panel">
-          <h2>Equipment availability</h2>
-          {!data.equipment.length ? <p>No equipment has been added to the catalogue yet.</p> : <>
-            <div className="equipment-table"><table><thead><tr><th>Equipment</th><th>Total stock</th><th>Available</th><th>Reserved for this event</th></tr></thead>
-              <tbody>{data.equipment.map(item => <tr key={item.equipment_id}><td>{item.name}</td><td>{item.total_quantity}</td><td>{item.available_quantity}</td><td>{item.reserved_quantity}</td></tr>)}</tbody>
-            </table></div>
-            <p>Availability accounts for other reservations during this event, including this event’s existing reservations. Stock can be reused when events do not overlap.</p>
-            <form onSubmit={reserve}>
-              <label>Equipment<select required value={equipmentId} disabled={saving} onChange={e => { setEquipmentId(e.target.value); setQuantity('1'); }}>
-                <option value="">Select equipment</option>{data.equipment.map(item => <option key={item.equipment_id} value={item.equipment_id} disabled={item.available_quantity < 1 || item.reserved_quantity > 0}>
-                  {item.name} — {item.reserved_quantity ? 'Already reserved' : `${item.available_quantity} available`}</option>)}
-              </select></label>
-              <label>Quantity<input type="number" required min="1" max={selected?.available_quantity || 1} step="1" value={quantity} disabled={saving || !selected} onChange={e => setQuantity(e.target.value)} /></label>
-              <button disabled={saving || !selected || selected.reserved_quantity > 0 || selected.available_quantity < 1}>{saving ? 'Reserving…' : 'Confirm reservation'}</button>
-            </form>
-          </>}
-        </section>
+        <button className="secondary" disabled={loading} onClick={() => setRefresh(value => value + 1)}>Refresh</button></div>
+      <p>View your events and review equipment requests submitted by your account.</p>
+      {error && <p role="alert" className="panel error">{error}</p>}
+      {message && <p role="status" className="panel">{message}</p>}
+      <label>Event<select value={eventId} onChange={e => setEventId(e.target.value)}>
+        <option value="">All my events</option>{groups.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+      </select></label>
+      {loading ? <p role="status">Loading equipment requests...</p> : <>
+        {!requests.length && !error && <p>You have not submitted any equipment requests yet.</p>}
+        {groups.filter(([id]) => !eventId || eventId === id).map(([id, name]) => <section key={id} className="panel" style={{ marginTop: '24px' }}>
+          <div className="heading"><h2>{name}</h2><Link to={`/events/${id}`}>View event</Link></div>
+          {!requests.some(row => String(row.event_id) === id) && <p>No equipment requests for this event yet.</p>}
+          {requests.filter(row => String(row.event_id) === id).map(row => <article key={row.equipment_request_id} className="panel">
+            <h3>{row.equipment_type}</h3>
+            <EquipmentRequestStatus request={row} />
+            {row.technical_requirements && <p>Technical requirements: {row.technical_requirements}</p>}
+            {row.status === 'pending' && <ReviewForm request={row} equipment={equipment} onReviewed={reviewed} />}
+          </article>)}
+        </section>)}
       </>}
-      <EquipmentReservations refresh={reservationsRefresh}
-        onChanged={() => setRefresh(value => value + 1)} />
     </main>
   </>;
 }
