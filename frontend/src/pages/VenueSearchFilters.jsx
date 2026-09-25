@@ -3,27 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { Alert, AlertDescription, AlertTitle } from '../components/Alert';
 import DateRangePicker from '../components/DateRangePicker';
-
-const FACILITIES = [
-  ['stage', 'Stage'],
-  ['projector', 'Projector'],
-  ['sound_system', 'Sound system'],
-  ['video_conferencing', 'Video conferencing'],
-  ['wifi', 'Wi-Fi'],
-  ['parking', 'Parking'],
-  ['catering_area', 'Catering area'],
-  ['air_conditioning', 'Air conditioning'],
-];
-
-const ROOM_LAYOUTS = [
-  ['theatre', 'Theatre'],
-  ['classroom', 'Classroom'],
-  ['boardroom', 'Boardroom'],
-  ['banquet', 'Banquet'],
-  ['exhibition', 'Exhibition'],
-  ['u_shape', 'U-shape'],
-  ['cabaret', 'Cabaret'],
-];
+import { VENUE_FACILITIES, VENUE_ROOM_LAYOUTS } from '../config/venueOptions';
 
 function dateValue(value) {
   const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value);
@@ -131,7 +111,7 @@ export default function VenueSearchFilters() {
               <p className="filter-label">Acceptable room layouts</p>
               <p className="filter-help">Select one or more layouts.</p>
               <div className="facility-options">
-                {ROOM_LAYOUTS.map(([value, label]) => (
+                {VENUE_ROOM_LAYOUTS.map(([value, label]) => (
                   <label className="facility-option" key={value}>
                     <input name="layouts" type="checkbox" value={value} defaultChecked={searchParams.getAll('layouts').includes(value)} />
                     {label}
@@ -164,7 +144,7 @@ export default function VenueSearchFilters() {
           <fieldset>
             <legend>Required facilities</legend>
             <div className="facility-options">
-              {FACILITIES.map(([value, label]) => (
+              {VENUE_FACILITIES.map(([value, label]) => (
                 <label className="facility-option" key={value}>
                   <input name="facilities" type="checkbox" value={value} defaultChecked={searchParams.getAll('facilities').includes(value)} />
                   {label}

@@ -14,6 +14,11 @@ import VenueSearchFilters from './pages/VenueSearchFilters';
 import EquipmentAvailability from './pages/EquipmentAvailability';
 import VenueSuitability from './pages/VenueSuitability';
 import VenueSuitabilityCheck from './pages/VenueSuitabilityCheck';
+import Venues from './pages/Venues';
+import VenueDetails from './pages/VenueDetails';
+import CreateVenue from './pages/CreateVenue';
+import UpdateVenue from './pages/UpdateVenue';
+import DeleteVenue from './pages/DeleteVenue';
 
 export default function App() {
   const { token } = useAuth();
@@ -35,6 +40,11 @@ export default function App() {
     <Route path="/equipment-availability" element={protectedView(<EquipmentAvailability />)} />
     <Route path="/venue-suitability" element={protectedView(<VenueSuitability />)} />
     <Route path="/venue-suitability/check/:eventId" element={protectedView(<VenueSuitabilityCheck />)} />
+    <Route path="/venues" element={protectedView(<Venues />)} />
+    <Route path="/venues/new" element={protectedView(<CreateVenue />)} />
+    <Route path="/venues/:venueId" element={protectedView(<VenueDetails />)} />
+    <Route path="/venues/:venueId/edit" element={protectedView(<UpdateVenue />)} />
+    <Route path="/venues/:venueId/delete" element={protectedView(<DeleteVenue />)} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></HashRouter>;
 }
