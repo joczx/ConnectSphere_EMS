@@ -1,6 +1,6 @@
 const labels = {
   pending: 'Pending review', accepted: 'Accepted', rejected: 'Rejected',
-  partially_accepted: 'Partially accepted', in_progress: 'In progress', completed: 'Completed',
+  partially_accepted: 'Partially accepted', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled',
 };
 
 export default function EquipmentRequestStatus({ request }) {

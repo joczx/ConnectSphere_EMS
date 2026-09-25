@@ -18,11 +18,24 @@ def sql(query):
 
 
 def user(query, actor=ACTOR):
-    return sql(f"set role authenticated; set request.jwt.claim.sub = '{actor}'; {query}")
+    return json.loads(sql(f"set role authenticated; set request.jwt.claim.sub = '{actor}'; {query}"))
 
 
 def review(request_id, outcome, quantity='null', actor=ACTOR):
-    return json.loads(user(f"select review_equipment_request({request_id}, '{outcome}', 10, {quantity}, 'Not enough equipment');", actor))
+    return user(f"select review_equipment_request({request_id}, '{outcome}', 10, {quantity}, 'Not suitable');", actor)
+
+
+def change(reservation_id, quantity=None, actor=ACTOR):
+    operation = f"cancel_equipment_reservation('{reservation_id}')" if quantity is None else f"update_equipment_reservation('{reservation_id}', {quantity})"
+    return user(f'select {operation};', actor)
+
+
+def availability(event_id):
+    return user(f"select equipment_availability('{event_id}');")['equipment'][0]['available_quantity']
+
+
+def request_row(request_id):
+    return json.loads(sql(f'select row_to_json(r) from equipment_request r where equipment_request_id = {request_id};'))
 
 
 def main():
@@ -36,113 +49,130 @@ def main():
         grant execute on function auth.uid() to authenticated;
         create table users(user_id uuid primary key);
         create table events(event_id integer primary key, event_name text,
-            start_datetime timestamptz, end_datetime timestamptz, technical_support_id uuid);
+            start_datetime timestamptz, end_datetime timestamptz,
+            technical_support_id uuid, event_organiser_id uuid);
     """)
     for file in ['006_create_equipment', '005_create_equipment_request.sql',
                  '010_equipment_reservations_existing_catalogue.sql', '011_manage_equipment_reservations.sql',
-                 '012_review_equipment_requests.sql', '013_link_equipment_request_reservations.sql', '014_equipment_access_without_roles.sql']:
+                 '012_review_equipment_requests.sql', '013_link_equipment_request_reservations.sql',
+                 '015_account_equipment_requests.sql', '016_manage_linked_equipment_reservations.sql']:
         sql((ROOT / 'supabase' / file).read_text())
     sql(f"""
         insert into auth.users values ('{ACTOR}'), ('{OTHER}');
         insert into users values ('{ACTOR}'), ('{OTHER}');
-        insert into events values
-            (1, 'Workshop', '2030-01-01 09:00Z', '2030-01-01 10:00Z', '{ACTOR}'),
-            (2, 'Conference', '2030-01-01 09:00Z', '2030-01-01 10:00Z', '{ACTOR}'),
-            (3, 'Later event', '2030-01-01 10:00Z', '2030-01-01 11:00Z', '{ACTOR}');
         insert into equipment values (10, 'Projector', 'Test model', 5);
+        insert into events values
+            (1, 'Workshop', '2030-01-01 09:00Z', '2030-01-01 10:00Z', '{OTHER}', '{ACTOR}'),
+            (2, 'Conference', '2030-01-01 09:00Z', '2030-01-01 10:00Z', '{OTHER}', '{ACTOR}'),
+            (3, 'Later event', '2030-01-01 10:00Z', '2030-01-01 11:00Z', null, '{ACTOR}'),
+            (4, 'Growth', '2030-01-02 09:00Z', '2030-01-02 10:00Z', null, '{ACTOR}'),
+            (5, 'Standalone', '2030-01-03 09:00Z', '2030-01-03 10:00Z', null, '{ACTOR}'),
+            (6, 'Other account', '2030-01-04 09:00Z', '2030-01-04 10:00Z', null, '{OTHER}');
         insert into equipment_request(event_id, requested_by, quantity, equipment_type)
-            values (1, '{OTHER}', 5, 'Projector'), (2, '{OTHER}', 4, 'Projector'),
-                   (3, '{OTHER}', 5, 'Projector'), (2, '{OTHER}', 2, 'Projector');
+            values (1, '{ACTOR}', 5, 'Projector'), (2, '{ACTOR}', 4, 'Projector'),
+                   (3, '{ACTOR}', 5, 'Projector'), (2, '{ACTOR}', 2, 'Projector'),
+                   (4, '{ACTOR}', 2, 'Projector');
     """)
-    assert len(json.loads(user('select equipment_request_review_queue();'))) == 4
-    assert len(json.loads(user('select equipment_request_review_queue();', OTHER))) == 4
-    assert len(json.loads(user('select equipment_events();', OTHER))) == 3
+    assert len(user('select equipment_request_review_queue();')) == 5
+    assert user('select equipment_request_review_queue();', OTHER) == []
+    assert {row['event_id'] for row in user('select my_equipment_request_events();')} == {'1', '2', '3', '4', '5'}
+    assert review(1, 'accepted', actor=OTHER)['status'] == 403
     assert review(1, 'partially_accepted', 5)['status'] == 400
-    result = review(1, 'partially_accepted', 3, actor=OTHER)['equipment_request']
-    assert result['quantity'] == 5 and result['accepted_quantity'] == 3
-    assert result['reviewed_by'] == OTHER and result['reviewed_at']
+    first = review(1, 'partially_accepted', 3)['reservation']['reservation_id']
     assert review(1, 'accepted')['status'] == 409
     assert review(2, 'accepted')['status'] == 409
-    assert sql('select count(*) from equipment_reservations where equipment_request_id = 2;') == '0'
-    assert sql('select status from equipment_request where equipment_request_id = 2;') == 'pending'
-    assert review(2, 'partially_accepted', 2)['equipment_request']['accepted_quantity'] == 2
-    assert review(3, 'accepted')['equipment_request']['accepted_quantity'] == 5
+    assert request_row(2)['status'] == 'pending'
+    second = review(2, 'partially_accepted', 2)['reservation']['reservation_id']
+    assert availability(1) == 0
+    assert availability(3) == 5  # Adjacent events do not overlap.
+    assert review(3, 'accepted')['reservation']['quantity'] == 5
     assert review(4, 'rejected')['equipment_request']['accepted_quantity'] == 0
-    assert sql("select equipment_peak(10, '2030-01-01 09:00Z', '2030-01-01 10:00Z');") == '5'
-    assert sql('select count(*) from equipment_reservations;') == '3'
-    reserved = json.loads(sql("select row_to_json(r) from equipment_reservations r where equipment_request_id = 1;"))
-    assert reserved['event_id'] == '1' and reserved['equipment_id'] == 10
-    assert reserved['quantity'] == 3 and reserved['created_by'] == OTHER
-    assert reserved['starts_at'].startswith('2030-01-01T09:00:00')
-    assert sql('select count(*) from equipment_reservations where equipment_request_id = 4;') == '0'
-    assert json.loads(user(f"select update_equipment_reservation('{reserved['reservation_id']}', 1);", OTHER))['status'] == 409
-    assert json.loads(user(f"select cancel_equipment_reservation('{reserved['reservation_id']}');", OTHER))['status'] == 409
-    assert 'already reserved' in json.loads(user("select reserve_equipment('2', 10, 1);", OTHER))['error']
-    assert json.loads(user("select equipment_availability('2');"))['equipment'][0]['available_quantity'] == 0
+    assert user('select my_equipment_reservations();', OTHER) == []
+    assert change(first, 1, OTHER)['status'] == 404
+    assert change(first, actor=OTHER)['status'] == 404
+    assert change(first, 0)['status'] == 400
+    assert change(first, 1)['equipment_request']['accepted_quantity'] == 1
+    assert availability(2) == 2
+    assert change(second, 4)['equipment_request']['status'] == 'accepted'
+    assert availability(1) == 0
+    assert change(first, 2)['status'] == 409
+    assert request_row(1)['accepted_quantity'] == 1
+    assert change(second, 2)['equipment_request']['status'] == 'partially_accepted'
+    assert change(first, 3)['reservation']['quantity'] == 3
+    cancelled = change(second)
+    assert cancelled['cancelled'] and cancelled['equipment_request']['status'] == 'cancelled'
+    assert request_row(2)['accepted_quantity'] == 0 and request_row(2)['quantity'] == 4
+    assert availability(1) == 2
+    assert change(first, 5)['equipment_request']['status'] == 'accepted'
+    assert change(first)['cancelled'] and availability(1) == 5
+    assert change(first, 1)['status'] == 404
+    assert change(first)['status'] == 404
+    # Increasing above the original request preserves that original quantity.
+    growth = review(5, 'accepted')['reservation']['reservation_id']
+    updated = change(growth, 4)
+    assert updated['reservation']['quantity'] == 4
+    assert updated['equipment_request']['quantity'] == 2
+    assert updated['equipment_request']['accepted_quantity'] == 4
+    assert availability(4) == 1
+    # Both writes roll back together if synchronization fails.
+    sql("""
+        create function fail_test_sync() returns trigger language plpgsql as $$
+        begin if new.equipment_request_id = 5 and new.accepted_quantity = 3 then
+          raise exception 'Test synchronization failure'; end if; return new; end; $$;
+        create trigger fail_test_sync before update on equipment_request for each row execute function fail_test_sync();
+    """)
     try:
-        sql("update events set end_datetime = end_datetime + interval '1 hour' where event_id = 1;")
-        raise AssertionError('Date edits must be blocked')
+        change(growth, 3)
+        raise AssertionError('Expected synchronization failure')
     except AssertionError as exc:
-        assert 'Release equipment reservations' in str(exc)
-    sql('grant select, update on equipment_request to authenticated;')
+        assert 'Test synchronization failure' in str(exc)
+    assert request_row(5)['accepted_quantity'] == 4
+    assert sql(f"select quantity from equipment_reservations where reservation_id = '{growth}';") == '4'
+    sql('drop trigger fail_test_sync on equipment_request; drop function fail_test_sync();')
+    standalone = user("select reserve_equipment('5', 10, 2);")['reservation']['reservation_id']
+    assert change(standalone, 3)['reservation']['quantity'] == 3
+    assert change(standalone)['cancelled'] and availability(5) == 5
+    # Simultaneous increases share the same stock lock, so only one fits.
+    sql(f"""
+        insert into events values
+            (7, 'Race one', '2030-02-01 09:00Z', '2030-02-01 10:00Z', null, '{ACTOR}'),
+            (8, 'Race two', '2030-02-01 09:00Z', '2030-02-01 10:00Z', null, '{ACTOR}');
+        insert into equipment_request(event_id, requested_by, quantity, equipment_type)
+            values (7, '{ACTOR}', 2, 'Projector'), (8, '{ACTOR}', 2, 'Projector');
+    """)
+    race = [review(i, 'accepted')['reservation']['reservation_id'] for i in (6, 7)]
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda reservation_id: change(reservation_id, 3), race))
+    assert sum('reservation' in result for result in results) == 1
+    assert sum(result.get('status') == 409 for result in results) == 1
+    assert availability(7) == 0
+    assert sum(request_row(i)['accepted_quantity'] for i in (6, 7)) == 5
+    assert user('select my_equipment_request_events();', '') == []
+    assert change(growth, 2, actor='')['status'] == 401
+    # Reproduce the event-page insert failure, then verify the account policy fix.
+    sql('alter table equipment_request enable row level security; grant select, insert on equipment_request to authenticated; grant usage on sequence equipment_request_equipment_request_id_seq to authenticated;')
+    insert_own = f"insert into equipment_request(event_id, requested_by, quantity, equipment_type, status) values (1, '{ACTOR}', 1, 'Projector', 'pending') returning equipment_request_id;"
     try:
-        user("update equipment_request set accepted_quantity = 5 where equipment_request_id = 1;")
-        raise AssertionError('Direct review mutation must be blocked')
+        user(insert_own)
+        raise AssertionError('Insert should fail without an insert policy')
+    except AssertionError as exc:
+        assert 'row-level security' in str(exc)
+    sql((ROOT / 'supabase/017_allow_own_equipment_requests.sql').read_text())
+    new_id = user(insert_own)
+    assert request_row(new_id)['requested_by'] == ACTOR
+    assert user(f"select count(*) from equipment_request where equipment_request_id = {new_id};") == 1
+    assert user(f"select count(*) from equipment_request where equipment_request_id = {new_id};", OTHER) == 0
+    try:
+        user(insert_own, OTHER)
+        raise AssertionError('Cannot submit a request under another account')
+    except AssertionError as exc:
+        assert 'row-level security' in str(exc)
+    try:
+        user(insert_own.replace("'pending'", "'accepted'"))
+        raise AssertionError('Cannot bypass review on submission')
     except AssertionError as exc:
         assert 'Use the equipment review action' in str(exc)
-    # Competing event requests must serialize on the catalogue item lock.
-    sql(f"""
-        insert into events values
-            (4, 'Race one', '2030-01-02 09:00Z', '2030-01-02 10:00Z', '{ACTOR}'),
-            (5, 'Race two', '2030-01-02 09:00Z', '2030-01-02 10:00Z', '{ACTOR}');
-        insert into equipment_request(event_id, requested_by, quantity, equipment_type)
-            values (4, '{OTHER}', 4, 'Projector'), (5, '{OTHER}', 4, 'Projector');
-    """)
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        results = list(pool.map(lambda request_id: review(request_id, 'accepted'), [5, 6]))
-    assert sum('equipment_request' in result for result in results) == 1
-    assert sum(result.get('status') == 409 for result in results) == 1
-    # Separate requests for the same event/model get separate linked reservations.
-    sql(f"""
-        insert into events values (6, 'Multiple requests', '2030-01-03 09:00Z', '2030-01-03 10:00Z', '{ACTOR}');
-        insert into equipment_request(event_id, requested_by, quantity, equipment_type)
-            values (6, '{OTHER}', 2, 'Projector'), (6, '{OTHER}', 3, 'Projector');
-    """)
-    assert review(7, 'accepted')['reservation']['quantity'] == 2
-    assert review(8, 'accepted')['reservation']['quantity'] == 3
-    assert sql("select count(*) from equipment_reservations where event_id = '6';") == '2'
-    assert sql("select equipment_peak(10, '2030-01-03 09:00Z', '2030-01-03 10:00Z');") == '5'
-    availability = json.loads(user("select equipment_availability('6');"))['equipment']
-    assert len(availability) == 1
-    assert availability[0]['reserved_quantity'] == 5 and availability[0]['available_quantity'] == 0
-    # Older accepted rows without a linked reservation continue consuming stock.
-    sql(f"""
-        insert into events values (7, 'Legacy', '2030-01-04 09:00Z', '2030-01-04 10:00Z', '{ACTOR}');
-        insert into equipment_request(event_id, requested_by, quantity, accepted_quantity, equipment_type, equipment_id, status)
-            values (7, '{OTHER}', 4, 2, 'Projector', 10, 'partially_accepted');
-    """)
-    assert sql("select equipment_peak(10, '2030-01-04 09:00Z', '2030-01-04 10:00Z');") == '2'
-    # Upgrade from unrestricted signed-in access to account ownership filtering.
-    sql((ROOT / 'supabase/015_account_equipment_requests.sql').read_text())
-    sql(f"""
-        alter table events add column event_organiser_id uuid;
-        insert into events values
-            (8, 'My empty event', '2030-01-05 09:00Z', '2030-01-05 10:00Z', null, '{ACTOR}'),
-            (9, 'Other empty event', '2030-01-06 09:00Z', '2030-01-06 10:00Z', null, '{OTHER}'),
-            (10, 'Requested event', '2030-01-07 09:00Z', '2030-01-07 10:00Z', null, '{OTHER}');
-    """)
-    request_id = int(sql(f"insert into equipment_request(event_id, requested_by, quantity, equipment_type) values (10, '{ACTOR}', 2, 'Projector') returning equipment_request_id;"))
-    mine = json.loads(user('select equipment_request_review_queue();'))
-    assert [row['equipment_request_id'] for row in mine] == [request_id]
-    own_events = json.loads(user('select my_equipment_request_events();'))
-    assert {row['event_id'] for row in own_events} == {'8', '10'}
-    assert all(row['requested_by'] == OTHER for row in json.loads(user('select equipment_request_review_queue();', OTHER)))
-    assert review(request_id, 'accepted', actor=OTHER)['status'] == 403
-    assert review(request_id, 'accepted')['reservation']['quantity'] == 2
-    assert json.loads(user("select reserve_equipment('9', 10, 1);"))['status'] == 403
-    assert json.loads(user("select reserve_equipment('8', 10, 1);"))['reservation']['quantity'] == 1
-    assert sql("set role authenticated; select my_equipment_request_events();") == '[]'
-    print('Database checks passed: account-owned events, own requests, cross-account review protection, linked reservations, overlap and concurrency checks.')
+    print('Database checks passed: own request submission with RLS and RETURNING, spoofed ownership blocked, review/management synchronization, stock release and concurrency.')
 
 
 

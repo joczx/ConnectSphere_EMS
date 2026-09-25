@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import EquipmentReservations from '../components/EquipmentReservations';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import { useAuth } from '../auth/AuthContext';
 
@@ -69,6 +70,7 @@ export default function Equipment() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [refresh, setRefresh] = useState(0);
+  const [reservationsRefresh, setReservationsRefresh] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -89,6 +91,7 @@ export default function Equipment() {
   function reviewed(row) {
     setRequests(rows => rows.map(current => current.equipment_request_id === row.equipment_request_id ? { ...current, ...row } : current));
     setMessage('Decision saved. The event page now shows the updated equipment request.');
+    setReservationsRefresh(value => value + 1);
   }
 
   return <>
@@ -103,6 +106,12 @@ export default function Equipment() {
       <label>Event<select value={eventId} onChange={e => setEventId(e.target.value)}>
         <option value="">All my events</option>{groups.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
       </select></label>
+      <EquipmentReservations eventId={eventId} refresh={reservationsRefresh} onChanged={result => {
+        if (result.equipment_request) {
+          setRequests(rows => rows.map(row => row.equipment_request_id === result.equipment_request.equipment_request_id
+            ? { ...row, ...result.equipment_request } : row));
+        }
+      }} />
       {loading ? <p role="status">Loading equipment requests...</p> : <>
         {!requests.length && !error && <p>You have not submitted any equipment requests yet.</p>}
         {groups.filter(([id]) => !eventId || eventId === id).map(([id, name]) => <section key={id} className="panel" style={{ marginTop: '24px' }}>

@@ -5,10 +5,11 @@ const date = value => new Intl.DateTimeFormat('en-SG', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Singapore',
 }).format(new Date(value));
 
-export default function EquipmentReservations({ refresh, onChanged }) {
+export default function EquipmentReservations({ refresh, onChanged, eventId = '' }) {
   const { api } = useAuth();
   const [rows, setRows] = useState([]);
-  const [quantities, setQuantities] = useState({});
+  const [quantity, setQuantity] = useState('');
+  const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -20,18 +21,21 @@ export default function EquipmentReservations({ refresh, onChanged }) {
     api('/api/equipment/reservations' + path, { cache: 'no-store', ...options })
   ), [api]);
 
-  function showRows(result) {
-    setRows(result.reservations);
-    setQuantities(Object.fromEntries(result.reservations.map(row => [row.reservation_id, String(row.quantity)])));
-  }
+  useEffect(() => {
+    setEditing(null);
+    setConfirmId(null);
+    setError('');
+    setMessage('');
+  }, [eventId]);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError('');
+    setEditing(null);
     setConfirmId(null);
     reservationsApi('', { signal: controller.signal }).then(result => {
-      if (!controller.signal.aborted) showRows(result);
+      if (!controller.signal.aborted) setRows(result.reservations);
     }).catch(err => {
       if (!controller.signal.aborted) { setRows([]); setError(err.message); }
     }).finally(() => {
@@ -42,60 +46,61 @@ export default function EquipmentReservations({ refresh, onChanged }) {
 
   async function change(row, cancel = false) {
     if (busy) return;
-    const quantity = Number(quantities[row.reservation_id]);
-    if (!cancel && (!Number.isInteger(quantity) || quantity < 1)) {
+    const amount = Number(quantity);
+    if (!cancel && (!Number.isInteger(amount) || amount < 1 || amount > 2147483647)) {
       setError('Quantity must be a positive whole number.');
       return;
     }
     setBusy(true);
     setError('');
     setMessage('');
-    let changed = false;
     try {
-      await reservationsApi('/' + row.reservation_id, {
+      const result = await reservationsApi('/' + row.reservation_id, {
         method: cancel ? 'DELETE' : 'PATCH',
-        ...(!cancel && { body: { quantity } }),
+        ...(!cancel && { body: { quantity: amount } }),
       });
-      changed = true;
       setConfirmId(null);
-      setMessage(cancel ? `Cancelled ${row.name} for ${row.event_name}.` : `Updated ${row.name} to ${quantity} for ${row.event_name}.`);
+      setEditing(null);
+      setMessage(cancel ? `Cancelled ${row.name} for ${row.event_name}.` : `Updated ${row.name} to ${amount} for ${row.event_name}.`);
+      onChanged?.(result);
     } catch (err) {
       setError(err.message);
     }
-    // Refresh after conflicts as well as success, preserving the mutation error.
-    try { showRows(await reservationsApi()); }
+    // Refresh stock conflicts and successful changes without erasing feedback.
+    try { setRows((await reservationsApi()).reservations); }
     catch (err) { setRows([]); setError(previous => previous || err.message); }
     finally { setBusy(false); }
-    if (changed) onChanged();
   }
 
-  return <section className="panel" aria-labelledby="my-reservations-heading">
+  const visibleRows = rows.filter(row => !eventId || String(row.event_id) === String(eventId));
+  return <section className="panel" aria-labelledby="my-reservations-heading" style={{ marginTop: '24px' }}>
     <div className="heading">
       <h2 id="my-reservations-heading">My equipment reservations</h2>
       <button type="button" className="secondary" disabled={loading || busy} onClick={() => setReload(value => value + 1)}>Refresh reservations</button>
     </div>
-    <p>Manage reservations you created. Reducing or cancelling a reservation releases stock for its event period.</p>
+    <p>Edit or cancel reservations you created. Changes are also shown on the event page.</p>
     {error && <p role="alert" className="error">{error}</p>}
     {message && <p role="status">{message}</p>}
-    {loading ? <p role="status">Loading your reservations…</p> : <>
-      {!rows.length && !error && <p>You have no equipment reservations.</p>}
-      {rows.map(row => <article key={row.reservation_id} className="panel">
-        <h3>{row.name} — {row.event_name}</h3>
-        <p>{date(row.starts_at)} – {date(row.ends_at)} (SGT)</p>
-        <p>Reserved: {row.quantity}. Maximum currently available for this reservation: {row.maximum_quantity}.</p>
-        <form onSubmit={event => { event.preventDefault(); change(row); }}>
+    {loading ? <p role="status">Loading your reservations...</p> : <>
+      {!visibleRows.length && !error && <p>{eventId ? 'You have no reservations for this event.' : 'You have no equipment reservations.'}</p>}
+      {visibleRows.map(row => <article key={row.reservation_id} className="panel">
+        <h3>{row.name} ? {row.event_name}</h3>
+        <p>{date(row.starts_at)} ? {date(row.ends_at)} (SGT)</p>
+        <p>Reserved quantity: {row.quantity}</p>
+        {editing === row.reservation_id ? <form onSubmit={event => { event.preventDefault(); change(row); }}>
           <label>Quantity for {row.name}
-            <input type="number" min="1" step="1" required
-              max={Math.max(row.quantity, row.maximum_quantity)}
-              value={quantities[row.reservation_id] ?? row.quantity} disabled={busy}
-              onChange={event => setQuantities(values => ({ ...values, [row.reservation_id]: event.target.value }))} />
+            <input autoFocus type="number" min="1" max="2147483647" step="1" required
+              value={quantity} disabled={busy} onChange={event => setQuantity(event.target.value)} />
           </label>
-          <button disabled={busy || Number(quantities[row.reservation_id]) === row.quantity}>Save quantity</button>
-          <button type="button" className="secondary" disabled={busy} onClick={() => setConfirmId(row.reservation_id)}>Cancel reservation</button>
-        </form>
+          <button disabled={busy || Number(quantity) === row.quantity}>{busy ? 'Saving...' : 'Save changes'}</button>
+          <button type="button" className="secondary" disabled={busy} onClick={() => setEditing(null)}>Cancel editing</button>
+        </form> : <button type="button" className="secondary" disabled={busy} onClick={() => {
+          setEditing(row.reservation_id); setQuantity(String(row.quantity)); setConfirmId(null); setError(''); setMessage('');
+        }}>Edit quantity</button>}
+        <button type="button" className="secondary" disabled={busy} onClick={() => { setConfirmId(row.reservation_id); setEditing(null); }}>Cancel reservation</button>
         {confirmId === row.reservation_id && <div>
           <p>Cancel all {row.quantity} units of {row.name} for {row.event_name}?</p>
-          <button type="button" disabled={busy} onClick={() => change(row, true)}>Confirm cancellation</button>
+          <button type="button" disabled={busy} onClick={() => change(row, true)}>{busy ? 'Cancelling...' : 'Confirm cancellation'}</button>
           <button type="button" className="secondary" disabled={busy} onClick={() => setConfirmId(null)}>Keep reservation</button>
         </div>}
       </article>)}
