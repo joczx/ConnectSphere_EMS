@@ -51,6 +51,14 @@ export const HOME_APPS = [
     roles: [],
   },
   {
+    id: 'venue-management',
+    label: 'Venue Management',
+    description: 'View and manage the venue catalogue',
+    path: '/venues',
+    icon: '🏛️',
+    roles: [],
+  },
+  {
     id: 'venue-search',
     label: 'Venue Search',
     description: 'Open Venue Search',
