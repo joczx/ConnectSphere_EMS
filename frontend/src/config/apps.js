@@ -13,7 +13,7 @@ export const HOME_APPS = [
   {
     id: 'equipment',
     label: 'Reserve Equipment',
-    description: 'Check availability and reserve equipment for an event',
+    description: 'Review equipment requests and accept or reject reservations',
     path: '/equipment',
     icon: '🛠️',
     roles: [],
@@ -48,6 +48,14 @@ export const HOME_APPS = [
     description: 'Open Equipment Availability',
     path: '/equipment-availability',
     icon: '🧰',
+    roles: [],
+  },
+  {
+    id: 'venue-management',
+    label: 'Venue Management',
+    description: 'View and manage the venue catalogue',
+    path: '/venues',
+    icon: '🏛️',
     roles: [],
   },
   {

@@ -13,18 +13,23 @@ venues = Blueprint("venues", __name__, url_prefix="/api/venues")
 
 _VENUE_FIELDS = (
     "venue_id,venue_name,capacity,building_name,block_number,street_name,"
-    "postal_code,wheelchair_accessible,blind_accessible,facilities,"
-    "supported_room_layouts"
+    "postal_code,unit_number,wheelchair_accessible,blind_accessible,"
+    "accessibility_notes,facilities,supported_room_layouts,operating_hours,"
+    "default_setup_minutes,default_turnaround_minutes"
 )
+
+
+def venue_catalogue_path(name=None):
+    """Build the ordered catalogue query, optionally filtered by venue name."""
+    path = f"/rest/v1/venues?select={_VENUE_FIELDS}"
+    if name:
+        path += f"&venue_name=ilike.*{quote(name, safe='')}*"
+    return path + "&order=venue_name.asc"
 
 
 def venue_name_search_path(name):
     """Build the case-insensitive Supabase query for a venue-name search."""
-    encoded_name = quote(name, safe="")
-    return (
-        f"/rest/v1/venues?select={_VENUE_FIELDS}"
-        f"&venue_name=ilike.*{encoded_name}*&order=venue_name.asc"
-    )
+    return venue_catalogue_path(name)
 
 
 @venues.after_request
@@ -54,6 +59,14 @@ def search_by_name():
     # intentionally added around, not inside, the user's encoded search text.
     rows = supabase_request(venue_name_search_path(name), token=token)
 
+    return jsonify(count=len(rows), venues=rows)
+
+
+@venues.get("/catalogue")
+def list_catalogue():
+    """Return every venue for the Venue Management catalogue."""
+    token = authenticated_token()
+    rows = supabase_request(venue_catalogue_path(), token=token)
     return jsonify(count=len(rows), venues=rows)
 
 

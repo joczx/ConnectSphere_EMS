@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import { useAuth } from '../auth/AuthContext';
 
 function date(value) {
@@ -172,7 +173,7 @@ export default function Events() {
             equipmentRequests.map((item) => (
               <div key={item.equipment_request_id || item.id} className="panel" style={{ marginTop: '12px' }}>
                 <h3>{item.equipment_type}</h3>
-                <p>Quantity: {item.quantity}</p>
+                <EquipmentRequestStatus request={item} />
                 <p>Technical requirements: {item.technical_requirements || 'Not specified'}</p>
               </div>
             ))
