@@ -53,6 +53,7 @@ export default function VenueSearchResults() {
         {venues.length > 0 && <ul className="venue-results">
           {venues.map((venue) => <li key={venue.venue_id}>
             <h2>{venue.venue_name}</h2>
+            <Link to={`/venue-bookings?venue_id=${encodeURIComponent(venue.venue_id)}`}>Request booking</Link>
             <p>{venue.capacity.toLocaleString()} people · {venue.building_name || `${venue.block_number} ${venue.street_name}`}</p>
           </li>)}
         </ul>}
