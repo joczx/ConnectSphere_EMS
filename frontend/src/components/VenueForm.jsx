@@ -1,16 +1,24 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Alert, AlertDescription, AlertTitle } from './Alert';
+import { VENUE_DAYS, VENUE_FACILITIES, VENUE_ROOM_LAYOUTS } from '../config/venueOptions';
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
-export default function VenueForm({ mode, venueId }) {
+export default function VenueForm({ mode, venueId, onSubmit, submitting = false, errors = {}, error = '' }) {
   const isUpdate = mode === 'update';
   const cancelPath = isUpdate ? `/venues/${venueId}` : '/venues';
+  const [closedDays, setClosedDays] = useState({});
+  const issues = Object.values(errors);
 
   return (
-    <form className="panel venue-form" onSubmit={(event) => event.preventDefault()}>
-      <p className="skeleton-note" role="note">
-        This form is a frontend skeleton. Saving will be connected to the venue API in a later step.
-      </p>
+    <form className="panel venue-form" onSubmit={onSubmit || ((event) => event.preventDefault())}>
+      {isUpdate && <p className="skeleton-note" role="note">Updating venues will be connected in a later step.</p>}
+      {(error || issues.length > 0) && <Alert variant="destructive">
+        <AlertTitle>Unable to create venue</AlertTitle>
+        <AlertDescription>
+          {error && <p>{error}</p>}
+          {issues.length > 0 && <ul>{issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}
+        </AlertDescription>
+      </Alert>}
 
       <fieldset>
         <legend>Venue information</legend>
@@ -68,14 +76,6 @@ export default function VenueForm({ mode, venueId }) {
         <legend>Venue characteristics</legend>
         <div className="venue-form-grid">
           <label>
-            Facilities
-            <textarea name="facilities" rows="4" required placeholder="Facility choices will be added here" />
-          </label>
-          <label>
-            Supported room layouts
-            <textarea name="supported_room_layouts" rows="4" required placeholder="Room layout choices will be added here" />
-          </label>
-          <label>
             Default setup time (minutes)
             <input name="default_setup_minutes" type="number" min="0" required placeholder="0" />
           </label>
@@ -84,25 +84,39 @@ export default function VenueForm({ mode, venueId }) {
             <input name="default_turnaround_minutes" type="number" min="0" required placeholder="0" />
           </label>
         </div>
+        <div className="layout-options">
+          <p className="filter-label">Facilities</p>
+          <p className="filter-help">Choose one or more facilities.</p>
+          <div className="facility-options">{VENUE_FACILITIES.map(([value, label]) => (
+            <label className="facility-option" key={value}><input name="facilities" type="checkbox" value={value} />{label}</label>
+          ))}</div>
+        </div>
+        <div className="layout-options">
+          <p className="filter-label">Supported room layouts</p>
+          <p className="filter-help">Choose one or more layouts.</p>
+          <div className="facility-options">{VENUE_ROOM_LAYOUTS.map(([value, label]) => (
+            <label className="facility-option" key={value}><input name="supported_room_layouts" type="checkbox" value={value} />{label}</label>
+          ))}</div>
+        </div>
       </fieldset>
 
       <fieldset>
         <legend>Operating hours</legend>
         <div className="operating-hours-skeleton">
-          {DAYS.map((day) => (
+          {VENUE_DAYS.map(([day, label]) => (
             <div className="operating-hours-row" key={day}>
-              <strong>{day}</strong>
-              <label><span className="sr-only">{day} opening time</span><input type="time" aria-label={`${day} opening time`} /></label>
+              <strong>{label}</strong>
+              <label><span className="sr-only">{label} opening time</span><input name={`${day}_open`} type="time" aria-label={`${label} opening time`} required={!closedDays[day]} disabled={closedDays[day]} /></label>
               <span aria-hidden="true">to</span>
-              <label><span className="sr-only">{day} closing time</span><input type="time" aria-label={`${day} closing time`} /></label>
-              <label className="venue-checkbox"><input type="checkbox" /> Closed</label>
+              <label><span className="sr-only">{label} closing time</span><input name={`${day}_close`} type="time" aria-label={`${label} closing time`} required={!closedDays[day]} disabled={closedDays[day]} /></label>
+              <label className="venue-checkbox"><input name={`${day}_closed`} type="checkbox" checked={Boolean(closedDays[day])} onChange={event => setClosedDays(current => ({ ...current, [day]: event.target.checked }))} /> Closed</label>
             </div>
           ))}
         </div>
       </fieldset>
 
       <div className="venue-page-actions">
-        <button type="submit" disabled>{isUpdate ? 'Update venue' : 'Create venue'}</button>
+        <button type="submit" disabled={isUpdate || submitting}>{submitting ? 'Creating venue…' : isUpdate ? 'Update venue' : 'Create venue'}</button>
         {isUpdate && <button type="button" className="secondary" disabled>Save draft</button>}
         <Link className="button-link secondary-link" to={cancelPath}>Cancel</Link>
       </div>

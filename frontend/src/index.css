@@ -164,6 +164,7 @@ input:not([type="checkbox"]), select, textarea { display: block; width: 100%; bo
 .venue-warning { margin-bottom: 24px; background: #fffbeb; border-color: #fbbf24; }
 .venue-delete-page { max-width: 760px; }
 .venue-delete-panel { border-color: #fecaca; }
+.venue-success { border-color: var(--cs-color-primary-focus); background: #f0fdfa; color: var(--cs-color-primary); }
 
 @media (max-width: 700px) {
   .operating-hours-row { grid-template-columns: 1fr 1fr; }
