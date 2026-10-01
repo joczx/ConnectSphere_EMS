@@ -1,11 +1,13 @@
-"""Read-only venue catalogue endpoints."""
+"""Venue search and catalogue management endpoints."""
 
+from uuid import UUID
 from urllib.parse import quote
 
 from flask import Blueprint, jsonify, request
 
 from app.routes.events import authenticated_token
 from app.schemas.venue_search import parse_filters
+from app.schemas.venue import parse_create
 from app.services.event_store import StoreError, supabase_request
 from app.services.venue_search_service import search_venues
 
@@ -32,6 +34,10 @@ def venue_name_search_path(name):
     return venue_catalogue_path(name)
 
 
+def venue_detail_path(venue_id):
+    return f"/rest/v1/venues?select={_VENUE_FIELDS}&venue_id=eq.{venue_id}&limit=1"
+
+
 @venues.after_request
 def no_cache(response):
     response.headers["Cache-Control"] = "no-store"
@@ -40,6 +46,13 @@ def no_cache(response):
 
 @venues.errorhandler(StoreError)
 def handle_store_error(error):
+    if error.code == "23505":
+        return jsonify(
+            error="A venue with the same name and address already exists.",
+            errors={"venue_name": "Use a different venue name or address."},
+        ), 409
+    if error.code == "42501":
+        return jsonify(error="You do not have permission to manage the venue catalogue."), 403
     message = "Please sign in again." if error.status == 401 else "Venue search is temporarily unavailable."
     return jsonify(error=message), error.status
 
@@ -91,3 +104,37 @@ def search_with_filters():
 
     rows = search_venues(filters, token)
     return jsonify(count=len(rows), venues=rows)
+
+
+@venues.get("/<venue_id>")
+def get_venue(venue_id):
+    """Return every stored characteristic for one venue."""
+    token = authenticated_token()
+    try:
+        venue_id = str(UUID(venue_id))
+    except ValueError:
+        return jsonify(error="Venue not found or access unavailable."), 404
+
+    rows = supabase_request(venue_detail_path(venue_id), token=token)
+    if not rows:
+        return jsonify(error="Venue not found or access unavailable."), 404
+    return jsonify(venue=rows[0])
+
+
+@venues.post("")
+def create_venue():
+    """Validate and add one complete venue to the catalogue."""
+    token = authenticated_token()
+    record, errors = parse_create(request.get_json(silent=True))
+    if errors:
+        return jsonify(
+            error="The venue could not be created because some details are missing or invalid.",
+            errors=errors,
+        ), 400
+
+    rows = supabase_request(
+        f"/rest/v1/venues?select={_VENUE_FIELDS}", token=token, payload=record
+    )
+    if not rows:
+        raise StoreError(503, "The venue could not be created. Please try again.")
+    return jsonify(message="Venue created successfully.", venue=rows[0]), 201
