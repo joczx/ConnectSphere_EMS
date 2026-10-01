@@ -18,6 +18,25 @@
 
 begin;
 
+alter table public.venues enable row level security;
+
+revoke all on table public.venues from anon;
+
+grant select, insert, update, delete
+on table public.venues
+to authenticated;
+
+drop policy if exists authenticated_read_venues on public.venues;
+drop policy if exists venue_staff_create_venues on public.venues;
+drop policy if exists authenticated_manage_venues on public.venues;
+
+create policy authenticated_manage_venues
+on public.venues
+for all
+to authenticated
+using (true)
+with check (true);
+
 create unique index if not exists venues_normalized_name_address_key
 on public.venues (
     lower(btrim(venue_name)),
@@ -27,14 +46,5 @@ on public.venues (
     lower(btrim(coalesce(building_name, ''))),
     lower(btrim(coalesce(unit_number, '')))
 );
-
-grant insert on table public.venues to authenticated;
-
-drop policy if exists venue_staff_create_venues on public.venues;
-create policy venue_staff_create_venues
-on public.venues
-for insert
-to authenticated
-with check (public.has_booking_role('venue_staff'));
 
 commit;
