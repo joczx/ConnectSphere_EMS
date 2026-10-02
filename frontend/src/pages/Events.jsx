@@ -25,6 +25,8 @@ export default function Events() {
   });
   const [submitState, setSubmitState] = useState({ message: '', error: '' });
   const [userNames, setUserNames] = useState({});
+  const [coordinatorChoices, setCoordinatorChoices] = useState([]);
+  const [reassignForm, setReassignForm] = useState({ open: false, value: '', busy: false, error: '', message: '' });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -107,12 +109,38 @@ export default function Events() {
       event.venue_staff_id,
     ].filter(Boolean).join(',');
 
-    if (!ids) return;
+    if (ids) {
+      api(`/api/users?ids=${encodeURIComponent(ids)}`, { cache: 'no-store' })
+        .then((data) => setUserNames(data.users || {}))
+        .catch(() => setUserNames({}));
+    } else {
+      setUserNames({});
+    }
 
-    api(`/api/users?ids=${encodeURIComponent(ids)}`, { cache: 'no-store' })
-      .then((data) => setUserNames(data.users || {}))
-      .catch(() => setUserNames({}));
+    api('/api/users?role=event_coordinator', { cache: 'no-store' })
+      .then((data) => {
+        const options = Object.entries(data.users || {}).map(([id, name]) => ({ id, name }));
+        setCoordinatorChoices(options.filter(({ id }) => id !== event.event_coordinator_id));
+      })
+      .catch(() => setCoordinatorChoices([]));
   }, [api, event]);
+
+  async function reassignCoordinator(eventSubmit) {
+    eventSubmit.preventDefault();
+    if (!event || !reassignForm.value) return;
+
+    setReassignForm((current) => ({ ...current, busy: true, error: '', message: '' }));
+    try {
+      const data = await api(`/api/events/${encodeURIComponent(eventId)}/coordinator`, {
+        method: 'PATCH',
+        body: { event_coordinator_id: reassignForm.value },
+      });
+      setReassignForm({ open: false, value: '', busy: false, error: '', message: data.message || 'Coordinator reassigned.' });
+      setRefresh(value => value + 1);
+    } catch (err) {
+      setReassignForm((current) => ({ ...current, busy: false, error: err.message || 'Unable to reassign the coordinator.' }));
+    }
+  }
 
   return <>
     <Navbar />
@@ -128,7 +156,22 @@ export default function Events() {
         {data.events.map(item => <Link className="panel event-link" key={item.event_id} to={'/events/' + item.event_id}><h2>{item.event_name}</h2><p>{date(item.start_datetime)}</p><p className="metadata">Status: {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : 'Not specified'}</p><span>View event information →</span></Link>)}
       </section>}
       {event && <article className="panel">
-        <h2>{event.event_name}</h2>
+        <div className="heading" style={{ alignItems: 'center' }}>
+          <h2 style={{ margin: 0 }}>{event.event_name}</h2>
+          <button type="button" className="secondary" onClick={() => setReassignForm(current => ({ ...current, open: !current.open, value: '', error: '', message: '' }))}>Reassign Event Coordinator</button>
+        </div>
+        {reassignForm.message && <div className="success" style={{ marginBottom: '12px' }}>{reassignForm.message}</div>}
+        {reassignForm.error && <div className="error" style={{ marginBottom: '12px' }}>{reassignForm.error}</div>}
+        {reassignForm.open && <form onSubmit={reassignCoordinator} style={{ display: 'grid', gap: '12px', marginBottom: '20px' }}>
+          <label>
+            Replacement event coordinator
+            <select value={reassignForm.value} onChange={(e) => setReassignForm((current) => ({ ...current, value: e.target.value }))} required>
+              <option value="">Select an event coordinator</option>
+              {coordinatorChoices.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+            </select>
+          </label>
+          <button type="submit" disabled={reassignForm.busy}>{reassignForm.busy ? 'Reassigning…' : 'Save reassignment'}</button>
+        </form>}
         <dl>
           <Detail label="Status" value={event.status ? event.status.charAt(0).toUpperCase() + event.status.slice(1) : null} />
           <Detail label="Start date and time" value={date(event.start_datetime)} />
