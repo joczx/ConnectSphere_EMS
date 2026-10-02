@@ -3,7 +3,7 @@
 from datetime import datetime
 
 ROOM_LAYOUTS = frozenset(
-    {"theatre", "classroom", "boardroom", "banquet", "exhibition", "u_shape", "cabaret"}
+    {"theatre", "classroom", "boardroom", "banquet", "exhibition", "u_shape", "cabaret", "cocktail"}
 )
 FACILITIES = frozenset(
     {
@@ -15,6 +15,12 @@ FACILITIES = frozenset(
         "parking",
         "catering_area",
         "air_conditioning",
+        "audio_visual",
+        "built_in_av",
+        "catering",
+        "lighting",
+        "loading_bay",
+        "power_outlets",
     }
 )
 
