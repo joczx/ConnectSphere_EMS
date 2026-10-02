@@ -38,7 +38,7 @@ def login():
     try:
         result = supabase_request('/auth/v1/token?grant_type=password', payload={
             'email': email, 'password': body['password'],
-        })
+        }, method='POST')
     except StoreError as error:
         if error.status == 401:
             return jsonify(error='Incorrect email or password. Please try again.'), 401
@@ -54,5 +54,5 @@ def refresh():
         return jsonify(error='Refresh token is required.'), 400
     result = supabase_request('/auth/v1/token?grant_type=refresh_token', payload={
         'refresh_token': refresh_token,
-    })
+    }, method='POST')
     return session_response(result)

@@ -66,5 +66,57 @@ class EventViewTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json, {'error': 'Event service is temporarily unavailable.'})
 
+    @patch('app.routes.events.supabase_request')
+    def test_current_coordinator_can_reassign_to_another_coordinator(self, query):
+        query.side_effect = [
+            {'id': 'current-coordinator'},
+            [{'event_id': EVENT_ID, 'event_coordinator_id': 'current-coordinator'}],
+            [{'event_id': EVENT_ID, 'event_coordinator_id': 'new-coordinator'}],
+        ]
+
+        response = self.client.patch(
+            '/api/events/' + EVENT_ID + '/coordinator',
+            headers=self.headers,
+            json={'event_coordinator_id': 'new-coordinator'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['event']['event_coordinator_id'], 'new-coordinator')
+        self.assertEqual(query.call_args.kwargs['token'], 'user-token')
+
+    @patch('app.routes.events.supabase_request')
+    def test_authenticated_non_coordinator_can_reassign(self, query):
+        query.side_effect = [
+            {'id': 'other-user'},
+            [{'event_id': EVENT_ID, 'event_coordinator_id': 'current-coordinator'}],
+            [{'event_id': EVENT_ID, 'event_coordinator_id': 'new-coordinator'}],
+        ]
+
+        response = self.client.patch(
+            '/api/events/' + EVENT_ID + '/coordinator',
+            headers=self.headers,
+            json={'event_coordinator_id': 'new-coordinator'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['event']['event_coordinator_id'], 'new-coordinator')
+
+    @patch('app.routes.events.supabase_request')
+    def test_empty_update_result_is_reported_as_permission_error(self, query):
+        query.side_effect = [
+            {'id': 'other-user'},
+            [{'event_id': EVENT_ID, 'event_coordinator_id': 'current-coordinator'}],
+            [],
+        ]
+
+        response = self.client.patch(
+            '/api/events/' + EVENT_ID + '/coordinator',
+            headers=self.headers,
+            json={'event_coordinator_id': 'new-coordinator'},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('permission to reassign', response.json['error'])
+
 if __name__ == '__main__':
     unittest.main()
