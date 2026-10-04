@@ -9,9 +9,14 @@ export default function Venues() {
   const { api } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [state, setState] = useState({ venues: [], loading: true, error: '' });
-  const formRef = useRef(null);
   const isFiltered = searchParams.toString().length > 0;
+  const [state, setState] = useState({ venues: [], loading: true, error: '' });
+  const [filtersOpen, setFiltersOpen] = useState(isFiltered);
+  const formRef = useRef(null);
+
+  useEffect(() => {
+    if (isFiltered) setFiltersOpen(true);
+  }, [isFiltered]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -53,11 +58,22 @@ export default function Venues() {
             <p className="eyebrow">VENUE MANAGEMENT</p>
             <h1>All venues</h1>
           </div>
-          <Link className="button-link" to="/venues/new">Create venue</Link>
+          <div className="venue-page-actions">
+            <button
+              type="button"
+              className="secondary"
+              aria-expanded={filtersOpen}
+              aria-controls="venue-filters"
+              onClick={() => setFiltersOpen(open => !open)}
+            >
+              {filtersOpen ? 'Hide filters' : isFiltered ? 'Show active filters' : 'Show filters'}
+            </button>
+            <Link className="button-link" to="/venues/new">Create venue</Link>
+          </div>
         </div>
         <p>View and manage the venues available to ConnectSphere.</p>
 
-        <form ref={formRef} className="panel venue-catalogue-filters" aria-labelledby="venue-filter-heading" onSubmit={applyFilters}>
+        <form id="venue-filters" ref={formRef} className="panel venue-catalogue-filters" aria-labelledby="venue-filter-heading" onSubmit={applyFilters} hidden={!filtersOpen}>
           <div className="heading venue-section-heading">
             <h2 id="venue-filter-heading">Filter venues</h2>
             <button type="button" className="secondary" onClick={clearFilters} disabled={!isFiltered}>Clear filters</button>

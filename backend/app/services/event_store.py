@@ -21,7 +21,7 @@ class StoreError(Exception):
         return {'error': self.message}
 
 
-def supabase_request(path, token=None, payload=None):
+def supabase_request(path, token=None, payload=None, method='GET'):
     base = os.environ.get('SUPABASE_URL', '').rstrip('/')
     key = os.environ.get('SUPABASE_ANON_KEY', '')
     if not base or not key:
@@ -31,7 +31,7 @@ def supabase_request(path, token=None, payload=None):
         headers['Prefer'] = 'return=representation'
     if token:
         headers['Authorization'] = f'Bearer {token}'
-    req = Request(base + path, headers=headers,
+    req = Request(base + path, headers=headers, method=method,
                   data=json.dumps(payload).encode() if payload is not None else None)
     try:
         with urlopen(req, timeout=10) as response:

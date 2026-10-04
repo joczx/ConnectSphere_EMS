@@ -21,6 +21,24 @@ class LoginTests(unittest.TestCase):
             self.assertIn('Invalid email address', response.json['error'])
         query.assert_not_called()
 
+    @patch('app.routes.login.supabase_request', return_value={
+        'access_token': 'access', 'refresh_token': 'refresh',
+    })
+    def test_login_uses_post_for_supabase_auth(self, query):
+        response = self.client.post(
+            '/api/login', json={'email': 'user@example.com', 'password': 'password'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(query.call_args.kwargs['method'], 'POST')
+
+    @patch('app.routes.login.supabase_request', return_value={
+        'access_token': 'access', 'refresh_token': 'refresh',
+    })
+    def test_refresh_uses_post_for_supabase_auth(self, query):
+        response = self.client.post('/api/refresh', json={'refresh_token': 'refresh'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(query.call_args.kwargs['method'], 'POST')
+
     @patch('app.routes.login.supabase_request', side_effect=StoreError(401))
     def test_login_wrong_password_returns_readable_error(self, query):
         response = self.client.post('/api/login', json={'email': 'user@example.com', 'password': 'wrong'})
