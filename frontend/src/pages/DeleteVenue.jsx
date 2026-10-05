@@ -50,14 +50,14 @@ export default function DeleteVenue() {
           {state.loading && <p role="status">Checking venue information and upcoming events…</p>}
           {state.error && <p className="error" role="alert">{state.error}</p>}
           {state.venue && <>
-            <p>You are about to permanently remove <strong>{state.venue.venue_name}</strong> from the venue catalogue.</p>
+            <p>You are about to remove <strong>{state.venue.venue_name}</strong> from the active venue catalogue.</p>
             {blocked ? <>
               <p className="venue-warning" role="alert">This venue cannot be deleted because it has upcoming scheduled events.</p>
               <ul className="venue-conflict-list">
                 {state.events.map(event => <li key={event.event_id}><strong>{event.event_name || 'Untitled event'}</strong><span>{when(event.start_datetime)}</span></li>)}
               </ul>
             </> : <>
-              <p>This action cannot be undone. Type the venue name exactly to confirm.</p>
+              <p>The venue will no longer be available for planning. Historic event records will keep their venue information. Type the venue name exactly to confirm.</p>
               <label>
                 Type <strong>{state.venue.venue_name}</strong> to confirm
                 <input type="text" value={state.confirmation} onChange={event => setState(current => ({ ...current, confirmation: event.target.value }))} autoComplete="off" />

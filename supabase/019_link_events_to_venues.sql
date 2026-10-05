@@ -1,8 +1,9 @@
 -- Venue deletion support. Apply after 018_add_venue_update_tracking.sql.
 --
--- The relationship keeps venue assignment optional. Deleting a venue clears
--- existing links so catalogue cleanup is not blocked by historical event rows.
--- Existing events remain unassigned (NULL) until a venue is selected for them.
+-- The application uses soft deletion in 020, so normal catalogue removal
+-- preserves historic event-to-venue links. ON DELETE SET NULL remains a safe
+-- fallback if an administrator physically removes a venue. Existing events
+-- remain unassigned (NULL) until a venue is selected for them.
 
 begin;
 

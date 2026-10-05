@@ -18,8 +18,10 @@ _VENUE_FIELDS = (
     "venue_id,venue_name,capacity,building_name,block_number,street_name,"
     "postal_code,unit_number,wheelchair_accessible,blind_accessible,"
     "accessibility_notes,facilities,supported_room_layouts,operating_hours,"
-    "default_setup_minutes,default_turnaround_minutes,version,updated_at"
+    "default_setup_minutes,default_turnaround_minutes,version,updated_at,deleted_at"
 )
+
+_ACTIVE_VENUE_FILTER = "deleted_at=is.null"
 
 
 def venue_catalogue_path(name=None):
@@ -27,7 +29,7 @@ def venue_catalogue_path(name=None):
     path = f"/rest/v1/venues?select={_VENUE_FIELDS}"
     if name:
         path += f"&venue_name=ilike.*{quote(name, safe='')}*"
-    return path + "&order=venue_name.asc"
+    return path + f"&{_ACTIVE_VENUE_FILTER}&order=venue_name.asc"
 
 
 def venue_name_search_path(name):
@@ -36,16 +38,16 @@ def venue_name_search_path(name):
 
 
 def venue_detail_path(venue_id):
-    return f"/rest/v1/venues?select={_VENUE_FIELDS}&venue_id=eq.{venue_id}&limit=1"
+    return f"/rest/v1/venues?select={_VENUE_FIELDS}&venue_id=eq.{venue_id}&{_ACTIVE_VENUE_FILTER}&limit=1"
 
 
 def venue_update_path(venue_id, version):
     """Target exactly the version of a venue the staff member reviewed."""
-    return f"/rest/v1/venues?select={_VENUE_FIELDS}&venue_id=eq.{venue_id}&version=eq.{version}"
+    return f"/rest/v1/venues?select={_VENUE_FIELDS}&venue_id=eq.{venue_id}&version=eq.{version}&{_ACTIVE_VENUE_FILTER}"
 
 
 def venue_delete_path(venue_id):
-    return f"/rest/v1/venues?select={_VENUE_FIELDS}&venue_id=eq.{venue_id}"
+    return f"/rest/v1/venues?select={_VENUE_FIELDS}&venue_id=eq.{venue_id}&{_ACTIVE_VENUE_FILTER}"
 
 
 def upcoming_event_path(venue_id):
@@ -245,8 +247,12 @@ def delete_venue(venue_id):
         return deletion_conflict_response(conflicts)
 
     deleted = supabase_request(
-        venue_delete_path(venue_id), token=token, method="DELETE", return_representation=True
+        venue_delete_path(venue_id),
+        token=token,
+        payload={"deleted_at": datetime.now(timezone.utc).isoformat()},
+        method="PATCH",
+        return_representation=True,
     )
     if not deleted:
         return jsonify(error="This venue has already been deleted or is unavailable."), 404
-    return jsonify(message="Venue deleted successfully.", venue=deleted[0])
+    return jsonify(message="Venue removed from the catalogue successfully.", venue=deleted[0])

@@ -119,6 +119,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
 
         self.assertEqual(catalogue.status_code, 200)
         self.assertEqual(name_search.status_code, 200)
+        self.assertIn("deleted_at=is.null", query.call_args_list[0].args[0])
         self.assertIn("order=venue_name.asc", query.call_args_list[0].args[0])
         self.assertIn("venue_name=ilike.*Hall*", query.call_args_list[1].args[0])
 
@@ -269,7 +270,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertIn("upcoming scheduled events", response.json["error"])
         self.assertEqual(query.call_count, 2)
 
-    def test_delete_venue_removes_a_venue_without_upcoming_events(self):
+    def test_delete_venue_soft_deletes_a_venue_without_upcoming_events(self):
         venue = {"venue_id": VENUE_ID, **valid_venue()}
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
             "app.routes.venues.supabase_request", side_effect=[[venue], [], [venue]]
@@ -278,8 +279,11 @@ class VenueCatalogueRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json["venue"], venue)
-        self.assertEqual(query.call_args.kwargs["method"], "DELETE")
+        self.assertIn("removed from the catalogue", response.json["message"])
+        self.assertEqual(query.call_args.kwargs["method"], "PATCH")
         self.assertTrue(query.call_args.kwargs["return_representation"])
+        self.assertIn("deleted_at", query.call_args.kwargs["payload"])
+        self.assertIn("deleted_at=is.null", query.call_args.args[0])
 
     def test_delete_reports_a_reason_when_venue_is_already_deleted(self):
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
