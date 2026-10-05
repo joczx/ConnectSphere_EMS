@@ -12,7 +12,9 @@ def test_every_status_the_database_accepts_is_known_to_the_code():
     assert schema.ALL_STATUSES == {
         "draft",
         "submitted",
-        "under_review",
-        "approved",
+        "planning",
         "rejected",
+        "confirmed",
+        "completed",
+        "cancelled",
     }

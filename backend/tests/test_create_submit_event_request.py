@@ -209,7 +209,7 @@ def test_accessibility_flags_must_be_true_or_false():
 
 def test_a_client_cannot_set_the_status_itself():
     """Status is system-controlled, so it is not a writable field."""
-    _, errors = schema.parse_payload(valid_payload(status="approved"))
+    _, errors = schema.parse_payload(valid_payload(status="planning"))
 
     assert "_body" in errors
     assert "status" in errors["_body"]
@@ -395,7 +395,7 @@ def test_service_blocks_each_missing_field(field):
     ({'required_facilities': ['invalid']}, 'required_facilities'),
     ({'equipment_requirements': [{'equipment_type': 'mic', 'quantity': 0}]}, 'equipment_requirements'),
     ({'event_name': '   '}, 'event_name'),
-    ({'status': 'approved'}, '_body'),
+    ({'status': 'planning'}, '_body'),
     ({'event_request_id': 123}, '_body'),
     ({'submitted_at': '2000-01-01T00:00:00Z'}, '_body'),
 ])

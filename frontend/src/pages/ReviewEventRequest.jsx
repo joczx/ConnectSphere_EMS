@@ -66,7 +66,7 @@ export default function ReviewEventRequest() {
       {state.reviews?.length > 0 && <section className="panel"><h2>Review history</h2><dl>
         {state.reviews.map(review => <div key={review.review_id}><dt>{humanise(review.outcome)} on {when(review.created_at)}</dt><dd>{review.comments || 'No remarks'}</dd></div>)}
       </dl></section>}
-      {['submitted', 'under_review'].includes(request?.status) && <form className="panel" onSubmit={review}>
+      {request?.status === 'submitted' && <form className="panel" onSubmit={review}>
         <fieldset disabled={state.busy}>
           {errorBox}
           <label>Remarks (required when rejecting)<textarea name="comments" rows="4" /></label>

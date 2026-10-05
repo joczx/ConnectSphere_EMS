@@ -10,7 +10,7 @@ export default function ReviewEventRequests() {
   useEffect(() => {
     (async () => {
       // One call per status, so Organisers' drafts never reach a Coordinator's browser.
-      try { setState({ sections: await Promise.all([['Received', 'submitted'], ['Approved', 'approved'], ['Rejected', 'rejected']].map(async ([title, status]) => [title, (await eventRequestsApi(api, '?status=' + status)).event_requests])) }); }
+      try { setState({ sections: await Promise.all([['Received', 'submitted'], ['In planning', 'planning'], ['Rejected', 'rejected']].map(async ([title, status]) => [title, (await eventRequestsApi(api, '?status=' + status)).event_requests])) }); }
       catch (err) { setState({ error: err.message || 'Unable to load event requests.' }); }
     })();
   }, [api]);
