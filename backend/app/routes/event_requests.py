@@ -47,10 +47,12 @@ def create():
     """
     payload = request.get_json(silent=True)
 
-    if payload is None:
+    if not isinstance(payload, dict):
         raise EventRequestError("Send the event request details as JSON.")
 
-    save_as_draft = bool(payload.pop("save_as_draft", False))
+    save_as_draft = payload.pop("save_as_draft", False)
+    if not isinstance(save_as_draft, bool):
+        raise EventRequestError("save_as_draft must be true or false.")
     row = create_event_request(payload, submit=not save_as_draft)
 
     message = (

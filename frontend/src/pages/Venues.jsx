@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import VenueCard from '../components/VenueCard';
 import { useAuth } from '../auth/AuthContext';
@@ -8,6 +8,7 @@ import { VENUE_FACILITIES, VENUE_ROOM_LAYOUTS } from '../config/venueOptions';
 export default function Venues() {
   const { api } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const isFiltered = searchParams.toString().length > 0;
   const [state, setState] = useState({ venues: [], loading: true, error: '' });
@@ -72,6 +73,7 @@ export default function Venues() {
           </div>
         </div>
         <p>View and manage the venues available to ConnectSphere.</p>
+        {location.state?.message && <p className="panel venue-success" role="status">{location.state.message}</p>}
 
         <form id="venue-filters" ref={formRef} className="panel venue-catalogue-filters" aria-labelledby="venue-filter-heading" onSubmit={applyFilters} hidden={!filtersOpen}>
           <div className="heading venue-section-heading">
