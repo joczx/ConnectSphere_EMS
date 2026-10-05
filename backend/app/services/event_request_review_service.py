@@ -150,6 +150,14 @@ def _why_not_reviewable(status):
             "once the Event Organiser submits it."
         )
 
+    # "has already been planning" does not read as English, and the Coordinator
+    # needs to know the decision was already taken, not just that it is late.
+    if status == request_schema.STATUS_PLANNING:
+        return (
+            "This event request has already been approved and is now in "
+            "planning. It cannot be reviewed again."
+        )
+
     return (
         f"This event request has already been {status} and cannot be "
         "reviewed again."

@@ -203,7 +203,7 @@ def test_accessibility_flags_must_be_true_or_false():
 
 def test_a_client_cannot_set_the_status_itself():
     """Status is system-controlled, so it is not a writable field."""
-    _, errors = schema.parse_payload(valid_payload(status="approved"))
+    _, errors = schema.parse_payload(valid_payload(status="planning"))
 
     assert "_body" in errors
     assert "status" in errors["_body"]
@@ -434,7 +434,9 @@ def test_every_status_the_database_accepts_is_known_to_the_code():
     assert schema.ALL_STATUSES == {
         "draft",
         "submitted",
-        "under_review",
-        "approved",
+        "planning",
         "rejected",
+        "confirmed",
+        "completed",
+        "cancelled",
     }

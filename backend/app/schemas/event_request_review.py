@@ -14,21 +14,23 @@ OUTCOME_REJECTED = "rejected"
 OUTCOME_CLARIFICATION = "clarification_requested"
 OUTCOMES = frozenset({OUTCOME_APPROVED, OUTCOME_REJECTED, OUTCOME_CLARIFICATION})
 
-# What the request's status becomes once the outcome is recorded. Requesting
-# clarification deliberately keeps the request under review: the customer
-# confirmed clarification "can be a sub-state of under_review" rather than a
-# status of its own.
+# What the request's status becomes once the outcome is recorded. Approving
+# moves it straight into planning: the customer described "approved" and
+# "planning (approved event)" as the same state seen from two angles.
+#
+# Requesting clarification deliberately leaves the request where it is. The
+# customer confirmed clarification "can be a sub-state of under_review" rather
+# than a status of its own, and with under_review retired that sub-state is
+# derived from the latest review row against a still-submitted request.
 OUTCOME_TO_STATUS = {
-    OUTCOME_APPROVED: request_schema.STATUS_APPROVED,
+    OUTCOME_APPROVED: request_schema.STATUS_PLANNING,
     OUTCOME_REJECTED: request_schema.STATUS_REJECTED,
-    OUTCOME_CLARIFICATION: request_schema.STATUS_UNDER_REVIEW,
+    OUTCOME_CLARIFICATION: request_schema.STATUS_SUBMITTED,
 }
 
 # A request may only be reviewed once the Organiser has submitted it. A draft
 # has not been sent for review, and an already-decided request is finished.
-REVIEWABLE_STATUSES = frozenset(
-    {request_schema.STATUS_SUBMITTED, request_schema.STATUS_UNDER_REVIEW}
-)
+REVIEWABLE_STATUSES = frozenset({request_schema.STATUS_SUBMITTED})
 
 # Approving without comment is fine. Rejecting or asking for clarification
 # without saying why leaves the Organiser with nothing to act on.

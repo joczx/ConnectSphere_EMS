@@ -106,19 +106,20 @@ def test_a_non_object_body_is_rejected():
 
 
 # AC: The system records the outcome of the review.
-def test_approving_moves_the_request_to_approved():
-    assert review.OUTCOME_TO_STATUS["approved"] == request_schema.STATUS_APPROVED
+def test_approving_moves_the_request_into_planning():
+    """An approved event is one whose arrangements are now being planned."""
+    assert review.OUTCOME_TO_STATUS["approved"] == request_schema.STATUS_PLANNING
 
 
 def test_rejecting_moves_the_request_to_rejected():
     assert review.OUTCOME_TO_STATUS["rejected"] == request_schema.STATUS_REJECTED
 
 
-def test_requesting_clarification_keeps_the_request_under_review():
-    """The customer confirmed clarification is a sub-state of under_review."""
+def test_requesting_clarification_leaves_the_request_submitted():
+    """Clarification is a sub-state, not a status: the decision is still open."""
     assert (
         review.OUTCOME_TO_STATUS["clarification_requested"]
-        == request_schema.STATUS_UNDER_REVIEW
+        == request_schema.STATUS_SUBMITTED
     )
 
 
@@ -131,18 +132,15 @@ def test_every_mapped_status_exists_in_the_database_enum():
 
 
 # AC: The system allows Event Coordinators to view submitted event requests.
-def test_only_submitted_or_under_review_requests_can_be_reviewed():
-    assert review.REVIEWABLE_STATUSES == {
-        request_schema.STATUS_SUBMITTED,
-        request_schema.STATUS_UNDER_REVIEW,
-    }
+def test_only_submitted_requests_can_be_reviewed():
+    assert review.REVIEWABLE_STATUSES == {request_schema.STATUS_SUBMITTED}
 
 
 def test_a_draft_is_not_reviewable():
     assert request_schema.STATUS_DRAFT not in review.REVIEWABLE_STATUSES
 
 
-@pytest.mark.parametrize("status", ["approved", "rejected"])
+@pytest.mark.parametrize("status", ["planning", "rejected", "cancelled"])
 def test_an_already_decided_request_is_not_reviewable(status):
     assert status not in review.REVIEWABLE_STATUSES
 
