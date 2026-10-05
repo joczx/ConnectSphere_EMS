@@ -122,7 +122,7 @@ for endpoint, path in [('list', '/api/events'), ('detail', DETAIL)]:
         setattr(EventAcceptanceTests, f'test_{number:02d}_{endpoint}_{label}', auth_case(path, header, identity))
         number += 1
 
-# 17-24: viewing endpoints do not accept writes.
+# 17-23: viewing endpoints do not accept writes.
 def write_case(path, method):
     def test(self):
         response = self.client.open(path, method=method, headers=self.headers, json={'event_name': 'Changed'})
@@ -130,10 +130,31 @@ def write_case(path, method):
         self.query.assert_not_called()
     return test
 
+# The detail endpoint does accept PATCH: that is how an event is edited during
+# planning, for the "Update Event Information" story. Everything else on both
+# endpoints is still read only.
+REJECTED_METHODS = {
+    'list': ['POST', 'PUT', 'PATCH', 'DELETE'],
+    'detail': ['POST', 'PUT', 'DELETE'],
+}
+
 for endpoint, path in [('list', '/api/events'), ('detail', DETAIL)]:
-    for method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+    for method in REJECTED_METHODS[endpoint]:
         setattr(EventAcceptanceTests, f'test_{number:02d}_{endpoint}_rejects_{method.lower()}', write_case(path, method))
         number += 1
+
+
+# 24: the edit endpoint exists; a routed PATCH must not come back as "method
+# not allowed". Built by a factory like the cases above so the function is not
+# also collected as a module level test.
+def accepts_case(path, method):
+    def test(self):
+        response = self.client.open(path, method=method, headers=self.headers, json={'event_name': 'Changed'})
+        self.assertNotEqual(response.status_code, 405)
+    return test
+
+setattr(EventAcceptanceTests, f'test_{number:02d}_detail_accepts_patch', accepts_case(DETAIL, 'PATCH'))
+number += 1
 
 
 class SupabaseClientTests(unittest.TestCase):
