@@ -9,6 +9,7 @@ import EventRequest from './pages/EventRequest';
 import ReviewEventRequests from './pages/ReviewEventRequests';
 import ReviewEventRequest from './pages/ReviewEventRequest';
 import VenueSearch from './pages/VenueSearch';
+import VenueBookings from './pages/VenueBookings';
 import VenueSearchResults from './pages/VenueSearchResults';
 import VenueSearchFilters from './pages/VenueSearchFilters';
 import EquipmentAvailability from './pages/EquipmentAvailability';
@@ -35,6 +36,7 @@ export default function App() {
     <Route path="/review-event-requests" element={protectedView(<ReviewEventRequests />)} />
     <Route path="/review-event-requests/:requestId" element={protectedView(<ReviewEventRequest />)} />
     <Route path="/venue-search" element={protectedView(<VenueSearch />)} />
+    <Route path="/venue-bookings" element={protectedView(<VenueBookings />)} />
     <Route path="/venue-search/results" element={protectedView(<VenueSearchResults />)} />
     <Route path="/venue-search/filters" element={protectedView(<VenueSearchFilters />)} />
     <Route path="/equipment-availability" element={protectedView(<EquipmentAvailability />)} />
