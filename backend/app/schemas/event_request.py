@@ -37,12 +37,6 @@ ALL_STATUSES = frozenset(
     }
 )
 
-# The subset a request can actually hold. Filtering a request listing by
-# "confirmed" is not an error, it just never matches.
-REQUEST_STATUSES = frozenset(
-    {STATUS_DRAFT, STATUS_SUBMITTED, STATUS_PLANNING, STATUS_REJECTED, STATUS_CANCELLED}
-)
-
 # public.room_layout
 ROOM_LAYOUTS = frozenset(
     {"theatre", "classroom", "boardroom", "banquet", "exhibition", "u_shape", "cabaret"}

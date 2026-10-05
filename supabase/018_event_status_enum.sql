@@ -58,6 +58,16 @@ alter table public.event_request
     alter column status set default 'draft'::public.event_status;
 
 -- public.events: currently character varying, defaulting to 'planning'.
+--
+-- The live table has this column; 002_create_events.sql does not create it.
+-- That file no longer describes the deployed table at all (different primary
+-- key type, different timestamp column names, a dozen columns missing), so it
+-- cannot rebuild production either way. This guard is here only so the
+-- migration is a no-op rather than an error against a database where the
+-- column is absent. It changes nothing against the live instance.
+alter table public.events
+    add column if not exists status text not null default 'planning';
+
 alter table public.events
     alter column status drop default;
 

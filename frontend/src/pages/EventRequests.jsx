@@ -44,6 +44,7 @@ export default function EventRequests() {
       {section('Submitted', requests.filter(item => item.status === 'submitted'))}
       {section('In planning', requests.filter(item => item.status === 'planning'))}
       {section('Rejected', requests.filter(item => item.status === 'rejected'))}
+      {section('Cancelled', requests.filter(item => item.status === 'cancelled'))}
     </main>
   </>;
 }
