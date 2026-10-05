@@ -39,6 +39,23 @@ create type public.event_status as enum (
     'cancelled'
 );
 
+-- public.create_event_after_request_approval pins the old type in its WHEN
+-- clause ('approved'::request_status), so PostgreSQL refuses to alter the
+-- column while it exists. It comes back at the end of this file keyed on
+-- 'planning' instead, which is the same moment in the lifecycle under the new
+-- vocabulary: the Coordinator has approved, and the event now needs planning.
+--
+-- Its function, create_event_from_approved_request(), needs no change: it
+-- already inserts the literal 'planning' into events.status, so it was written
+-- against this vocabulary before the enum caught up with it.
+drop trigger if exists create_event_after_request_approval on public.event_request;
+
+-- complete_before_submit pins the old type the same way, in 'draft'::request_status.
+-- It is recreated verbatim below with only that cast changed, so which requests
+-- the database accepts does not move with this migration.
+alter table public.event_request
+    drop constraint if exists complete_before_submit;
+
 -- public.event_request: currently public.request_status.
 alter table public.event_request
     alter column status drop default;
@@ -78,9 +95,42 @@ alter table public.events
 alter table public.events
     alter column status set default 'planning'::public.event_status;
 
--- Nothing else references the old type: no function, view or other column uses
--- it. Dropping it is what stops 'approved' and 'under_review' coming back.
+-- Nothing else references the old type now that the trigger is gone. Dropping
+-- it is what stops 'approved' and 'under_review' coming back.
 drop type public.request_status;
+
+-- Back on the new vocabulary, otherwise character for character as it was: a
+-- request may be incomplete only while it is a draft.
+--
+-- Note for whoever implements cancellation: 'cancelled' is NOT exempt here, so
+-- cancelling an incomplete draft would fail this check. That is deliberate --
+-- this migration changes the vocabulary, not the rules -- and it costs nothing
+-- today because nothing writes 'cancelled' to a request, and an unwanted draft
+-- is deleted rather than cancelled. If cancelling a draft becomes a real
+-- action, widen this to (status in ('draft', 'cancelled')) as its own change.
+alter table public.event_request
+    add constraint complete_before_submit check (
+        status = 'draft'::public.event_status
+        or (
+            event_name is not null
+            and purpose is not null
+            and start_datetime is not null
+            and end_datetime is not null
+            and capacity_needed is not null
+        )
+    );
+
+-- Back on the new vocabulary. Approving an event request still creates the
+-- events row exactly once: the function's "on conflict (event_request_id) do
+-- nothing" means a request that returns to planning never duplicates it.
+create trigger create_event_after_request_approval
+    after update of status on public.event_request
+    for each row
+    when (
+        new.status = 'planning'::public.event_status
+        and old.status is distinct from 'planning'::public.event_status
+    )
+    execute function public.create_event_from_approved_request();
 
 comment on column public.event_request.status is
     'Approval phase of the event lifecycle. A request leaves this table''s '
