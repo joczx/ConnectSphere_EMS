@@ -3,14 +3,17 @@
 Run automated validation and HTTP/service tests from `backend`:
 
 ```powershell
-python -m pytest tests/test_event_request_schema.py tests/test_event_request_submission.py -v -p no:cacheprovider
+python -m pytest tests/test_create_submit_event_request.py -v -p no:cacheprovider
 ```
 
-The HTTP tests replace Supabase at the database boundary. They verify the
-actual route and service together, including validation before writes,
-server-controlled status/timestamp, returning the database-generated ID,
-success messages, failure messages, malformed bodies and incomplete drafts.
-They do not prove database ID uniqueness or browser behaviour.
+All unit tests for this story are in `test_create_submit_event_request.py`.
+Schema functions are called directly. Service tests mock the persistence
+wrapper; route tests call handlers directly in a Flask request context and
+mock their service dependency. No HTTP test client or real database is used.
+Coverage includes validation before writes, server-controlled status/timestamp,
+returning the database-generated ID, success/error messages and malformed bodies.
+These tests do not prove database ID uniqueness, route-to-service integration,
+or browser behaviour. Draft-editing unit tests remain in `test_event_request_schema.py`.
 
 ## Browser and deployed database checks
 
