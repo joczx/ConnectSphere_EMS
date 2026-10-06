@@ -21,7 +21,11 @@ class StoreError(Exception):
         return {'error': self.message}
 
 
-def supabase_request(path, token=None, payload=None, method='GET', return_representation=False):
+def supabase_request(path, token=None, payload=None, method=None, return_representation=False):
+    # PostgREST reads RPC arguments from JSON only for POST requests. A GET
+    # with a JSON body is treated as a call without arguments.
+    if method is None:
+        method = 'POST' if path.startswith('/rest/v1/rpc/') and payload is not None else 'GET'
     base = os.environ.get('SUPABASE_URL', '').rstrip('/')
     key = os.environ.get('SUPABASE_ANON_KEY', '')
     if not base or not key:

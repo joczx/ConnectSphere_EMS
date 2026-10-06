@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import EquipmentReservations from '../components/EquipmentReservations';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
+import ReserveEquipment from '../components/ReserveEquipment';
 import { useAuth } from '../auth/AuthContext';
 
 function ReviewForm({ request, equipment, onReviewed }) {
@@ -100,6 +101,7 @@ export default function Equipment() {
       <Link to="/home">Home</Link>
       <div className="heading"><div><p className="eyebrow">EQUIPMENT</p><h1>Reserve equipment</h1></div>
         <button className="secondary" disabled={loading} onClick={() => setRefresh(value => value + 1)}>Refresh</button></div>
+      <ReserveEquipment onReserved={() => setReservationsRefresh(value => value + 1)} />
       <p>View your events and review equipment requests submitted by your account.</p>
       {error && <p role="alert" className="panel error">{error}</p>}
       {message && <p role="status" className="panel">{message}</p>}
