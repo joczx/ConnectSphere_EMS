@@ -55,14 +55,24 @@ def test_another_coordinator_may_not_review():
     assert "another Event Coordinator" in caught.value.message
 
 
-def test_an_unassigned_request_is_not_blocked():
-    """Rows predating the assignment trigger would otherwise be unreviewable.
+def test_an_unassigned_request_cannot_be_reviewed():
+    """A missing assignment is a data fault, not permission for anyone.
 
-    023 backfills them, but the service must not strand one that slips through.
+    The Organiser can see their own request, so allowing an unassigned one to
+    be reviewed by whoever can reach it would let them approve it themselves.
     """
-    _, recorded, _ = review_as(COORDINATOR, a_request(event_coordinator_id=None))
+    with pytest.raises(EventRequestError) as caught:
+        review_as(COORDINATOR, a_request(event_coordinator_id=None))
 
-    assert recorded["outcome"] == "approved"
+    assert caught.value.status_code == 409
+    assert "no Event Coordinator assigned" in caught.value.message
+
+
+def test_an_organiser_cannot_approve_their_own_unassigned_request():
+    organiser = "5d7e2a18-3c94-4f60-b2a1-8e4c6d0f9b73"
+
+    with pytest.raises(EventRequestError):
+        review_as(organiser, a_request(event_coordinator_id=None))
 
 
 def test_the_status_rule_still_applies_to_the_assigned_coordinator():

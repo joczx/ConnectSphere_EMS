@@ -4,7 +4,7 @@ import Navbar from '../components/Navbar';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import { useAuth } from '../auth/AuthContext';
 import {
-  CRITICAL_FIELDS, FACILITIES, LAYOUTS,
+  FACILITIES, LAYOUTS,
   display, label, toInput, toIso, toItems, toLines,
 } from '../services/eventFields';
 
@@ -125,8 +125,10 @@ export default function Events() {
     if (!eventId) return;
     let ignore = false;
     api(`/api/events/${encodeURIComponent(eventId)}/activity`, { cache: 'no-store' })
-      .then(data => { if (!ignore) setState(current => ({ ...current, activity: data.activity || [] })); })
-      .catch(() => { if (!ignore) setState(current => ({ ...current, activity: [] })); });
+      .then(data => { if (!ignore) setState(current => ({ ...current, activity: data.activity || [], activityError: null })); })
+      // Not an empty history: swallowing this would render "no changes have
+      // been recorded" over a Critical Edit the viewer simply could not read.
+      .catch(err => { if (!ignore) setState(current => ({ ...current, activity: null, activityError: err.message || 'Unable to load the activity history.' })); });
     return () => { ignore = true; };
   }, [api, eventId, refresh]);
 
@@ -396,7 +398,8 @@ export default function Events() {
 
       {eventId && <section className="panel" style={{ marginTop: '24px' }}>
         <h2>Activity history</h2>
-        {activity.length === 0 ? <p>No changes have been recorded for this event yet.</p> : <dl>
+        {state.activityError && <div role="alert" className="error">{state.activityError} Use Refresh to try again.</div>}
+        {!state.activityError && activity.length === 0 ? <p>No changes have been recorded for this event yet.</p> : activity.length > 0 && <dl>
           {activity.map(entry => <div key={entry.activity_id}>
             <dt>{entry.change_type === 'critical_edit' ? 'Critical Edit' : 'Edit'} — {date(entry.created_at)}</dt>
             <dd>

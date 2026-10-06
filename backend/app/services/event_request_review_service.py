@@ -45,7 +45,17 @@ def review_event_request(event_request_id, payload, reviewer_id=None):
     # rule is enforced here too rather than relying on not being found.
     assigned = existing.get("event_coordinator_id")
 
-    if assigned is not None and assigned != record["reviewer_id"]:
+    # A request with no coordinator is a data fault, not an open invitation.
+    # Treating it as one would let the Organiser decide their own request:
+    # they can see it, so without this they would pass the check below.
+    if assigned is None:
+        raise EventRequestError(
+            "This event request has no Event Coordinator assigned and cannot "
+            "be reviewed yet. Please contact an administrator.",
+            status_code=409,
+        )
+
+    if assigned != record["reviewer_id"]:
         raise EventRequestError(
             "This event request is assigned to another Event Coordinator and "
             "can only be reviewed by them.",

@@ -8,15 +8,9 @@
 export const LAYOUTS = ['theatre', 'classroom', 'boardroom', 'banquet', 'exhibition', 'u_shape', 'cabaret'];
 export const FACILITIES = ['stage', 'projector', 'sound_system', 'video_conferencing', 'wifi', 'parking', 'catering_area', 'air_conditioning'];
 
-// Changing one of these may invalidate a venue booking or an equipment
-// reservation already made, so the user is warned before they are saved.
-// Mirrors CRITICAL_FIELDS in backend/app/schemas/event.py, which is what
-// actually enforces the rule.
-export const CRITICAL_FIELDS = [
-  'start_datetime', 'end_datetime', 'capacity_needed', 'room_layout',
-  'required_facilities', 'need_wheelchair_accessibility',
-  'need_blind_accessibility', 'equipment_requirements',
-];
+// Which fields count as critical is deliberately NOT listed here. The server
+// decides, and names them in the 409 it returns, so the warning always matches
+// what is actually enforced rather than a copy that can drift from it.
 
 // datetime-local inputs use the browser's local time; the API stores UTC.
 export const toInput = (iso) => { if (!iso) return ''; const d = new Date(iso); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
