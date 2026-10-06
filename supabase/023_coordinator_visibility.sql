@@ -41,8 +41,15 @@
 begin;
 
 -- 1. Give every unassigned request a coordinator, the same way the trigger
---    does for new ones. random() is volatile, so this is evaluated per row
---    rather than once for the whole statement.
+--    does for new ones.
+--
+--    APPLIED 2026-10-06. Note for anyone reading this as an example: the
+--    subquery does not correlate with the outer row, so PostgreSQL evaluated
+--    it once for the whole statement rather than per row, and all 8 backfilled
+--    requests went to the same coordinator. Every row got exactly one
+--    coordinator, which is what the policy below needs, so this was left as
+--    it ran. To spread them, correlate the subquery with the outer row (for
+--    example by referencing event_request_id in the order by).
 update public.event_request
 set event_coordinator_id = (
     select u.user_id
