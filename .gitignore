@@ -25,3 +25,6 @@ backend/htmlcov/
 *.swp
 Thumbs.db
 .DS_Store
+
+#reports
+backend/coverage_report
