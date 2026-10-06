@@ -213,7 +213,9 @@ export default function Events() {
   }
 
   function startEditing() {
-    setEdit({ open: true, values: formFrom(event), busy: false, error: '', details: null, message: '' });
+    // The version being edited. Sent back on save so the server can refuse
+    // rather than overwrite if someone else has saved in the meantime.
+    setEdit({ open: true, values: formFrom(event), base: event.updated_at, busy: false, error: '', details: null, message: '' });
     setWarning(null);
   }
 
@@ -231,7 +233,7 @@ export default function Events() {
     try {
       const result = await api(`/api/events/${encodeURIComponent(eventId)}`, {
         method: 'PATCH',
-        body: confirmCritical ? { ...body, confirm_critical: true } : body,
+        body: { ...body, expected_updated_at: edit.base, ...(confirmCritical ? { confirm_critical: true } : {}) },
       });
       setWarning(null);
       setEdit({ open: false, values: null, busy: false, error: '', details: null, message: result.message || 'Event information updated.' });
@@ -242,6 +244,14 @@ export default function Events() {
       if (err.data?.critical_fields) {
         setWarning({ fields: err.data.critical_fields, body });
         setEdit(current => ({ ...current, busy: false }));
+        return;
+      }
+      // Someone else saved first. Their version is loaded so it can be read
+      // before deciding what to do; the edits are kept in the form meanwhile.
+      if (err.data?.stale) {
+        setWarning(null);
+        setEdit(current => ({ ...current, busy: false, error: err.message, details: null }));
+        setRefresh(value => value + 1);
         return;
       }
       setEdit(current => ({ ...current, busy: false, error: err.message || 'Unable to save these changes.', details: err.details }));

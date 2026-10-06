@@ -67,6 +67,10 @@ def edit_event(event_id):
     Send only the fields that changed. A change to a critical field is refused
     with 409 and the field names, so the client can show the warning modal and
     retry with "confirm_critical": true once the user confirms.
+
+    Send "expected_updated_at" with the value the event carried when editing
+    began. If someone else has saved since, the write is refused with 409 and
+    "stale": true rather than overwriting their work.
     """
     token = authenticated_token(supabase_request)
     event_id_value = valid_event_id(event_id)
@@ -77,11 +81,15 @@ def edit_event(event_id):
     if not isinstance(payload, dict):
         return jsonify(error='Event details must be provided as JSON.'), 400
 
-    # Not a field on the event: it is the user answering the warning.
+    # Neither is a field on the event: one is the user answering the warning,
+    # the other is the version they were looking at when they started editing.
     payload = dict(payload)
     confirm_critical = payload.pop('confirm_critical', False) is True
+    expected_updated_at = payload.pop('expected_updated_at', None)
 
-    row, activity = update_event(event_id_value, payload, token, confirm_critical)
+    row, activity = update_event(
+        event_id_value, payload, token, confirm_critical, expected_updated_at
+    )
 
     return jsonify({
         'message': 'No changes to save.' if activity is None else 'Event information updated.',
