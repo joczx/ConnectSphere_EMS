@@ -17,7 +17,7 @@ COORDINATOR = "3f1b9c64-7a2e-4d51-9b0f-2c8e5a6d4f10"
 @pytest.mark.parametrize("outcome", sorted(review.OUTCOMES))
 def test_each_outcome_is_accepted(outcome):
     record, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": outcome, "comments": "Looks reasonable."}
+        {"outcome": outcome, "comments": "Looks reasonable."}, COORDINATOR
     )
 
     assert errors == {}
@@ -26,33 +26,52 @@ def test_each_outcome_is_accepted(outcome):
 
 
 def test_an_unknown_outcome_is_rejected():
-    _, errors = review.parse_payload({"reviewer_id": COORDINATOR, "outcome": "maybe"})
+    _, errors = review.parse_payload({"outcome": "maybe"}, COORDINATOR)
 
     assert "outcome" in errors
 
 
 def test_an_outcome_is_required():
-    _, errors = review.parse_payload({"reviewer_id": COORDINATOR})
+    _, errors = review.parse_payload({}, COORDINATOR)
 
     assert "outcome" in errors
 
 
 def test_a_reviewer_is_required():
-    _, errors = review.parse_payload({"outcome": "approved"})
+    """No signed-in user means there is nobody to attribute the review to."""
+    _, errors = review.parse_payload({"outcome": "approved"}, None)
 
     assert "reviewer_id" in errors
 
 
 def test_the_reviewer_must_be_a_user_id():
-    _, errors = review.parse_payload({"reviewer_id": "seven", "outcome": "approved"})
+    _, errors = review.parse_payload({"outcome": "approved"}, "seven")
 
     assert "reviewer_id" in errors
+
+
+# The identity comes from the session, so a body that tries to name someone
+# else is refused outright rather than quietly ignored.
+def test_a_client_cannot_name_the_reviewer():
+    _, errors = review.parse_payload(
+        {"outcome": "approved", "reviewer_id": COORDINATOR}, COORDINATOR
+    )
+
+    assert "_body" in errors
+    assert "reviewer_id" in errors["_body"]
+
+
+def test_the_reviewer_comes_from_the_session():
+    record, errors = review.parse_payload({"outcome": "approved"}, COORDINATOR)
+
+    assert errors == {}
+    assert record["reviewer_id"] == COORDINATOR
 
 
 # AC: The Event Coordinator can add comments along with the outcome.
 def test_comments_are_kept_with_the_outcome():
     record, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": "approved", "comments": "  Approved for Hall A. "}
+        {"outcome": "approved", "comments": "  Approved for Hall A. "}, COORDINATOR
     )
 
     assert errors == {}
@@ -60,7 +79,7 @@ def test_comments_are_kept_with_the_outcome():
 
 
 def test_approving_without_a_comment_is_allowed():
-    record, errors = review.parse_payload({"reviewer_id": COORDINATOR, "outcome": "approved"})
+    record, errors = review.parse_payload({"outcome": "approved"}, COORDINATOR)
 
     assert errors == {}
     assert record["comments"] is None
@@ -69,7 +88,7 @@ def test_approving_without_a_comment_is_allowed():
 @pytest.mark.parametrize("outcome", sorted(review.OUTCOMES_NEEDING_COMMENTS))
 def test_a_reason_is_required_when_not_approving(outcome):
     """An Organiser told "rejected" with no reason has nothing to act on."""
-    _, errors = review.parse_payload({"reviewer_id": COORDINATOR, "outcome": outcome})
+    _, errors = review.parse_payload({"outcome": outcome}, COORDINATOR)
 
     assert "comments" in errors
 
@@ -77,7 +96,7 @@ def test_a_reason_is_required_when_not_approving(outcome):
 @pytest.mark.parametrize("outcome", sorted(review.OUTCOMES_NEEDING_COMMENTS))
 def test_a_blank_reason_does_not_count(outcome):
     _, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": outcome, "comments": "   "}
+        {"outcome": outcome, "comments": "   "}, COORDINATOR
     )
 
     assert "comments" in errors
@@ -85,7 +104,7 @@ def test_a_blank_reason_does_not_count(outcome):
 
 def test_comments_must_be_text():
     _, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": "approved", "comments": 42}
+        {"outcome": "approved", "comments": 42}, COORDINATOR
     )
 
     assert "comments" in errors
@@ -93,7 +112,7 @@ def test_comments_must_be_text():
 
 def test_unknown_fields_are_rejected():
     _, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": "approved", "decision": "yes"}
+        {"outcome": "approved", "decision": "yes"}, COORDINATOR
     )
 
     assert "_body" in errors

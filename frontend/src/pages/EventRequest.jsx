@@ -3,23 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext';
 import { eventRequestsApi, humanise, userId } from '../services/eventRequests';
-
-const LAYOUTS = ['theatre', 'classroom', 'boardroom', 'banquet', 'exhibition', 'u_shape', 'cabaret'];
-const FACILITIES = ['stage', 'projector', 'sound_system', 'video_conferencing', 'wifi', 'parking', 'catering_area', 'air_conditioning'];
-
-// datetime-local inputs use the browser's local time; the API stores UTC.
-const toInput = (iso) => { if (!iso) return ''; const d = new Date(iso); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
-const toIso = (local) => {
-  if (!local) return null;
-  const date = new Date(local);
-  return Number.isNaN(date.getTime()) ? local : date.toISOString();
-};
-// Equipment is edited as one "type, quantity, notes" line per item, or "none". Blank (null) means not answered yet.
-const toLines = (items) => !items ? '' : items.length ? items.map(i => [i.equipment_type, i.quantity, i.notes].filter(Boolean).join(', ')).join('\n') : 'none';
-const toItems = (text) => !text.trim() ? null : text.trim().toLowerCase() === 'none' ? [] : text.split('\n').filter(line => line.trim()).map(line => {
-  const [equipment_type, quantity, ...notes] = line.split(',').map(part => part.trim());
-  return { equipment_type, quantity: Number(quantity), notes: notes.join(', ') || null };
-});
+import { FACILITIES, LAYOUTS, toInput, toIso, toItems, toLines } from '../services/eventFields';
 
 export default function EventRequest() {
   const { api, token } = useAuth();
