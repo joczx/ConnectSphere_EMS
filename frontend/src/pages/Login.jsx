@@ -9,12 +9,8 @@ export default function Login() {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(e.currentTarget));
     body.email = body.email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
-      setError('Invalid email address. Please enter a valid email address.');
-      return;
-    }
-    if (!body.password) {
-      setError('Please enter your password.');
+    if (!body.email || !body.password) {
+      setError('Email and password are required.');
       return;
     }
     setBusy(true);
@@ -23,13 +19,20 @@ export default function Login() {
       const response = await fetch('/api/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
-      if (!response.ok) throw new Error(response.status === 401 ? 'Unable to sign in. Incorrect email or password.' : 'Unable to sign in. Please try again.');
+      if (!response.ok) {
+        setError(response.status === 401
+          ? 'Incorrect email or password. Please try again.'
+          : 'Unable to sign in right now. Please try again.');
+        return;
+      }
 
       const data = await response.json();
 
       signIn(data);
 
-    } catch (err) { setError(err.message || 'Unable to sign in. Please try again.'); }
+    } catch {
+      setError('Unable to sign in right now. Please try again.');
+    }
     finally { setBusy(false); }
   }
   return <main className="login-card panel">
