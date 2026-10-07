@@ -8,7 +8,7 @@ else it is read only, because the customer was explicit that an Organiser
 
 "Awaiting clarification" is deliberately not a status of its own - the
 customer said clarification "can be a sub-state of under_review" - so it is
-derived from the most recent review.
+derived from the most recent review against a still-submitted request.
 """
 
 import logging
@@ -82,8 +82,12 @@ def can_amend(event_request):
 
 
 def is_awaiting_clarification(event_request):
-    """True when the latest review asked the Organiser for clarification."""
-    if event_request.get("status") != schema.STATUS_UNDER_REVIEW:
+    """True when the latest review asked the Organiser for clarification.
+
+    A query leaves the request "submitted": it is still waiting on a decision,
+    and only the latest review says the ball is back with the Organiser.
+    """
+    if event_request.get("status") != schema.STATUS_SUBMITTED:
         return False
 
     latest = reviews.latest_review(event_request["event_request_id"])
@@ -187,7 +191,7 @@ def _notify_resubmission(event_request):
 def _why_not_editable(existing):
     status = existing.get("status")
 
-    if status == schema.STATUS_UNDER_REVIEW:
+    if status == schema.STATUS_SUBMITTED:
         return (
             "This event request is being reviewed. It can only be amended "
             "once the Event Coordinator asks for clarification."
@@ -202,7 +206,7 @@ def _why_not_editable(existing):
 def _why_not_submittable(existing):
     status = existing.get("status")
 
-    if status == schema.STATUS_UNDER_REVIEW:
+    if status == schema.STATUS_SUBMITTED:
         return (
             "This event request is already with the Event Coordinator. There "
             "is nothing to resubmit until clarification is requested."

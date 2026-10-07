@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext';
-import { eventRequestsApi, humanise, userId } from '../services/eventRequests';
+import { eventRequestsApi, humanise } from '../services/eventRequests';
 
 const when = (iso) => iso && new Intl.DateTimeFormat('en-SG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Singapore' }).format(new Date(iso));
 const list = (items, show) => items?.length ? items.map(show).join(', ') : 'None';
 
 export default function ReviewEventRequest() {
-  const { api, token } = useAuth();
+  const { api } = useAuth();
   const { requestId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -30,7 +30,9 @@ export default function ReviewEventRequest() {
     const comments = new FormData(e.currentTarget).get('comments');
     setState(current => ({ ...current, busy: true, error: null, details: null }));
     try {
-      const data = await eventRequestsApi(api, `/${requestId}/review`, { method: 'POST', body: { reviewer_id: userId(token), outcome, comments } });
+      // The reviewer is taken from the signed-in session by the API, not sent
+      // from here: a review has to be attributable to whoever actually made it.
+      const data = await eventRequestsApi(api, `/${requestId}/review`, { method: 'POST', body: { outcome, comments } });
       navigate('/review-event-requests/' + requestId, { replace: true, state: { message: data.message } });
     } catch (err) {
       setState(current => ({ ...current, busy: false, error: err.message, details: err.details }));
@@ -66,7 +68,7 @@ export default function ReviewEventRequest() {
       {state.reviews?.length > 0 && <section className="panel"><h2>Review history</h2><dl>
         {state.reviews.map(review => <div key={review.review_id}><dt>{humanise(review.outcome)} on {when(review.created_at)}</dt><dd>{review.comments || 'No remarks'}</dd></div>)}
       </dl></section>}
-      {['submitted', 'under_review'].includes(request?.status) && <form className="panel" onSubmit={review}>
+      {request?.status === 'submitted' && <form className="panel" onSubmit={review}>
         <fieldset disabled={state.busy}>
           {errorBox}
           <label>Remarks (required when rejecting)<textarea name="comments" rows="4" /></label>

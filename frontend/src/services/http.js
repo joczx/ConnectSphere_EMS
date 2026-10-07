@@ -7,7 +7,7 @@ export async function readApiResponse(response) {
     throw new Error(`The service returned an unexpected response (HTTP ${response.status}). Please try again or contact support.`);
   }
   if (!response.ok) {
-    throw Object.assign(new Error(data.error || 'Unable to load data. Please try again.'), { details: data.errors });
+    throw Object.assign(new Error(data.error || 'Unable to load data. Please try again.'), { details: data.errors, data });
   }
   return data;
 }

@@ -14,33 +14,40 @@ OUTCOME_REJECTED = "rejected"
 OUTCOME_CLARIFICATION = "clarification_requested"
 OUTCOMES = frozenset({OUTCOME_APPROVED, OUTCOME_REJECTED, OUTCOME_CLARIFICATION})
 
-# What the request's status becomes once the outcome is recorded. Requesting
-# clarification deliberately keeps the request under review: the customer
-# confirmed clarification "can be a sub-state of under_review" rather than a
-# status of its own.
+# What the request's status becomes once the outcome is recorded. Approving
+# moves it straight into planning: the customer described "approved" and
+# "planning (approved event)" as the same state seen from two angles.
+#
+# Requesting clarification deliberately leaves the request where it is. The
+# customer confirmed clarification "can be a sub-state of under_review" rather
+# than a status of its own, and with under_review retired that sub-state is
+# derived from the latest review row against a still-submitted request.
 OUTCOME_TO_STATUS = {
-    OUTCOME_APPROVED: request_schema.STATUS_APPROVED,
+    OUTCOME_APPROVED: request_schema.STATUS_PLANNING,
     OUTCOME_REJECTED: request_schema.STATUS_REJECTED,
-    OUTCOME_CLARIFICATION: request_schema.STATUS_UNDER_REVIEW,
+    OUTCOME_CLARIFICATION: request_schema.STATUS_SUBMITTED,
 }
 
 # A request may only be reviewed once the Organiser has submitted it. A draft
 # has not been sent for review, and an already-decided request is finished.
-REVIEWABLE_STATUSES = frozenset(
-    {request_schema.STATUS_SUBMITTED, request_schema.STATUS_UNDER_REVIEW}
-)
+REVIEWABLE_STATUSES = frozenset({request_schema.STATUS_SUBMITTED})
 
 # Approving without comment is fine. Rejecting or asking for clarification
 # without saying why leaves the Organiser with nothing to act on.
 OUTCOMES_NEEDING_COMMENTS = frozenset({OUTCOME_REJECTED, OUTCOME_CLARIFICATION})
 
-WRITABLE_FIELDS = ("reviewer_id", "outcome", "comments")
+# What a client may send. reviewer_id is deliberately absent: a review has to
+# be attributable to whoever actually made it, so the identity comes from the
+# authenticated session rather than the request body. A client that sends one
+# now gets "Unrecognised field", which is better than being quietly ignored.
+WRITABLE_FIELDS = ("outcome", "comments")
 
 
-def parse_payload(payload):
+def parse_payload(payload, reviewer_id=None):
     """Turn a review body into a database-ready record.
 
-    Returns (record, errors).
+    `reviewer_id` is the signed-in user, supplied by the route from the
+    verified session. Returns (record, errors).
     """
     errors = {}
 
@@ -53,13 +60,14 @@ def parse_payload(payload):
 
     record = {}
 
-    reviewer_id = request_schema.clean_user_id(payload.get("reviewer_id"))
-    if reviewer_id is None:
+    reviewer = request_schema.clean_user_id(reviewer_id)
+    if reviewer is None:
         errors["reviewer_id"] = (
-            "The reviewing Event Coordinator is required, as a user id (a UUID)."
+            "The reviewing Event Coordinator could not be identified. "
+            "Please sign in again."
         )
     else:
-        record["reviewer_id"] = reviewer_id
+        record["reviewer_id"] = reviewer
 
     outcome = payload.get("outcome")
     if not isinstance(outcome, str) or not outcome.strip():

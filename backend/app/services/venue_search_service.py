@@ -20,7 +20,7 @@ def search_venues(filters, token):
 
 def filter_search_path(filters):
     """Build a safe PostgREST query from already validated filters."""
-    query = [f"select={VENUE_FIELDS}"]
+    query = [f"select={VENUE_FIELDS}", "deleted_at=is.null"]
     if filters["name"]:
         name = quote(filters["name"], safe="")
         query.append(f"venue_name=ilike.*{name}*")

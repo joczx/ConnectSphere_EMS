@@ -84,8 +84,24 @@ def test_splitting_a_note_does_not_mutate_the_caller_s_payload():
 
 # AC: a rejected request can be amended and resubmitted; approval is final.
 @pytest.mark.parametrize("status, allowed", [
-    ("rejected", True), ("approved", False), ("submitted", False), ("draft", False),
+    ("rejected", True), ("planning", False), ("draft", False), ("cancelled", False),
 ])
 def test_only_a_request_sent_back_to_the_organiser_can_be_amended(status, allowed):
     """The customer confirmed rejection "is not necessarily final"."""
     assert can_amend({"event_request_id": 1, "status": status}) is allowed
+
+
+# "submitted" no longer settles the question on its own. Clarification is a
+# sub-state of it, so the latest review decides who holds the request.
+@pytest.mark.parametrize("outcome, allowed", [
+    ("clarification_requested", True), ("approved", False), (None, False),
+])
+def test_a_submitted_request_is_amendable_only_while_clarification_is_outstanding(
+    monkeypatch, outcome, allowed
+):
+    monkeypatch.setattr(
+        "app.services.event_request_review_service.latest_review",
+        lambda _id: None if outcome is None else {"outcome": outcome},
+    )
+
+    assert can_amend({"event_request_id": 1, "status": "submitted"}) is allowed

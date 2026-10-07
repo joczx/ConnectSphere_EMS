@@ -1,6 +1,7 @@
 from uuid import UUID
 from flask import Blueprint, jsonify, request
 from app.services.event_store import StoreError, supabase_request, authenticated_token
+from app.services.event_service import EventError, list_activity, update_event
 
 events = Blueprint('events', __name__, url_prefix='/api')
 
@@ -17,6 +18,11 @@ def store_error(error):
     return jsonify(error=message), error.status
 
 
+@events.errorhandler(EventError)
+def event_error(error):
+    return jsonify(error.to_dict()), error.status
+
+
 
 @events.get('/events')
 def list_events():
@@ -25,9 +31,12 @@ def list_events():
     return jsonify(events=rows)
 
 
-@events.get('/events/<event_id>')
-def view_event(event_id):
-    token = authenticated_token(supabase_request)
+def valid_event_id(event_id):
+    """Return the id as a string, or None when it is neither an int nor a UUID.
+
+    The column is an integer, but an id reaches here straight from the URL, so
+    anything else is refused before it is interpolated into a query.
+    """
     event_id_value = str(event_id)
     try:
         int(event_id_value)
@@ -35,24 +44,77 @@ def view_event(event_id):
         try:
             UUID(event_id_value)
         except (TypeError, ValueError):
-            return jsonify(error='Event not found or access unavailable.'), 404
+            return None
+    return event_id_value
+
+
+@events.get('/events/<event_id>')
+def view_event(event_id):
+    token = authenticated_token(supabase_request)
+    event_id_value = valid_event_id(event_id)
+    if event_id_value is None:
+        return jsonify(error='Event not found or access unavailable.'), 404
     rows = supabase_request(f'/rest/v1/events?select=*&event_id=eq.{event_id_value}', token=token)
     if not rows:
         return jsonify(error='Event not found or access unavailable.'), 404
     return jsonify(event=rows[0])
 
 
+@events.patch('/events/<event_id>')
+def edit_event(event_id):
+    """Update an event during planning.
+
+    Send only the fields that changed. A change to a critical field is refused
+    with 409 and the field names, so the client can show the warning modal and
+    retry with "confirm_critical": true once the user confirms.
+
+    Send "expected_updated_at" with the value the event carried when editing
+    began. If someone else has saved since, the write is refused with 409 and
+    "stale": true rather than overwriting their work.
+    """
+    token = authenticated_token(supabase_request)
+    event_id_value = valid_event_id(event_id)
+    if event_id_value is None:
+        return jsonify(error='Event not found or access unavailable.'), 404
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify(error='Event details must be provided as JSON.'), 400
+
+    # Neither is a field on the event: one is the user answering the warning,
+    # the other is the version they were looking at when they started editing.
+    payload = dict(payload)
+    confirm_critical = payload.pop('confirm_critical', False) is True
+    expected_updated_at = payload.pop('expected_updated_at', None)
+
+    row, activity = update_event(
+        event_id_value, payload, token, confirm_critical, expected_updated_at
+    )
+
+    return jsonify({
+        'message': 'No changes to save.' if activity is None else 'Event information updated.',
+        'event': row,
+        'activity': activity,
+    })
+
+
+@events.get('/events/<event_id>/activity')
+def event_activity(event_id):
+    """The event's Activity History, newest first."""
+    token = authenticated_token(supabase_request)
+    event_id_value = valid_event_id(event_id)
+    if event_id_value is None:
+        return jsonify(error='Event not found or access unavailable.'), 404
+
+    return jsonify(activity=list_activity(event_id_value, token))
+
+
 @events.patch('/events/<event_id>/coordinator')
 def reassign_event_coordinator(event_id):
     token = authenticated_token(supabase_request)
-    event_id_value = str(event_id)
-    try:
-        int(event_id_value)
-    except ValueError:
-        try:
-            UUID(event_id_value)
-        except (TypeError, ValueError):
-            return jsonify(error='Event not found or access unavailable.'), 404
+    event_id_value = valid_event_id(event_id)
+    if event_id_value is None:
+        return jsonify(error='Event not found or access unavailable.'), 404
 
     payload = request.get_json(silent=True) or {}
     coordinator_id = payload.get('event_coordinator_id')
