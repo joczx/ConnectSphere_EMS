@@ -21,13 +21,13 @@ class StoreError(Exception):
         return {'error': self.message}
 
 
-def supabase_request(path, token=None, payload=None, method='GET'):
+def supabase_request(path, token=None, payload=None, method='GET', return_representation=False):
     base = os.environ.get('SUPABASE_URL', '').rstrip('/')
     key = os.environ.get('SUPABASE_ANON_KEY', '')
     if not base or not key:
         raise StoreError(503, 'Supabase credentials are missing or incomplete. Set SUPABASE_URL and SUPABASE_ANON_KEY in backend/.env.')
     headers = {'apikey': key, 'Content-Type': 'application/json'}
-    if payload is not None:
+    if payload is not None or return_representation:
         headers['Prefer'] = 'return=representation'
     if token:
         headers['Authorization'] = f'Bearer {token}'
@@ -62,8 +62,8 @@ def supabase_request(path, token=None, payload=None, method='GET'):
         raise StoreError(503, 'Supabase is temporarily unavailable.') from exc
 
 
-def authenticated_token(query=None):
-    """Return the caller's verified access token.
+def authenticated_user(query=None):
+    """Return (access token, user id) for the caller, both verified.
 
     `query` lets a blueprint pass its own supabase_request, so a test that
     patches that module's function also intercepts this user lookup.
@@ -75,4 +75,10 @@ def authenticated_token(query=None):
     user = query('/auth/v1/user', token=token)
     if not user.get('id'):
         raise StoreError(401)
+    return token, user['id']
+
+
+def authenticated_token(query=None):
+    """Return just the caller's verified access token."""
+    token, _ = authenticated_user(query)
     return token

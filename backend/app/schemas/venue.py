@@ -18,6 +18,10 @@ CREATE_FIELDS = frozenset(
     }
 )
 
+# `version` is supplied with an edit only.  It is not a catalogue attribute:
+# it lets the API reject an edit made against stale venue information.
+UPDATE_FIELDS = CREATE_FIELDS | {"version"}
+
 
 def parse_create(payload):
     """Return a clean venue record and field errors."""
@@ -54,6 +58,60 @@ def parse_create(payload):
     }
 
     return record, errors
+
+
+def parse_update(payload):
+    """Validate a partial venue edit and return (changes, version, errors).
+
+    Unlike creation, omitted fields are deliberately left untouched.  A
+    required field may not be cleared, while optional text fields may be set to
+    null.  The caller uses ``version`` as an optimistic-concurrency check.
+    """
+    if not isinstance(payload, dict):
+        return {}, None, {"form": "Send the venue changes as a JSON object."}
+
+    errors = {}
+    unknown = sorted(set(payload) - UPDATE_FIELDS)
+    if unknown:
+        errors[unknown[0]] = "This field cannot be updated."
+
+    version = payload.get("version")
+    if type(version) is not int or version < 1:
+        errors["version"] = "Reload the venue information before updating it."
+
+    changes = {}
+    for field in CREATE_FIELDS & set(payload):
+        value = payload[field]
+        if field == "venue_name":
+            changes[field] = _text(value, field, errors, required=True, maximum=150)
+        elif field == "capacity":
+            changes[field] = _integer(value, field, errors, minimum=1)
+        elif field == "postal_code":
+            changes[field] = _postal_code(value, errors)
+        elif field == "block_number":
+            changes[field] = _text(value, field, errors, required=True, maximum=50)
+        elif field == "street_name":
+            changes[field] = _text(value, field, errors, required=True, maximum=150)
+        elif field in {"building_name", "unit_number"}:
+            changes[field] = _text(value, field, errors, maximum=150 if field == "building_name" else 50)
+        elif field == "accessibility_notes":
+            changes[field] = _text(value, field, errors, maximum=1000)
+        elif field in {"wheelchair_accessible", "blind_accessible"}:
+            changes[field] = _boolean(value, field, errors)
+        elif field == "facilities":
+            changes[field] = _choices(value, FACILITIES, field, errors)
+        elif field == "supported_room_layouts":
+            changes[field] = _choices(value, ROOM_LAYOUTS, field, errors)
+        elif field == "operating_hours":
+            changes[field] = _operating_hours(value, errors)
+        elif field in {"default_setup_minutes", "default_turnaround_minutes"}:  # pragma: no branch
+            # Every CREATE_FIELDS member is handled above, so the false branch
+            # is structurally unreachable.
+            changes[field] = _integer(value, field, errors, minimum=0)
+
+    if not changes:
+        errors["form"] = "Change at least one venue field before updating."
+    return changes, version, errors
 
 
 def _text(value, field, errors, *, required=False, maximum=100):

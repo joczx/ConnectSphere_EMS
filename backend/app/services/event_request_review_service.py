@@ -11,12 +11,15 @@ from app.services.supabase_client import get_supabase
 logger = logging.getLogger(__name__)
 
 
-def review_event_request(event_request_id, payload):
+def review_event_request(event_request_id, payload, reviewer_id=None):
     """Record an Event Coordinator's decision and notify the people involved.
+
+    `reviewer_id` is the signed-in user, taken from the verified session by the
+    route rather than from the request body.
 
     Returns (event_request, review, notifications).
     """
-    record, errors = review_schema.parse_payload(payload)
+    record, errors = review_schema.parse_payload(payload, reviewer_id)
 
     if errors:
         raise EventRequestError(
@@ -36,6 +39,28 @@ def review_event_request(event_request_id, payload):
 
     if status not in review_schema.REVIEWABLE_STATUSES:
         raise EventRequestError(_why_not_reviewable(status), status_code=409)
+
+    # A request is received by one Event Coordinator. Row level security keeps
+    # it out of anyone else's listing, but a request id is guessable, so the
+    # rule is enforced here too rather than relying on not being found.
+    assigned = existing.get("event_coordinator_id")
+
+    # A request with no coordinator is a data fault, not an open invitation.
+    # Treating it as one would let the Organiser decide their own request:
+    # they can see it, so without this they would pass the check below.
+    if assigned is None:
+        raise EventRequestError(
+            "This event request has no Event Coordinator assigned and cannot "
+            "be reviewed yet. Please contact an administrator.",
+            status_code=409,
+        )
+
+    if assigned != record["reviewer_id"]:
+        raise EventRequestError(
+            "This event request is assigned to another Event Coordinator and "
+            "can only be reviewed by them.",
+            status_code=403,
+        )
 
     review = _record_review(event_request_id, record)
 
@@ -148,6 +173,14 @@ def _why_not_reviewable(status):
         return (
             "This event request is still a draft. It can only be reviewed "
             "once the Event Organiser submits it."
+        )
+
+    # "has already been planning" does not read as English, and the Coordinator
+    # needs to know the decision was already taken, not just that it is late.
+    if status == request_schema.STATUS_PLANNING:
+        return (
+            "This event request has already been approved and is now in "
+            "planning. It cannot be reviewed again."
         )
 
     return (

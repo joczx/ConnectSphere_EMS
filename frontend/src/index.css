@@ -165,6 +165,9 @@ input:not([type="checkbox"]), select, textarea { display: block; width: 100%; bo
 .venue-warning { margin-bottom: 24px; background: #fffbeb; border-color: #fbbf24; }
 .venue-delete-page { max-width: 760px; }
 .venue-delete-panel { border-color: #fecaca; }
+.venue-conflict-list { display: grid; gap: 10px; margin: 16px 0 24px; padding: 0; list-style: none; }
+.venue-conflict-list li { display: grid; gap: 4px; padding: 12px; border: 1px solid #fbbf24; border-radius: var(--cs-radius-control); background: #fffbeb; color: var(--cs-color-heading); }
+.venue-conflict-list span { color: var(--cs-color-text); font-size: 14px; }
 .venue-success { border-color: var(--cs-color-primary-focus); background: #f0fdfa; color: var(--cs-color-primary); }
 
 @media (max-width: 700px) {

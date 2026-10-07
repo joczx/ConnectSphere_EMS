@@ -17,7 +17,7 @@ COORDINATOR = "3f1b9c64-7a2e-4d51-9b0f-2c8e5a6d4f10"
 @pytest.mark.parametrize("outcome", sorted(review.OUTCOMES))
 def test_each_outcome_is_accepted(outcome):
     record, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": outcome, "comments": "Looks reasonable."}
+        {"outcome": outcome, "comments": "Looks reasonable."}, COORDINATOR
     )
 
     assert errors == {}
@@ -26,33 +26,52 @@ def test_each_outcome_is_accepted(outcome):
 
 
 def test_an_unknown_outcome_is_rejected():
-    _, errors = review.parse_payload({"reviewer_id": COORDINATOR, "outcome": "maybe"})
+    _, errors = review.parse_payload({"outcome": "maybe"}, COORDINATOR)
 
     assert "outcome" in errors
 
 
 def test_an_outcome_is_required():
-    _, errors = review.parse_payload({"reviewer_id": COORDINATOR})
+    _, errors = review.parse_payload({}, COORDINATOR)
 
     assert "outcome" in errors
 
 
 def test_a_reviewer_is_required():
-    _, errors = review.parse_payload({"outcome": "approved"})
+    """No signed-in user means there is nobody to attribute the review to."""
+    _, errors = review.parse_payload({"outcome": "approved"}, None)
 
     assert "reviewer_id" in errors
 
 
 def test_the_reviewer_must_be_a_user_id():
-    _, errors = review.parse_payload({"reviewer_id": "seven", "outcome": "approved"})
+    _, errors = review.parse_payload({"outcome": "approved"}, "seven")
 
     assert "reviewer_id" in errors
+
+
+# The identity comes from the session, so a body that tries to name someone
+# else is refused outright rather than quietly ignored.
+def test_a_client_cannot_name_the_reviewer():
+    _, errors = review.parse_payload(
+        {"outcome": "approved", "reviewer_id": COORDINATOR}, COORDINATOR
+    )
+
+    assert "_body" in errors
+    assert "reviewer_id" in errors["_body"]
+
+
+def test_the_reviewer_comes_from_the_session():
+    record, errors = review.parse_payload({"outcome": "approved"}, COORDINATOR)
+
+    assert errors == {}
+    assert record["reviewer_id"] == COORDINATOR
 
 
 # AC: The Event Coordinator can add comments along with the outcome.
 def test_comments_are_kept_with_the_outcome():
     record, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": "approved", "comments": "  Approved for Hall A. "}
+        {"outcome": "approved", "comments": "  Approved for Hall A. "}, COORDINATOR
     )
 
     assert errors == {}
@@ -60,7 +79,7 @@ def test_comments_are_kept_with_the_outcome():
 
 
 def test_approving_without_a_comment_is_allowed():
-    record, errors = review.parse_payload({"reviewer_id": COORDINATOR, "outcome": "approved"})
+    record, errors = review.parse_payload({"outcome": "approved"}, COORDINATOR)
 
     assert errors == {}
     assert record["comments"] is None
@@ -69,7 +88,7 @@ def test_approving_without_a_comment_is_allowed():
 @pytest.mark.parametrize("outcome", sorted(review.OUTCOMES_NEEDING_COMMENTS))
 def test_a_reason_is_required_when_not_approving(outcome):
     """An Organiser told "rejected" with no reason has nothing to act on."""
-    _, errors = review.parse_payload({"reviewer_id": COORDINATOR, "outcome": outcome})
+    _, errors = review.parse_payload({"outcome": outcome}, COORDINATOR)
 
     assert "comments" in errors
 
@@ -77,7 +96,7 @@ def test_a_reason_is_required_when_not_approving(outcome):
 @pytest.mark.parametrize("outcome", sorted(review.OUTCOMES_NEEDING_COMMENTS))
 def test_a_blank_reason_does_not_count(outcome):
     _, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": outcome, "comments": "   "}
+        {"outcome": outcome, "comments": "   "}, COORDINATOR
     )
 
     assert "comments" in errors
@@ -85,7 +104,7 @@ def test_a_blank_reason_does_not_count(outcome):
 
 def test_comments_must_be_text():
     _, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": "approved", "comments": 42}
+        {"outcome": "approved", "comments": 42}, COORDINATOR
     )
 
     assert "comments" in errors
@@ -93,7 +112,7 @@ def test_comments_must_be_text():
 
 def test_unknown_fields_are_rejected():
     _, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": "approved", "decision": "yes"}
+        {"outcome": "approved", "decision": "yes"}, COORDINATOR
     )
 
     assert "_body" in errors
@@ -106,19 +125,20 @@ def test_a_non_object_body_is_rejected():
 
 
 # AC: The system records the outcome of the review.
-def test_approving_moves_the_request_to_approved():
-    assert review.OUTCOME_TO_STATUS["approved"] == request_schema.STATUS_APPROVED
+def test_approving_moves_the_request_into_planning():
+    """An approved event is one whose arrangements are now being planned."""
+    assert review.OUTCOME_TO_STATUS["approved"] == request_schema.STATUS_PLANNING
 
 
 def test_rejecting_moves_the_request_to_rejected():
     assert review.OUTCOME_TO_STATUS["rejected"] == request_schema.STATUS_REJECTED
 
 
-def test_requesting_clarification_keeps_the_request_under_review():
-    """The customer confirmed clarification is a sub-state of under_review."""
+def test_requesting_clarification_leaves_the_request_submitted():
+    """Clarification is a sub-state, not a status: the decision is still open."""
     assert (
         review.OUTCOME_TO_STATUS["clarification_requested"]
-        == request_schema.STATUS_UNDER_REVIEW
+        == request_schema.STATUS_SUBMITTED
     )
 
 
@@ -131,18 +151,15 @@ def test_every_mapped_status_exists_in_the_database_enum():
 
 
 # AC: The system allows Event Coordinators to view submitted event requests.
-def test_only_submitted_or_under_review_requests_can_be_reviewed():
-    assert review.REVIEWABLE_STATUSES == {
-        request_schema.STATUS_SUBMITTED,
-        request_schema.STATUS_UNDER_REVIEW,
-    }
+def test_only_submitted_requests_can_be_reviewed():
+    assert review.REVIEWABLE_STATUSES == {request_schema.STATUS_SUBMITTED}
 
 
 def test_a_draft_is_not_reviewable():
     assert request_schema.STATUS_DRAFT not in review.REVIEWABLE_STATUSES
 
 
-@pytest.mark.parametrize("status", ["approved", "rejected"])
+@pytest.mark.parametrize("status", ["planning", "rejected", "cancelled"])
 def test_an_already_decided_request_is_not_reviewable(status):
     assert status not in review.REVIEWABLE_STATUSES
 

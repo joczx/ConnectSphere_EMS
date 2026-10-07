@@ -11,6 +11,14 @@
  */
 export const HOME_APPS = [
   {
+    id: 'venue-bookings',
+    label: 'Venue Bookings',
+    description: 'Submit venue bookings and view requests for review',
+    path: '/venue-bookings',
+    icon: '📋',
+    roles: [],
+  },
+  {
     id: 'equipment',
     label: 'Reserve Equipment',
     description: 'Review equipment requests and accept or reject reservations',

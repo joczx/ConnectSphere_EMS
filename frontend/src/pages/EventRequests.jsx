@@ -41,9 +41,10 @@ export default function EventRequests() {
       {state.loading && <p role="status">Loading your event requests…</p>}
       {state.error && <div role="alert" className="panel error">{state.error}</div>}
       {section('Drafts', requests.filter(item => item.status === 'draft'))}
-      {section('Submitted', requests.filter(item => ['submitted', 'under_review'].includes(item.status)))}
-      {section('Approved', requests.filter(item => item.status === 'approved'))}
+      {section('Submitted', requests.filter(item => item.status === 'submitted'))}
+      {section('In planning', requests.filter(item => item.status === 'planning'))}
       {section('Rejected', requests.filter(item => item.status === 'rejected'))}
+      {section('Cancelled', requests.filter(item => item.status === 'cancelled'))}
     </main>
   </>;
 }

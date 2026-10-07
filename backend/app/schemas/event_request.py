@@ -12,14 +12,29 @@ from datetime import datetime, timezone
 
 TABLE_NAME = "event_request"
 
-# public.request_status
+# public.event_status, shared with public.events so that one vocabulary covers
+# the whole lifecycle. A request lives in the approval phase and leaves it at
+# either "planning" (an events row now exists) or "rejected".
 STATUS_DRAFT = "draft"
 STATUS_SUBMITTED = "submitted"
-STATUS_UNDER_REVIEW = "under_review"
-STATUS_APPROVED = "approved"
+STATUS_PLANNING = "planning"
 STATUS_REJECTED = "rejected"
+
+# Set on public.events rather than here, but part of the same enum.
+STATUS_CONFIRMED = "confirmed"
+STATUS_COMPLETED = "completed"
+STATUS_CANCELLED = "cancelled"
+
 ALL_STATUSES = frozenset(
-    {"draft", "submitted", "under_review", "approved", "rejected"}
+    {
+        "draft",
+        "submitted",
+        "planning",
+        "rejected",
+        "confirmed",
+        "completed",
+        "cancelled",
+    }
 )
 
 # public.room_layout
