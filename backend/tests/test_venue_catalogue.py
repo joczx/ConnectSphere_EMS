@@ -51,6 +51,11 @@ def valid_venue(**overrides):
 class VenueCatalogueRouteTests(unittest.TestCase):
     def setUp(self):
         self.client = create_app().test_client()
+        # Approved venue bookings also block deletion, and are tested in
+        # VenueDeletionBookingTests. Here no venue has any.
+        bookings = patch("app.routes.venues.upcoming_approved_bookings", return_value=[])
+        bookings.start()
+        self.addCleanup(bookings.stop)
 
     # User story: View Venue Catalogue | Page/API: Individual Venue page — successful detail load.
     def test_view_individual_venue_returns_all_characteristics(self):
@@ -439,6 +444,55 @@ class VenueCatalogueRouteTests(unittest.TestCase):
             conflicts = venue_routes.scheduled_upcoming_events(VENUE_ID, "user-token")
 
         self.assertEqual([event["event_id"] for event in conflicts], ["active", "blank"])
+
+
+class VenueDeletionBookingTests(unittest.TestCase):
+    """An approved venue booking commits the venue as surely as an event does."""
+
+    def setUp(self):
+        self.client = create_app().test_client()
+        self.venue = {"venue_id": VENUE_ID, **valid_venue()}
+        self.booking = {"event_id": 6, "event_name": "Halloween", "starts_at": "2030-10-31T10:35:00+00:00"}
+
+    def test_an_approved_booking_ahead_blocks_deletion(self):
+        with patch("app.routes.venues.authenticated_token", return_value="staff-token"), patch(
+            "app.routes.venues.supabase_request", side_effect=[[self.venue], []]
+        ), patch("app.routes.venues.upcoming_approved_bookings", return_value=[self.booking]):
+            response = self.client.delete(f"/api/venues/{VENUE_ID}")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json["events"], [{
+            "event_id": 6, "event_name": "Halloween", "status": "approved booking",
+            "start_datetime": "2030-10-31T10:35:00+00:00",
+        }])
+
+    def test_the_deletion_check_lists_it_like_an_event(self):
+        with patch("app.routes.venues.authenticated_token", return_value="staff-token"), patch(
+            "app.routes.venues.supabase_request", side_effect=[[self.venue], []]
+        ), patch("app.routes.venues.upcoming_approved_bookings", return_value=[self.booking]):
+            response = self.client.get(f"/api/venues/{VENUE_ID}/deletion-check")
+
+        self.assertEqual(response.json["events"][0]["event_name"], "Halloween")
+
+    def test_an_event_both_linked_and_booked_is_listed_once(self):
+        linked = {"event_id": 6, "event_name": "Halloween", "status": "planning",
+                  "start_datetime": "2030-10-31T10:35:00+00:00"}
+        with patch("app.routes.venues.supabase_request", return_value=[linked]), patch(
+            "app.routes.venues.upcoming_approved_bookings", return_value=[self.booking]
+        ):
+            conflicts = venue_routes.scheduled_upcoming_events(VENUE_ID, "staff-token")
+
+        self.assertEqual(conflicts, [linked])
+
+    def test_only_approved_bookings_that_have_not_ended_are_asked_for(self):
+        exact = datetime(2030, 1, 1, tzinfo=timezone.utc)
+        with patch("app.routes.venues.datetime") as clock:
+            clock.now.return_value = exact
+            path = venue_routes.upcoming_booking_path(VENUE_ID)
+
+        self.assertIn("status=eq.approved", path)
+        self.assertIn("ends_at=gt.2030-01-01T00%3A00%3A00%2B00%3A00", path)
+        self.assertIn(f"venue_id=eq.{VENUE_ID}", path)
 
 
 class VenueCreateSchemaTests(unittest.TestCase):

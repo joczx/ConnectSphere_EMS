@@ -33,7 +33,14 @@ class StoreError(Exception):
         return {'error': self.message}
 
 
-def supabase_request(path, token=None, payload=None, method='GET', return_representation=False):
+def supabase_request(path, token=None, payload=None, method=None, return_representation=False):
+    # Sending data means POST unless a method is named. A GET with a body is
+    # not an error anywhere: PostgREST simply ignores the body, so an insert
+    # quietly becomes a read and an RPC is called with no arguments. That is
+    # what a 'GET' default did to every caller that sends data, which is why
+    # the method is only inferred, never assumed.
+    if method is None:
+        method = 'GET' if payload is None else 'POST'
     base = os.environ.get('SUPABASE_URL', '').rstrip('/')
     key = os.environ.get('SUPABASE_ANON_KEY', '')
     if not base or not key:

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import { useAuth } from '../auth/AuthContext';
+import { statusLabel } from '../services/venueBookings';
 import {
   FACILITIES, LAYOUTS,
   display, label, toInput, toIso, toItems, toLines,
@@ -86,6 +87,9 @@ export default function Events() {
   const [reassignForm, setReassignForm] = useState({ open: false, value: '', busy: false, error: '', message: '' });
   const [edit, setEdit] = useState({ open: false, values: null, busy: false, error: '', details: null, message: '' });
   const [warning, setWarning] = useState(null);
+  // `allowed`: whether this viewer takes part in venue booking at all.
+  // `canRequest`: whether they may request one (coordinators, not staff).
+  const [venue, setVenue] = useState({ assigned: null, bookings: [], error: '', allowed: true, canRequest: false });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -132,6 +136,29 @@ export default function Events() {
     return () => { ignore = true; };
   }, [api, eventId, refresh]);
 
+  // The venue side of planning this event: what has been requested for it so
+  // far, so the coordinator does not request a second venue without knowing.
+  useEffect(() => {
+    if (!eventId) return undefined;
+    let ignore = false;
+    api('/api/venue-bookings', { cache: 'no-store' })
+      .then(data => {
+        if (ignore) return;
+        const forThisEvent = (data.bookings || [])
+          .filter(booking => String(booking.event_id) === String(eventId));
+        setVenue(current => ({ ...current, bookings: forThisEvent, error: '', allowed: true, canRequest: !!data.can_submit }));
+      })
+      .catch(err => {
+        if (ignore) return;
+        // Organisers and technical support can read the event but take no part
+        // in venue booking. That is not a failure, so they see no section
+        // rather than an error they can do nothing about.
+        if (err.status === 403) setVenue(current => ({ ...current, allowed: false, error: '' }));
+        else setVenue(current => ({ ...current, error: err.message || 'Unable to load venue booking requests.' }));
+      });
+    return () => { ignore = true; };
+  }, [api, eventId, refresh]);
+
   const [equipmentTypes, setEquipmentTypes] = useState([]);
 
   useEffect(() => {
@@ -168,6 +195,9 @@ export default function Events() {
   const equipmentRequests = state.equipment || [];
   const activity = state.activity || [];
   const editable = event?.status === 'planning';
+  const approvedVenues = venue.bookings
+    .filter(booking => booking.status === 'approved')
+    .map(booking => booking.venue_name);
 
   useEffect(() => {
     if (!event) return;
@@ -194,6 +224,20 @@ export default function Events() {
       })
       .catch(() => setCoordinatorChoices([]));
   }, [api, event]);
+
+  useEffect(() => {
+    if (!event?.venue_id) {
+      setVenue(current => ({ ...current, assigned: null }));
+      return undefined;
+    }
+    let ignore = false;
+    api(`/api/venues/${encodeURIComponent(event.venue_id)}`, { cache: 'no-store' })
+      .then(data => { if (!ignore) setVenue(current => ({ ...current, assigned: data.venue })); })
+      // The venue name is a convenience. Failing to read it must not make the
+      // rest of the planning page look broken.
+      .catch(() => { if (!ignore) setVenue(current => ({ ...current, assigned: null })); });
+    return () => { ignore = true; };
+  }, [api, event?.venue_id]);
 
   async function reassignCoordinator(eventSubmit) {
     eventSubmit.preventDefault();
@@ -365,6 +409,46 @@ export default function Events() {
           <button type="button" onClick={() => save(warning.body, true)} disabled={edit.busy}>{edit.busy ? 'Saving…' : 'Confirm and save'}</button>
         </div>
       </div>}
+
+      {eventId && event && venue.allowed && <section className="panel" style={{ marginTop: '24px' }}>
+        <h2>Venue</h2>
+        {venue.assigned && <p>Assigned venue: <Link to={`/venues/${venue.assigned.venue_id}`}>{venue.assigned.venue_name}</Link></p>}
+        {/* An approved request is what makes a venue available for the event,
+            and an event may need more than one, so each is named. */}
+        {approvedVenues.length > 0 && <p>Approved by Venue Staff: <strong>{approvedVenues.join(', ')}</strong></p>}
+        {!venue.assigned && approvedVenues.length === 0 && <p>No venue has been approved for this event yet.</p>}
+        <p>
+          Venue Search opens with this event&rsquo;s requirements already applied: expected
+          attendance, room layout, required facilities and accessibility needs. You can widen or
+          clear those filters, but a venue that cannot meet them cannot be requested for this
+          event.
+        </p>
+        {/* Only an Event Coordinator may request a venue; Venue Staff assigned
+            to the event read this section but decide requests elsewhere. */}
+        {editable && venue.canRequest && <Link className="button-link" to={`/venue-search?event_id=${encodeURIComponent(eventId)}`}>
+          Find venues for this event
+        </Link>}
+        {!editable && <p className="metadata">A venue can only be requested while the event is in planning.</p>}
+
+        <h3 style={{ marginTop: '20px' }}>Venue booking requests for this event</h3>
+        {venue.error && <div role="alert" className="error">{venue.error} Use Refresh to try again.</div>}
+        {!venue.error && venue.bookings.length === 0 && <p>No venue booking requests have been submitted for this event yet.</p>}
+        {venue.bookings.length > 0 && <dl>
+          {venue.bookings.map(booking => <div key={booking.booking_id}>
+            <dt>{booking.venue_name}</dt>
+            <dd>
+              <span className={`booking-status booking-status-${booking.status}`}>{statusLabel(booking.status)}</span>
+              {' · submitted '}{date(booking.submitted_at)}
+              {booking.status !== 'submitted' && <>
+                <br />Decided {date(booking.reviewed_at)}
+                {booking.reviewed_by_name ? ` by ${booking.reviewed_by_name}` : ''}
+                {booking.review_comments && <><br />Comments: <span style={{ whiteSpace: 'pre-wrap' }}>{booking.review_comments}</span></>}
+              </>}
+              <br />Reference: {booking.booking_id}
+            </dd>
+          </div>)}
+        </dl>}
+      </section>}
 
       {eventId && <section className="panel" style={{ marginTop: '24px' }}>
         <h2>Equipment requests</h2>
