@@ -9,6 +9,18 @@ from flask import request
 logger = logging.getLogger(__name__)
 
 
+def _application_status(path, upstream_status):
+    """Translate Supabase failures without treating data errors as expired auth."""
+    if upstream_status == 401:
+        return 401
+    if path.startswith('/auth/v1/') and upstream_status in (400, 403):
+        # GoTrue commonly uses 400 for invalid credentials and refresh tokens.
+        return 401
+    if upstream_status == 403:
+        return 403
+    return 503
+
+
 class StoreError(Exception):
     def __init__(self, status, message=None, code=None):
         self.code = code
@@ -57,7 +69,7 @@ def supabase_request(path, token=None, payload=None, method='GET', return_repres
         # Upstream wording can name tables, columns and keys, so it is logged
         # for developers rather than carried in the error the caller sees.
         logger.warning('Supabase %s failed for %s: %s', exc.code, path, detail or exc.reason)
-        raise StoreError(401 if exc.code in (400, 401, 403) else 503, code=code) from exc
+        raise StoreError(_application_status(path, exc.code), code=code) from exc
     except (URLError, TimeoutError) as exc:
         raise StoreError(503, 'Supabase is temporarily unavailable.') from exc
 

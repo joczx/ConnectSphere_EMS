@@ -219,17 +219,24 @@ class SupabaseClientTests(unittest.TestCase):
 
 
 # 35-42: upstream failures are converted to the application's error contract.
-def http_case(status, expected):
+def http_case(status, expected, path='/rest/v1/events'):
     def test(self):
         self.transport.side_effect = HTTPError('https://example.invalid', status, 'private diagnostic', {}, None)
         with self.assertRaises(StoreError) as result:
-            supabase_request('/rest/v1/events', token='user-a-token')
+            supabase_request(path, token='user-a-token')
         self.assertEqual(result.exception.status, expected)
         self.assertNotIn('private', str(result.exception))
     return test
 
-for number, (status, expected) in enumerate([(400, 401), (401, 401), (403, 401), (404, 503), (429, 503), (500, 503), (502, 503), (503, 503)], 35):
+for number, (status, expected) in enumerate([(400, 503), (401, 401), (403, 403), (404, 503), (429, 503), (500, 503), (502, 503), (503, 503)], 35):
     setattr(SupabaseClientTests, f'test_{number:02d}_upstream_http_{status}', http_case(status, expected))
+
+SupabaseClientTests.test_51_auth_http_400_is_unauthorized = http_case(
+    400, 401, '/auth/v1/token?grant_type=password'
+)
+SupabaseClientTests.test_52_auth_http_403_is_unauthorized = http_case(
+    403, 401, '/auth/v1/user'
+)
 
 if __name__ == '__main__':
     unittest.main()
