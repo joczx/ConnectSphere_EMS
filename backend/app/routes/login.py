@@ -7,15 +7,11 @@ from app.services.event_store import supabase_request, StoreError
 login_bp = Blueprint('login', __name__, url_prefix='/api')
 
 
-@login_bp.errorhandler(StoreError)
-def handle_store_error(error):
-    return jsonify(error.to_dict()), error.status
-
-
 def session_response(result):
     return jsonify(
         access_token=result['access_token'], refresh_token=result['refresh_token']
     )
+
 
 @login_bp.errorhandler(StoreError)
 def handle_store_error(error):
@@ -26,14 +22,18 @@ def handle_store_error(error):
 @login_bp.post('/login')
 def login():
     body = request.get_json(silent=True) or {}
-    if not isinstance(body, dict) or not isinstance(body.get('email'), str) or not isinstance(body.get('password'), str):
+    if (
+        not isinstance(body, dict)
+        or not isinstance(body.get('email'), str)
+        or not body['email'].strip()
+        or not isinstance(body.get('password'), str)
+        or not body['password']
+    ):
         return jsonify(error='Email and password are required.'), 400
 
     email = body['email'].strip()
     if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email):
-        return jsonify(error='Invalid email address. Please enter a valid email address.'), 400
-    if not body['password']:
-        return jsonify(error='Please enter your password.'), 400
+        return jsonify(error='Incorrect email or password. Please try again.'), 401
 
     try:
         result = supabase_request('/auth/v1/token?grant_type=password', payload={
@@ -42,7 +42,7 @@ def login():
     except StoreError as error:
         if error.status == 401:
             return jsonify(error='Incorrect email or password. Please try again.'), 401
-        raise
+        return jsonify(error='Unable to sign in right now. Please try again.'), error.status
     return session_response(result)
 
 

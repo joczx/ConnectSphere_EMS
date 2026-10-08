@@ -25,6 +25,46 @@ def handle_store_error(error):
 #     return token
 
 
+@users.get('/users/me')
+def get_current_user():
+    token = authenticated_token(supabase_request)
+    auth_user = supabase_request('/auth/v1/user', token=token)
+    user_id = auth_user.get('id')
+
+    profile_rows = supabase_request(
+        f'/rest/v1/users?select=name,email&user_id=eq.{user_id}',
+        token=token,
+    )
+    profile = profile_rows[0] if profile_rows else {}
+    name = (profile.get('name') or '').strip()
+    if not name:
+        name = (profile.get('email') or auth_user.get('email') or '').strip()
+    if '@' in name:
+        name = name.split('@', 1)[0]
+
+    memberships = supabase_request(
+        f'/rest/v1/user_roles?select=role_id&user_id=eq.{user_id}',
+        token=token,
+    )
+    role_ids = list(dict.fromkeys(
+        str(row['role_id'])
+        for row in memberships
+        if row.get('role_id') is not None
+    ))
+    roles = supabase_request(
+        '/rest/v1/roles?select=role_name&role_id=in.('
+        + ','.join(role_ids) + ')',
+        token=token,
+    ) if role_ids else []
+    role_names = list(dict.fromkeys(
+        str(row['role_name']).strip().replace('_', ' ').title()
+        for row in roles
+        if row.get('role_name') and str(row['role_name']).strip()
+    ))
+
+    return jsonify(user={'name': name, 'roles': role_names})
+
+
 @users.get('/users')
 def get_users_by_ids():
     token = authenticated_token(supabase_request)
