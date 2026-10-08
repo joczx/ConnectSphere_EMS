@@ -208,6 +208,26 @@ class SupabaseClientTests(unittest.TestCase):
         self.assertEqual(request.get_header('Apikey'), 'test-key')
         self.assertEqual(self.transport.call_args.kwargs, {'timeout': 10})
 
+    def test_data_without_a_method_is_posted_not_dropped(self):
+        # A GET carrying a body is silently accepted by PostgREST, which then
+        # ignores the body: an RPC runs with no arguments, an insert becomes a
+        # read. Every caller that sends data relies on this being a POST.
+        self.transport.return_value.__enter__.return_value = io.BytesIO(b'{"ok":true}')
+        supabase_request('/rest/v1/rpc/submit_venue_booking', token='t', payload={'p_booking': {'a': 1}})
+        request = self.transport.call_args.args[0]
+        self.assertEqual(request.get_method(), 'POST')
+        self.assertEqual(request.data, b'{"p_booking": {"a": 1}}')
+
+    def test_an_empty_payload_is_still_posted(self):
+        self.transport.return_value.__enter__.return_value = io.BytesIO(b'[]')
+        supabase_request('/rest/v1/rpc/my_equipment_reservations', token='t', payload={})
+        self.assertEqual(self.transport.call_args.args[0].get_method(), 'POST')
+
+    def test_a_named_method_is_always_used(self):
+        self.transport.return_value.__enter__.return_value = io.BytesIO(b'[]')
+        supabase_request('/rest/v1/venues?venue_id=eq.x', token='t', payload={'capacity': 5}, method='PATCH')
+        self.assertEqual(self.transport.call_args.args[0].get_method(), 'PATCH')
+
     def test_49_json_object_response(self):
         self.transport.return_value.__enter__.return_value = io.BytesIO(b'{"id":"user-a"}')
         self.assertEqual(supabase_request('/auth/v1/user', token='user-a-token'), {'id': 'user-a'})

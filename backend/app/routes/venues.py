@@ -6,10 +6,13 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
-from app.routes.events import authenticated_token
+from app.routes.events import EVENT_SUMMARY_FIELDS, authenticated_token, valid_event_id
 from app.schemas.venue_search import parse_filters
 from app.schemas.venue import parse_create, parse_update
+from app.services.event_service import EventError, load_event
 from app.services.event_store import StoreError, supabase_request
+from app.services.event_venue_criteria import annotate, criteria_from_event, describe
+from app.services.venue_availability import mark_for_event
 from app.services.venue_search_service import search_venues
 
 venues = Blueprint("venues", __name__, url_prefix="/api/venues")
@@ -94,6 +97,12 @@ def handle_store_error(error):
     return jsonify(error=message), error.status
 
 
+@venues.errorhandler(EventError)
+def handle_event_error(error):
+    """A search carrying an event_id the caller may not read is a 404 here."""
+    return jsonify(error.to_dict()), error.status
+
+
 @venues.get("")
 def search_by_name():
     """Find catalogue venues whose names contain the supplied text."""
@@ -122,7 +131,15 @@ def list_catalogue():
 
 @venues.get("/search")
 def search_with_filters():
-    """Find venues that meet the advanced search conditions."""
+    """Find venues that meet the advanced search conditions.
+
+    An optional `event_id` says which event the coordinator is searching for.
+    It does not narrow the results: the filters alone decide what is listed, so
+    they can be cleared and the whole catalogue read. What it adds is the
+    verdict for each venue, because a venue that cannot meet the event's
+    requirements must not be offered for a booking request even when the
+    coordinator has cleared the filter that would have hidden it.
+    """
     token = authenticated_token()
     payload = {
         "name": request.args.get("name"),
@@ -140,12 +157,40 @@ def search_with_filters():
         return jsonify(error="Some filter conditions are invalid.", errors=errors), 400
 
     rows = search_venues(filters, token)
-    return jsonify(count=len(rows), venues=rows)
+
+    event_id = (request.args.get("event_id") or "").strip()
+    if not event_id:
+        return jsonify(count=len(rows), venues=rows)
+
+    event_id_value = valid_event_id(event_id)
+    if event_id_value is None:
+        return jsonify(error="Event not found or access unavailable."), 404
+
+    # Read with the caller's own token, so an event they are not assigned to is
+    # not found rather than searchable.
+    event = load_event(event_id_value, token)
+    criteria = criteria_from_event(event)
+    # Requirements first, then availability: a venue can fail either, and the
+    # page shows both reasons rather than just the first one found.
+    assessed = mark_for_event(annotate(rows, criteria), event, token)
+
+    return jsonify(
+        count=len(assessed),
+        venues=assessed,
+        event={field: event.get(field) for field in EVENT_SUMMARY_FIELDS},
+        requirements=describe(criteria),
+        eligible_count=sum(1 for venue in assessed if venue["eligible"]),
+    )
 
 
 @venues.get("/<venue_id>")
 def get_venue(venue_id):
-    """Return every stored characteristic for one venue."""
+    """Return every stored characteristic for one venue.
+
+    With an `event_id`, the venue also carries the verdict for that event, so
+    the page that is about to request a booking shows the same requirements the
+    database will check rather than discovering them in a refusal.
+    """
     token = authenticated_token()
     try:
         venue_id = str(UUID(venue_id))
@@ -155,7 +200,22 @@ def get_venue(venue_id):
     rows = supabase_request(venue_detail_path(venue_id), token=token)
     if not rows:
         return jsonify(error="Venue not found or access unavailable."), 404
-    return jsonify(venue=rows[0])
+
+    event_id = (request.args.get("event_id") or "").strip()
+    if not event_id:
+        return jsonify(venue=rows[0])
+
+    event_id_value = valid_event_id(event_id)
+    if event_id_value is None:
+        return jsonify(error="Event not found or access unavailable."), 404
+
+    event = load_event(event_id_value, token)
+    criteria = criteria_from_event(event)
+    return jsonify(
+        venue=mark_for_event(annotate(rows, criteria), event, token)[0],
+        event={field: event.get(field) for field in EVENT_SUMMARY_FIELDS},
+        requirements=describe(criteria),
+    )
 
 
 @venues.get("/<venue_id>/deletion-check")

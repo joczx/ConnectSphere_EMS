@@ -1,9 +1,18 @@
 from uuid import UUID
 from flask import Blueprint, jsonify, request
+from app.schemas import event as event_schema
 from app.services.event_store import StoreError, supabase_request, authenticated_token
-from app.services.event_service import EventError, list_activity, update_event
+from app.services.event_service import EventError, list_activity, load_event, update_event
+from app.services.event_venue_criteria import criteria_from_event, describe, search_filters
 
 events = Blueprint('events', __name__, url_prefix='/api')
+
+# Enough of the event to label the venue search it was opened from, without
+# resending details the search has no use for.
+EVENT_SUMMARY_FIELDS = (
+    'event_id', 'event_name', 'status', 'start_datetime', 'end_datetime',
+    'capacity_needed', 'venue_id',
+)
 
 
 @events.after_request
@@ -95,6 +104,34 @@ def edit_event(event_id):
         'message': 'No changes to save.' if activity is None else 'Event information updated.',
         'event': row,
         'activity': activity,
+    })
+
+
+@events.get('/events/<event_id>/venue-criteria')
+def event_venue_criteria(event_id):
+    """What this event needs from a venue, as Venue Search conditions.
+
+    Venue Search is opened from the event being planned, so the requirements
+    the event already records become the search filters rather than something
+    the coordinator retypes. `filters` is what the search endpoint accepts;
+    `requirements` is the same thing worded for the page.
+    """
+    token = authenticated_token(supabase_request)
+    event_id_value = valid_event_id(event_id)
+    if event_id_value is None:
+        return jsonify(error='Event not found or access unavailable.'), 404
+
+    event = load_event(event_id_value, token)
+    criteria = criteria_from_event(event)
+
+    return jsonify({
+        'event': {field: event.get(field) for field in EVENT_SUMMARY_FIELDS},
+        'filters': search_filters(criteria),
+        'requirements': describe(criteria),
+        # Searching is reading, so it is not refused outside planning. The page
+        # says why a booking cannot follow instead of showing nothing.
+        'planning': event_schema.is_editable(event),
+        'planning_note': None if event_schema.is_editable(event) else event_schema.why_not_editable(event),
     })
 
 
