@@ -87,7 +87,9 @@ export default function Events() {
   const [reassignForm, setReassignForm] = useState({ open: false, value: '', busy: false, error: '', message: '' });
   const [edit, setEdit] = useState({ open: false, values: null, busy: false, error: '', details: null, message: '' });
   const [warning, setWarning] = useState(null);
-  const [venue, setVenue] = useState({ assigned: null, bookings: [], error: '' });
+  // `allowed`: whether this viewer takes part in venue booking at all.
+  // `canRequest`: whether they may request one (coordinators, not staff).
+  const [venue, setVenue] = useState({ assigned: null, bookings: [], error: '', allowed: true, canRequest: false });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -144,10 +146,15 @@ export default function Events() {
         if (ignore) return;
         const forThisEvent = (data.bookings || [])
           .filter(booking => String(booking.event_id) === String(eventId));
-        setVenue(current => ({ ...current, bookings: forThisEvent, error: '' }));
+        setVenue(current => ({ ...current, bookings: forThisEvent, error: '', allowed: true, canRequest: !!data.can_submit }));
       })
       .catch(err => {
-        if (!ignore) setVenue(current => ({ ...current, error: err.message || 'Unable to load venue booking requests.' }));
+        if (ignore) return;
+        // Organisers and technical support can read the event but take no part
+        // in venue booking. That is not a failure, so they see no section
+        // rather than an error they can do nothing about.
+        if (err.status === 403) setVenue(current => ({ ...current, allowed: false, error: '' }));
+        else setVenue(current => ({ ...current, error: err.message || 'Unable to load venue booking requests.' }));
       });
     return () => { ignore = true; };
   }, [api, eventId, refresh]);
@@ -403,7 +410,7 @@ export default function Events() {
         </div>
       </div>}
 
-      {eventId && event && <section className="panel" style={{ marginTop: '24px' }}>
+      {eventId && event && venue.allowed && <section className="panel" style={{ marginTop: '24px' }}>
         <h2>Venue</h2>
         {venue.assigned && <p>Assigned venue: <Link to={`/venues/${venue.assigned.venue_id}`}>{venue.assigned.venue_name}</Link></p>}
         {/* An approved request is what makes a venue available for the event,
@@ -416,11 +423,12 @@ export default function Events() {
           clear those filters, but a venue that cannot meet them cannot be requested for this
           event.
         </p>
-        {editable
-          ? <Link className="button-link" to={`/venue-search?event_id=${encodeURIComponent(eventId)}`}>
-            Find venues for this event
-          </Link>
-          : <p className="metadata">A venue can only be requested while the event is in planning.</p>}
+        {/* Only an Event Coordinator may request a venue; Venue Staff assigned
+            to the event read this section but decide requests elsewhere. */}
+        {editable && venue.canRequest && <Link className="button-link" to={`/venue-search?event_id=${encodeURIComponent(eventId)}`}>
+          Find venues for this event
+        </Link>}
+        {!editable && <p className="metadata">A venue can only be requested while the event is in planning.</p>}
 
         <h3 style={{ marginTop: '20px' }}>Venue booking requests for this event</h3>
         {venue.error && <div role="alert" className="error">{venue.error} Use Refresh to try again.</div>}

@@ -17,6 +17,22 @@ export default function VenueBookingDetails({ booking, linkFor }) {
   const blocked = booking.status === 'approved' ? pendingOnly(booking.conflicts) : [];
 
   return <>
+    {/* Each of these means the request can only be rejected. They are worked
+        out by the database, which refuses the approval for the same reasons. */}
+    {pending && booking.venue_deleted && <section className="panel booking-conflict-panel" role="alert">
+      <h2>This venue has been removed from the catalogue</h2>
+      <p>A request for a removed venue can no longer be approved, only rejected.</p>
+    </section>}
+
+    {pending && booking.matches_event === false && <section className="panel booking-conflict-panel" role="alert">
+      <h2>The event has changed since this was requested</h2>
+      <p>
+        Its date, time or expected attendance no longer match this request, so approving it would
+        book the wrong period. It can only be rejected; the Event Coordinator can then request the
+        venue again for the event as it is now.
+      </p>
+    </section>}
+
     {blocking.length > 0 && <section className="panel booking-conflict-panel" role="alert">
       <h2>The venue is already booked at this time</h2>
       <p>An approved booking overlaps this request, so this request can no longer be approved.</p>

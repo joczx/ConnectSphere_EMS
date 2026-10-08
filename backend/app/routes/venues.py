@@ -62,11 +62,44 @@ def upcoming_event_path(venue_id):
     )
 
 
+def upcoming_booking_path(venue_id):
+    """Approved venue bookings that have not finished yet."""
+    now = quote(datetime.now(timezone.utc).isoformat(), safe="")
+    return (
+        "/rest/v1/venue_booking_requests?select=event_id,event_name,starts_at"
+        f"&venue_id=eq.{venue_id}&status=eq.approved&ends_at=gt.{now}&order=starts_at.asc"
+    )
+
+
+def upcoming_approved_bookings(venue_id, token):
+    return supabase_request(upcoming_booking_path(venue_id), token=token)
+
+
 def scheduled_upcoming_events(venue_id, token):
-    """Exclude event records that can no longer make a venue unavailable."""
+    """Everything ahead that still needs this venue.
+
+    An approved booking commits the venue just as surely as an event linked to
+    it, so both block deletion. Bookings are reported in the same shape as
+    events, so the deletion page lists them without knowing the difference.
+    """
     rows = supabase_request(upcoming_event_path(venue_id), token=token)
     inactive_statuses = {"cancelled", "completed", "rejected"}
-    return [row for row in rows if str(row.get("status", "")).lower() not in inactive_statuses]
+    events = [row for row in rows if str(row.get("status", "")).lower() not in inactive_statuses]
+
+    listed = {row.get("event_id") for row in events}
+    for booking in upcoming_approved_bookings(venue_id, token):
+        # An event can be linked to the venue and booked into it as well; it is
+        # one reason to keep the venue, not two.
+        if booking.get("event_id") in listed and booking.get("event_id") is not None:
+            continue
+        listed.add(booking.get("event_id"))
+        events.append({
+            "event_id": booking.get("event_id"),
+            "event_name": booking.get("event_name"),
+            "status": "approved booking",
+            "start_datetime": booking.get("starts_at"),
+        })
+    return events
 
 
 def deletion_conflict_response(conflicts):

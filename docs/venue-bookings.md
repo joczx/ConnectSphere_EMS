@@ -122,6 +122,20 @@ A conflicting booking always shows its period. Its event is named only to Venue 
 coordinator who made that request; anyone else reads "another event". Pending requests are shown
 only to Venue Staff and their own requester. That redaction lives in `venue_booking_summary()`.
 
+## Approval matches the event and venue as they are
+
+Apply `supabase/028_approval_matches_event.sql` after 027. Approval is refused, and the request can
+only be rejected, when:
+
+- **the event moved after the request** — its period or attendance no longer matches, and approving
+  would book the old time (`matches_event` is false on the request);
+- **the venue was removed** from the catalogue (`venue_deleted`);
+- the event or venue would change *during* the approval — both rows are read `FOR SHARE`, so an edit
+  waits until the approval has committed.
+
+A venue with an approved booking still ahead cannot be deleted; the deletion page lists the booking
+alongside any scheduled events.
+
 ## Scope
 
 Approving a request does not reserve setup or turnaround time either side of the booking.

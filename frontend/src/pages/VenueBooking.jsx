@@ -39,9 +39,11 @@ export default function VenueBooking() {
       {booking?.event_id && <p>
         <Link to={`/events/${encodeURIComponent(booking.event_id)}`}>Open the event →</Link>
       </p>}
-      {/* Rejected, or still waiting but beaten to the slot by an approval: either
-          way this venue will not be had, so the next step is offered here. */}
-      {booking && (booking.status === 'rejected' || (booking.status === 'submitted' && approvedOnly(booking.conflicts).length > 0))
+      {/* Rejected, or still waiting but no longer approvable (the slot was taken,
+          the venue removed, or the event moved): either way this request will not
+          get the venue, so the next step is offered here. */}
+      {booking && (booking.status === 'rejected' || (booking.status === 'submitted' && (approvedOnly(booking.conflicts).length > 0
+          || booking.venue_deleted || booking.matches_event === false)))
         && booking.event_id && booking.event_status === 'planning' && <p>
         <Link className="button-link" to={`/venue-search?event_id=${encodeURIComponent(booking.event_id)}`}>
           Find another venue for this event

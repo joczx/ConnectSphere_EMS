@@ -61,9 +61,11 @@ export default function ReviewVenueBooking() {
   const booking = state.data?.booking;
   const pending = booking?.status === 'submitted';
   const shortfalls = booking?.current_shortfalls || [];
-  // Either reason means the request can only be rejected; the database
-  // refuses an approval for both, and the page says so before anyone tries.
-  const booked = approvedOnly(booking?.conflicts).length > 0;
+  // Any of these means the request can only be rejected. The database refuses
+  // the approval for every one, and the page says so before anyone tries.
+  const booked = approvedOnly(booking?.conflicts).length > 0
+    || booking?.venue_deleted === true
+    || booking?.matches_event === false;
 
   return <>
     <Navbar />
