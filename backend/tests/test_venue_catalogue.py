@@ -1,7 +1,8 @@
-"""HTTP and validation tests for viewing and creating catalogue venues."""
+"""HTTP and validation tests for viewing, creating, updating and deleting venues."""
 
 import unittest
 from datetime import datetime, timezone
+from pprint import pformat
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -12,6 +13,14 @@ from app.routes import venues as venue_routes
 
 DAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 VENUE_ID = str(uuid4())
+
+
+def report_test_case(test_case_id, **actual_results):
+    """Print values captured during a successful documented test case."""
+    print(f"\n{test_case_id}")
+    for label, value in actual_results.items():
+        print(f"{label.replace('_', ' ').upper()}: {pformat(value, sort_dicts=False)}")
+    print("STATUS: PASS")
 
 
 def valid_venue(**overrides):
@@ -42,7 +51,13 @@ def valid_venue(**overrides):
 class VenueCatalogueRouteTests(unittest.TestCase):
     def setUp(self):
         self.client = create_app().test_client()
+        # Approved venue bookings also block deletion, and are tested in
+        # VenueDeletionBookingTests. Here no venue has any.
+        bookings = patch("app.routes.venues.upcoming_approved_bookings", return_value=[])
+        bookings.start()
+        self.addCleanup(bookings.stop)
 
+    # User story: View Venue Catalogue | Page/API: Individual Venue page — successful detail load.
     def test_view_individual_venue_returns_all_characteristics(self):
         venue = {"venue_id": VENUE_ID, **valid_venue()}
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -55,6 +70,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertIn(f"venue_id=eq.{VENUE_ID}", query.call_args.args[0])
         self.assertEqual(query.call_args.kwargs["token"], "user-token")
 
+    # User story: View Venue Catalogue | Page/API: Individual Venue page — invalid venue URL.
     def test_view_individual_venue_rejects_invalid_id_without_querying_database(self):
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
             "app.routes.venues.supabase_request"
@@ -64,6 +80,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         query.assert_not_called()
 
+    # User story: View Venue Catalogue | Page/API: Individual Venue page — missing or inaccessible venue.
     def test_view_individual_venue_returns_not_found_for_inaccessible_row(self):
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
             "app.routes.venues.supabase_request", return_value=[]
@@ -72,6 +89,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    # User story: Create Venue Catalogue | Page/API: Create Venue page — successful submission.
     def test_create_venue_stores_validated_record(self):
         created = {"venue_id": VENUE_ID, **valid_venue()}
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -83,7 +101,14 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.json["venue"], created)
         self.assertEqual(query.call_args.kwargs["token"], "user-token")
         self.assertEqual(query.call_args.kwargs["payload"], valid_venue())
+        report_test_case(
+            "TC-CVC-001",
+            http_response={"status_code": response.status_code, "json": response.get_json()},
+            database_request=query.call_args,
+            database_response=query.return_value,
+        )
 
+    # User story: Create Venue Catalogue | Page/API: Create Venue page — invalid form submission.
     def test_create_venue_rejects_invalid_details_without_writing(self):
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
             "app.routes.venues.supabase_request"
@@ -94,7 +119,13 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertIn("capacity", response.json["errors"])
         self.assertIn("postal_code", response.json["errors"])
         query.assert_not_called()
+        report_test_case(
+            "TC-CVC-002",
+            http_response={"status_code": response.status_code, "json": response.get_json()},
+            database_called=query.called,
+        )
 
+    # User story: Create Venue Catalogue | Page/API: Create Venue page — duplicate venue submission.
     def test_create_venue_reports_database_duplicate(self):
         duplicate = StoreError(503, code="23505")
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -104,11 +135,31 @@ class VenueCatalogueRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 409)
         self.assertIn("already exists", response.json["error"])
+        report_test_case(
+            "TC-CVC-003",
+            http_response={"status_code": response.status_code, "json": response.get_json()},
+            database_error={"status": duplicate.status, "code": duplicate.code},
+        )
 
+    # User stories: View/Create Venue Catalogue | Pages/APIs: Individual and Create Venue — authentication required.
     def test_view_and_create_require_sign_in(self):
-        self.assertEqual(self.client.get(f"/api/venues/{VENUE_ID}").status_code, 401)
-        self.assertEqual(self.client.post("/api/venues", json=valid_venue()).status_code, 401)
+        view_response = self.client.get(f"/api/venues/{VENUE_ID}")
+        create_response = self.client.post("/api/venues", json=valid_venue())
+        self.assertEqual(view_response.status_code, 401)
+        self.assertEqual(create_response.status_code, 401)
+        report_test_case(
+            "TC-CVC-004",
+            create_http_response={
+                "status_code": create_response.status_code,
+                "json": create_response.get_json(),
+            },
+            view_http_response={
+                "status_code": view_response.status_code,
+                "json": view_response.get_json(),
+            },
+        )
 
+    # User story: View Venue Catalogue | Page/API: All Venues page — catalogue and name-search boundaries.
     def test_catalogue_list_and_name_search_boundaries(self):
         venue = {"venue_id": VENUE_ID, **valid_venue()}
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -133,14 +184,48 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(too_long.status_code, 400)
         query.assert_not_called()
 
+    # User story: View Venue Catalogue | Page/API: All Venues page — advanced filters and invalid filters.
+    def test_view_venues_with_advanced_filters_and_validation_error(self):
+        venue = {"venue_id": VENUE_ID, **valid_venue()}
+        with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
+            "app.routes.venues.search_venues", return_value=[venue]
+        ) as search:
+            success = self.client.get(
+                "/api/venues/search?name=Hall&start_date=21-09-2027&end_date=21-09-2027"
+                "&capacity=100&location=Central&layouts=theatre&layouts=classroom"
+                "&facilities=wifi&wheelchair_accessible=true"
+            )
+            invalid = self.client.get("/api/venues/search?capacity=-1")
+
+        self.assertEqual(success.status_code, 200)
+        self.assertEqual(success.json, {"count": 1, "venues": [venue]})
+        filters, token = search.call_args.args
+        self.assertEqual(token, "user-token")
+        self.assertEqual(filters["name"], "Hall")
+        self.assertEqual(filters["layouts"], ["theatre", "classroom"])
+        self.assertEqual(filters["facilities"], ["wifi"])
+        self.assertTrue(filters["wheelchair_accessible"])
+        self.assertIsNone(filters["blind_accessible"])
+
+        self.assertEqual(invalid.status_code, 400)
+        self.assertIn("capacity", invalid.json["errors"])
+        search.assert_called_once()
+
+    # User story: Create Venue Catalogue | Page/API: Create Venue page — database returns no created row.
     def test_create_reports_empty_database_response(self):
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
             "app.routes.venues.supabase_request", return_value=[]
-        ):
+        ) as query:
             response = self.client.post("/api/venues", json=valid_venue())
 
         self.assertEqual(response.status_code, 503)
+        report_test_case(
+            "TC-CVC-005",
+            http_response={"status_code": response.status_code, "json": response.get_json()},
+            database_response=query.return_value,
+        )
 
+    # User stories: View/Create/Update/Delete Venue Catalogue | Page/API: Venue APIs — permission error handling.
     def test_venue_permission_error_is_not_misreported_as_a_generic_failure(self):
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
             "app.routes.venues.supabase_request", side_effect=StoreError(503, code="42501")
@@ -150,6 +235,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertIn("permission", response.json["error"])
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue page — successful partial update.
     def test_update_venue_writes_only_changed_fields(self):
         updated = {"venue_id": VENUE_ID, **valid_venue(capacity=300), "version": 2}
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -163,6 +249,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(query.call_args.kwargs["method"], "PATCH")
         self.assertIn("version=eq.1", query.call_args.args[0])
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue page — stale-form conflict.
     def test_update_venue_returns_current_record_when_staff_form_is_stale(self):
         current = {"venue_id": VENUE_ID, **valid_venue(capacity=275), "version": 2}
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -174,6 +261,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.json["venue"], current)
         self.assertIn("redo your update", response.json["error"])
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue page — invalid or empty change.
     def test_update_venue_rejects_invalid_or_empty_change_without_writing(self):
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
             "app.routes.venues.supabase_request"
@@ -184,6 +272,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertIn("capacity", response.json["errors"])
         query.assert_not_called()
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue page — minimum valid numeric boundaries.
     def test_update_accepts_the_minimum_version_and_capacity(self):
         updated = {"venue_id": VENUE_ID, **valid_venue(capacity=1), "version": 2}
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -194,6 +283,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json["venue"]["capacity"], 1)
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue page — malformed request and invalid URL.
     def test_update_rejects_malformed_payload_unknown_field_and_invalid_identifier(self):
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
             "app.routes.venues.supabase_request"
@@ -209,6 +299,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(invalid_id.status_code, 404)
         query.assert_not_called()
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue page — venue removed during update.
     def test_update_reports_not_found_when_venue_is_deleted_during_a_stale_update(self):
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
             "app.routes.venues.supabase_request", side_effect=[[], []]
@@ -218,10 +309,12 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertIn("not found", response.json["error"])
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue page — authentication required.
     def test_update_requires_sign_in(self):
         response = self.client.patch(f"/api/venues/{VENUE_ID}", json={"version": 1, "capacity": 1})
         self.assertEqual(response.status_code, 401)
 
+    # User story: Delete Venue Catalogue | Page/API: Delete Venue page — upcoming-event warning.
     def test_deletion_check_shows_upcoming_event_conflicts(self):
         venue = {"venue_id": VENUE_ID, **valid_venue()}
         event = {"event_id": str(uuid4()), "event_name": "Product launch", "status": "confirmed", "start_datetime": "2030-01-01T09:00:00Z"}
@@ -234,6 +327,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.json["venue"], venue)
         self.assertEqual(response.json["events"], [event])
 
+    # User story: Delete Venue Catalogue | Page/API: Delete Venue page — invalid, deleted and signed-out access.
     def test_deletion_check_handles_invalid_deleted_and_unauthenticated_venues(self):
         self.assertEqual(self.client.get(f"/api/venues/{VENUE_ID}/deletion-check").status_code, 401)
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -247,6 +341,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertIn("already been deleted", deleted.json["error"])
         self.assertEqual(query.call_count, 1)
 
+    # User story: Delete Venue Catalogue | Page/API: Delete Venue page — no upcoming-event conflicts.
     def test_deletion_check_allows_no_upcoming_events(self):
         venue = {"venue_id": VENUE_ID, **valid_venue()}
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -257,6 +352,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json["events"], [])
 
+    # User story: Delete Venue Catalogue | Page/API: Delete Venue page — deletion blocked by upcoming events.
     def test_delete_venue_blocks_upcoming_events_and_returns_them(self):
         venue = {"venue_id": VENUE_ID, **valid_venue()}
         event = {"event_id": str(uuid4()), "event_name": "Product launch", "status": "confirmed", "start_datetime": "2030-01-01T09:00:00Z"}
@@ -270,6 +366,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertIn("upcoming scheduled events", response.json["error"])
         self.assertEqual(query.call_count, 2)
 
+    # User story: Delete Venue Catalogue | Page/API: Delete Venue page — successful soft deletion.
     def test_delete_venue_soft_deletes_a_venue_without_upcoming_events(self):
         venue = {"venue_id": VENUE_ID, **valid_venue()}
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -285,6 +382,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertIn("deleted_at", query.call_args.kwargs["payload"])
         self.assertIn("deleted_at=is.null", query.call_args.args[0])
 
+    # User story: Delete Venue Catalogue | Page/API: Delete Venue page — venue already deleted.
     def test_delete_reports_a_reason_when_venue_is_already_deleted(self):
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
             "app.routes.venues.supabase_request", return_value=[]
@@ -294,6 +392,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertIn("already been deleted", response.json["error"])
 
+    # User story: Delete Venue Catalogue | Page/API: Delete Venue page — concurrent deletion conflict.
     def test_delete_reports_not_found_when_venue_is_removed_after_the_conflict_check(self):
         venue = {"venue_id": VENUE_ID, **valid_venue()}
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -304,6 +403,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertIn("already been deleted", response.json["error"])
 
+    # User story: Delete Venue Catalogue | Page/API: Delete Venue page — invalid URL and authentication required.
     def test_delete_rejects_invalid_id_and_unauthenticated_request(self):
         self.assertEqual(self.client.delete(f"/api/venues/{VENUE_ID}").status_code, 401)
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -314,6 +414,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         query.assert_not_called()
 
+    # User story: Delete Venue Catalogue | Page/API: Delete Venue page — database relationship conflict.
     def test_delete_reports_a_database_foreign_key_conflict(self):
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
             "app.routes.venues.supabase_request", side_effect=StoreError(503, code="23503")
@@ -323,6 +424,7 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertIn("still linked", response.json["error"])
 
+    # User story: Delete Venue Catalogue | Page/API: Delete Venue page — upcoming-event date and status rules.
     def test_upcoming_event_boundary_and_inactive_statuses(self):
         exact_start = datetime(2030, 1, 1, tzinfo=timezone.utc)
         with patch("app.routes.venues.datetime") as clock:
@@ -344,43 +446,109 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual([event["event_id"] for event in conflicts], ["active", "blank"])
 
 
+class VenueDeletionBookingTests(unittest.TestCase):
+    """An approved venue booking commits the venue as surely as an event does."""
+
+    def setUp(self):
+        self.client = create_app().test_client()
+        self.venue = {"venue_id": VENUE_ID, **valid_venue()}
+        self.booking = {"event_id": 6, "event_name": "Halloween", "starts_at": "2030-10-31T10:35:00+00:00"}
+
+    def test_an_approved_booking_ahead_blocks_deletion(self):
+        with patch("app.routes.venues.authenticated_token", return_value="staff-token"), patch(
+            "app.routes.venues.supabase_request", side_effect=[[self.venue], []]
+        ), patch("app.routes.venues.upcoming_approved_bookings", return_value=[self.booking]):
+            response = self.client.delete(f"/api/venues/{VENUE_ID}")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json["events"], [{
+            "event_id": 6, "event_name": "Halloween", "status": "approved booking",
+            "start_datetime": "2030-10-31T10:35:00+00:00",
+        }])
+
+    def test_the_deletion_check_lists_it_like_an_event(self):
+        with patch("app.routes.venues.authenticated_token", return_value="staff-token"), patch(
+            "app.routes.venues.supabase_request", side_effect=[[self.venue], []]
+        ), patch("app.routes.venues.upcoming_approved_bookings", return_value=[self.booking]):
+            response = self.client.get(f"/api/venues/{VENUE_ID}/deletion-check")
+
+        self.assertEqual(response.json["events"][0]["event_name"], "Halloween")
+
+    def test_an_event_both_linked_and_booked_is_listed_once(self):
+        linked = {"event_id": 6, "event_name": "Halloween", "status": "planning",
+                  "start_datetime": "2030-10-31T10:35:00+00:00"}
+        with patch("app.routes.venues.supabase_request", return_value=[linked]), patch(
+            "app.routes.venues.upcoming_approved_bookings", return_value=[self.booking]
+        ):
+            conflicts = venue_routes.scheduled_upcoming_events(VENUE_ID, "staff-token")
+
+        self.assertEqual(conflicts, [linked])
+
+    def test_only_approved_bookings_that_have_not_ended_are_asked_for(self):
+        exact = datetime(2030, 1, 1, tzinfo=timezone.utc)
+        with patch("app.routes.venues.datetime") as clock:
+            clock.now.return_value = exact
+            path = venue_routes.upcoming_booking_path(VENUE_ID)
+
+        self.assertIn("status=eq.approved", path)
+        self.assertIn("ends_at=gt.2030-01-01T00%3A00%3A00%2B00%3A00", path)
+        self.assertIn(f"venue_id=eq.{VENUE_ID}", path)
+
+
 class VenueCreateSchemaTests(unittest.TestCase):
+    # User story: Create Venue Catalogue | Page/API: Create Venue form — valid input normalization.
     def test_valid_venue_is_cleaned(self):
         record, errors = parse_create(valid_venue(venue_name="  ConnectSphere   Hall  "))
         self.assertEqual(errors, {})
         self.assertEqual(record["venue_name"], "ConnectSphere Hall")
+        report_test_case(
+            "TC-CVC-006",
+            validation_record=record,
+            validation_errors=errors,
+        )
 
+    # User story: Create Venue Catalogue | Page/API: Create Venue form — complete operating-hours validation.
     def test_all_seven_operating_days_are_required(self):
         hours = valid_venue()["operating_hours"]
         del hours["sunday"]
         _, errors = parse_create(valid_venue(operating_hours=hours))
         self.assertIn("operating_hours", errors)
+        report_test_case("TC-CVC-007", validation_errors=errors)
 
+    # User story: Create Venue Catalogue | Page/API: Create Venue form — daily time-range validation.
     def test_open_day_must_close_after_opening(self):
         hours = valid_venue()["operating_hours"]
         hours["monday"] = {"open": "22:00", "close": "08:00"}
         _, errors = parse_create(valid_venue(operating_hours=hours))
         self.assertIn("Monday", errors["operating_hours"])
+        report_test_case("TC-CVC-008", validation_errors=errors)
 
+    # User story: Create Venue Catalogue | Page/API: Create Venue form — facility-choice validation.
     def test_unknown_facility_is_rejected(self):
         _, errors = parse_create(valid_venue(facilities=["wifi", "unknown_facility"]))
         self.assertIn("facilities", errors)
+        report_test_case("TC-CVC-009", validation_errors=errors)
 
+    # User story: Create Venue Catalogue | Page/API: Create Venue form — database-owned venue ID protection.
     def test_client_cannot_choose_venue_id(self):
         _, errors = parse_create({**valid_venue(), "venue_id": VENUE_ID})
         self.assertIn("venue_id", errors)
+        report_test_case("TC-CVC-010", validation_errors=errors)
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue form — validate only submitted fields.
     def test_partial_update_validates_only_the_field_being_changed(self):
         record, version, errors = parse_update({"version": 4, "capacity": 350})
         self.assertEqual(errors, {})
         self.assertEqual(version, 4)
         self.assertEqual(record, {"capacity": 350})
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue form — version and change required.
     def test_update_requires_a_version_and_a_change(self):
         _, _, errors = parse_update({"version": 0})
         self.assertIn("version", errors)
         self.assertIn("form", errors)
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue form — valid field boundaries.
     def test_update_accepts_all_fields_at_their_lower_and_upper_valid_boundaries(self):
         hours = {
             day: ({"closed": True} if day == "sunday" else {"open": "00:00", "close": "23:59"})
@@ -413,6 +581,7 @@ class VenueCreateSchemaTests(unittest.TestCase):
         self.assertEqual(record["facilities"], ["wifi"])
         self.assertEqual(record["operating_hours"]["monday"], {"open": "00:00", "close": "23:59"})
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue form — invalid numeric and text boundaries.
     def test_update_rejects_values_immediately_outside_numeric_and_length_boundaries(self):
         cases = {
             "venue_name": "V" * 151,
@@ -430,6 +599,7 @@ class VenueCreateSchemaTests(unittest.TestCase):
                 _, _, errors = parse_update({"version": 1, field: value})
                 self.assertIn(field, errors)
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue form — missing, mistyped and unknown fields.
     def test_update_rejects_missing_required_values_bad_types_and_unknown_fields(self):
         cases = {
             "venue_name": None,
@@ -449,6 +619,7 @@ class VenueCreateSchemaTests(unittest.TestCase):
         self.assertIn("version", errors)
         self.assertIn("not_a_venue_field", errors)
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue form — clearing optional text.
     def test_update_allows_optional_text_to_be_cleared(self):
         record, _, errors = parse_update({
             "version": 1,
@@ -464,6 +635,7 @@ class VenueCreateSchemaTests(unittest.TestCase):
             "accessibility_notes": None,
         })
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue form — postal, choice and hours boundaries.
     def test_update_validates_postal_choice_and_operating_hour_boundaries(self):
         invalid_hours = valid_venue()["operating_hours"]
         invalid_hours["monday"] = {"open": "08:00", "close": "08:00"}
@@ -478,6 +650,7 @@ class VenueCreateSchemaTests(unittest.TestCase):
                 _, _, errors = parse_update({"version": 1, field: value})
                 self.assertIn(field, errors)
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue form — malformed choices and schedules.
     def test_update_rejects_non_list_choices_and_invalid_operating_hour_shapes(self):
         malformed_hours = valid_venue()["operating_hours"]
         malformed_hours["monday"] = {"open": "invalid", "close": "22:00"}
@@ -496,6 +669,7 @@ class VenueCreateSchemaTests(unittest.TestCase):
         _, _, errors = parse_update({"version": 1, "operating_hours": hours_missing_a_day})
         self.assertIn("operating_hours", errors)
 
+    # User story: Update Venue Catalogue | Page/API: Update Venue form — choice and operating-hours edge cases.
     def test_update_choice_and_operating_hour_edge_cases(self):
         whitespace_choice = {"version": 1, "facilities": ["   "]}
         _, _, errors = parse_update(whitespace_choice)
@@ -519,9 +693,22 @@ class VenueCreateSchemaTests(unittest.TestCase):
         _, _, errors = parse_update({"version": 1, "operating_hours": invalid_schedule_hours})
         self.assertIn("operating_hours", errors)
 
+    # User story: Create Venue Catalogue | Page/API: Create Venue form — malformed payload and time boundaries.
     def test_create_rejects_non_object_payload_and_time_parser_boundaries(self):
         _, errors = parse_create([])
+        midnight = _time("00:00")
+        invalid_clock_time = _time("24:00")
+        invalid_time_type = _time(800)
         self.assertIn("form", errors)
-        self.assertEqual(_time("00:00"), "00:00")
-        self.assertIsNone(_time("24:00"))
-        self.assertIsNone(_time(800))
+        self.assertEqual(midnight, "00:00")
+        self.assertIsNone(invalid_clock_time)
+        self.assertIsNone(invalid_time_type)
+        report_test_case(
+            "TC-CVC-011",
+            validation_errors=errors,
+            parsed_times={
+                "00:00": midnight,
+                "24:00": invalid_clock_time,
+                "800": invalid_time_type,
+            },
+        )
