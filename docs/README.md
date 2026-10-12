@@ -2,6 +2,7 @@
 
 - [Equipment reservations: setup, behaviour and verification](equipment-reservations.md)
 - [Event Coordinator assignment: setup, behaviour and verification](event-coordinator-assignment.md)
+- [Coordinator Lead dashboard: setup, behaviour and verification](coordinator-lead-dashboard.md)
 
 Store non-code project evidence here in clearly named folders as the project
 progresses:

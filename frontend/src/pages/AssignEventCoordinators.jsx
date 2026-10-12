@@ -13,7 +13,7 @@ function date(value) {
   }).format(parsed);
 }
 
-export default function AssignEventRequests() {
+export default function AssignEventCoordinators() {
   const { api } = useAuth();
   const [state, setState] = useState({ loading: true, requests: [], coordinators: [] });
   const [selected, setSelected] = useState({});

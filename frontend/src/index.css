@@ -82,6 +82,10 @@ input:not([type="checkbox"]), select, textarea { display: block; width: 100%; bo
 .assignment-card dl { margin: 20px 0; }
 .assignment-card label { margin-bottom: 16px; }
 .assignment-success { padding: 12px 16px; border: 1px solid var(--cs-color-primary-focus); border-radius: var(--cs-radius-control); color: var(--cs-color-primary); background: var(--cs-color-surface); }
+.coordinator-event-card { text-align: left; }
+.coordinator-event-card h2 { margin-top: 0; }
+.coordinator-event-card dl { margin: 16px 0; }
+.coordinator-event-card label { margin: 16px 0; }
 .button-link { display: inline-block; padding: 10px 18px; background: var(--cs-color-primary); border-radius: var(--cs-radius-control); color: white; font-weight: 600; text-decoration: none; }
 .venue-search-bar { flex: 1; }
 .venue-search-bar-content { display: flex; max-width: 800px; margin: 0 auto; border: 1px solid var(--cs-color-border-strong); border-radius: 999px; overflow: hidden; }

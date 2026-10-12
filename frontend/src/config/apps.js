@@ -61,11 +61,19 @@ export const HOME_APPS = [
     roles: [],
   },
   {
-    id: 'assign-event-requests',
-    label: 'Assign Event Requests',
+    id: 'assign-event-coordinators',
+    label: 'Assign Event Coordinators',
     description: 'Assign unassigned event requests to Event Coordinators',
-    path: '/assign-event-requests',
+    path: '/assign-event-coordinators',
     icon: '👥',
+    roles: ['Event Coordinator Lead'],
+  },
+  {
+    id: 'reassign-event-coordinators',
+    label: 'Reassign Event Coordinators',
+    description: 'View event stages and reassign Event Coordinators',
+    path: '/reassign-event-coordinators',
+    icon: '📊',
     roles: ['Event Coordinator Lead'],
   },
   {
