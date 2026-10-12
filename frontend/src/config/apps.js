@@ -61,6 +61,14 @@ export const HOME_APPS = [
     roles: [],
   },
   {
+    id: 'assign-event-requests',
+    label: 'Assign Event Requests',
+    description: 'Assign unassigned event requests to Event Coordinators',
+    path: '/assign-event-requests',
+    icon: '👥',
+    roles: ['Event Coordinator Lead'],
+  },
+  {
     id: 'equipment-availability',
     label: 'Check Equipment Availability',
     description: 'Open Equipment Availability',

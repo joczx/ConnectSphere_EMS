@@ -20,11 +20,23 @@ from app.services.event_request_workflow import (
     list_amendments,
     send_for_review,
 )
-from app.services.event_store import authenticated_user
+from app.services.event_store import (
+    StoreError,
+    authenticated_token,
+    authenticated_user,
+    supabase_request,
+)
 
 event_requests_bp = Blueprint(
     "event_requests", __name__, url_prefix="/api/event-requests"
 )
+
+
+@event_requests_bp.after_request
+def prevent_caching(response):
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
 
 # Confirmation shown to the Event Coordinator once the outcome is recorded.
 MESSAGES = {
@@ -37,6 +49,67 @@ MESSAGES = {
 @event_requests_bp.errorhandler(EventRequestError)
 def handle_event_request_error(error):
     return jsonify(error.to_dict()), error.status_code
+
+
+@event_requests_bp.errorhandler(StoreError)
+def handle_store_error(error):
+    if (
+        error.code == "PGRST202"
+        and request.endpoint in {
+            "event_requests.unassigned",
+            "event_requests.assign_coordinator",
+        }
+    ):
+        return jsonify(
+            error=(
+                "Event Coordinator assignment is not available in Supabase yet. "
+                "Apply supabase/029_event_coordinator_assignment.sql and reload "
+                "the Supabase API schema cache."
+            )
+        ), 503
+    return jsonify(error.to_dict()), error.status
+
+
+def _assignment_result(result):
+    if isinstance(result, dict) and result.get("error"):
+        return jsonify(error=result["error"]), result.get("status", 500)
+    return jsonify(result)
+
+
+@event_requests_bp.get("/unassigned")
+def unassigned():
+    token = authenticated_token(supabase_request)
+    result = supabase_request(
+        "/rest/v1/rpc/event_request_assignment_queue",
+        token=token,
+        payload={},
+        method="POST",
+    )
+    return _assignment_result(result)
+
+
+@event_requests_bp.post("/<int:event_request_id>/assign-coordinator")
+def assign_coordinator(event_request_id):
+    token = authenticated_token(supabase_request)
+    payload = request.get_json(silent=True)
+    coordinator_id = (
+        clean_user_id(payload.get("coordinator_id"))
+        if isinstance(payload, dict)
+        else None
+    )
+    if coordinator_id is None:
+        return jsonify(error="Choose a valid Event Coordinator."), 400
+
+    result = supabase_request(
+        "/rest/v1/rpc/assign_event_request_coordinator",
+        token=token,
+        payload={
+            "p_event_request_id": event_request_id,
+            "p_coordinator_id": coordinator_id,
+        },
+        method="POST",
+    )
+    return _assignment_result(result)
 
 
 @event_requests_bp.post("")
