@@ -13,9 +13,19 @@ export const HOME_APPS = [
   {
     id: 'venue-bookings',
     label: 'Venue Bookings',
-    description: 'Submit venue bookings and view requests for review',
+    // A request now starts from the event being planned, so this tile is for
+    // following the requests already made and the decisions on them.
+    description: 'Track your venue booking requests and their outcomes',
     path: '/venue-bookings',
     icon: '📋',
+    roles: [],
+  },
+  {
+    id: 'review-venue-bookings',
+    label: 'Review Venue Bookings',
+    description: 'Approve or reject venue booking requests',
+    path: '/review-venue-bookings',
+    icon: '🗂️',
     roles: [],
   },
   {

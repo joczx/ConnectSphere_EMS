@@ -9,6 +9,18 @@ from flask import request
 logger = logging.getLogger(__name__)
 
 
+def _application_status(path, upstream_status):
+    """Translate Supabase failures without treating data errors as expired auth."""
+    if upstream_status == 401:
+        return 401
+    if path.startswith('/auth/v1/') and upstream_status in (400, 403):
+        # GoTrue commonly uses 400 for invalid credentials and refresh tokens.
+        return 401
+    if upstream_status == 403:
+        return 403
+    return 503
+
+
 class StoreError(Exception):
     def __init__(self, status, message=None, code=None):
         self.code = code
@@ -22,10 +34,13 @@ class StoreError(Exception):
 
 
 def supabase_request(path, token=None, payload=None, method=None, return_representation=False):
-    # PostgREST reads RPC arguments from JSON only for POST requests. A GET
-    # with a JSON body is treated as a call without arguments.
+    # Sending data means POST unless a method is named. A GET with a body is
+    # not an error anywhere: PostgREST simply ignores the body, so an insert
+    # quietly becomes a read and an RPC is called with no arguments. That is
+    # what a 'GET' default did to every caller that sends data, which is why
+    # the method is only inferred, never assumed.
     if method is None:
-        method = 'POST' if path.startswith('/rest/v1/rpc/') and payload is not None else 'GET'
+        method = 'GET' if payload is None else 'POST'
     base = os.environ.get('SUPABASE_URL', '').rstrip('/')
     key = os.environ.get('SUPABASE_ANON_KEY', '')
     if not base or not key:
@@ -61,13 +76,13 @@ def supabase_request(path, token=None, payload=None, method=None, return_represe
         # Upstream wording can name tables, columns and keys, so it is logged
         # for developers rather than carried in the error the caller sees.
         logger.warning('Supabase %s failed for %s: %s', exc.code, path, detail or exc.reason)
-        raise StoreError(401 if exc.code in (400, 401, 403) else 503, code=code) from exc
+        raise StoreError(_application_status(path, exc.code), code=code) from exc
     except (URLError, TimeoutError) as exc:
         raise StoreError(503, 'Supabase is temporarily unavailable.') from exc
 
 
-def authenticated_token(query=None):
-    """Return the caller's verified access token.
+def authenticated_user(query=None):
+    """Return (access token, user id) for the caller, both verified.
 
     `query` lets a blueprint pass its own supabase_request, so a test that
     patches that module's function also intercepts this user lookup.
@@ -79,4 +94,10 @@ def authenticated_token(query=None):
     user = query('/auth/v1/user', token=token)
     if not user.get('id'):
         raise StoreError(401)
+    return token, user['id']
+
+
+def authenticated_token(query=None):
+    """Return just the caller's verified access token."""
+    token, _ = authenticated_user(query)
     return token

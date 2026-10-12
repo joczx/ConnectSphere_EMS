@@ -8,12 +8,14 @@ export default function VenueSearchBar() {
 
   useEffect(() => setQuery(searchParams.get('name') || ''), [searchParams]);
 
+  // A name is one more filter on the catalogue, so the search stays on the same
+  // page and keeps the filters and the event already in the URL.
   function openResults(nextQuery) {
     const parameters = new URLSearchParams(searchParams);
     if (nextQuery) parameters.set('name', nextQuery);
     else parameters.delete('name');
     const suffix = parameters.toString();
-    navigate(suffix ? `/venue-search/results?${suffix}` : '/venue-search');
+    navigate(suffix ? `/venue-search?${suffix}` : '/venue-search');
   }
 
   function submit(event) {

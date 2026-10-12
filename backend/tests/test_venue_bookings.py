@@ -4,7 +4,7 @@ from app import create_app
 from app.schemas.venue_booking import parse_booking
 from app.services.event_store import StoreError
 
-VALID = dict(venue_id='b21bdd3b-5fbb-4588-b070-f9a7e923ef02', event_name='Workshop',
+VALID = dict(venue_id='b21bdd3b-5fbb-4588-b070-f9a7e923ef02', event_id=4, event_name='Workshop',
              starts_at='2099-01-01T10:00:00+08:00', ends_at='2099-01-01T12:00:00+08:00',
              attendance=40, venue_requirements='Classroom layout and wheelchair access')
 HEADERS = {'Authorization': 'Bearer coordinator-token'}
@@ -24,6 +24,8 @@ def test_every_booking_field_is_required(field):
     ({'venue_id': 'bad'}, 'venue_id'), ({'starts_at': '2099-01-01T10:00'}, 'starts_at'),
     ({'starts_at': '2000-01-01T10:00+08:00'}, 'starts_at'),
     ({'ends_at': VALID['starts_at']}, 'ends_at'),
+    ({'event_id': '4'}, 'event_id'), ({'event_id': 0}, 'event_id'),
+    ({'event_id': True}, 'event_id'), ({'event_id': 4.0}, 'event_id'),
 ])
 def test_invalid_booking_details(changes, field):
     assert field in parse_booking({**VALID, **changes})[1]
@@ -85,4 +87,27 @@ def test_storage_failure_has_no_confirmation(query):
     query.side_effect = [{'id': 'coordinator'}, StoreError(503)]
     response = create_app().test_client().post('/api/venue-bookings', json=VALID, headers=HEADERS)
     assert response.status_code == 503
+    assert 'booking' not in response.json
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_request_names_the_event_it_is_for(query):
+    query.side_effect = [{'id': 'coordinator'}, {**VALID, 'booking_id': 'saved-id'}]
+    create_app().test_client().post('/api/venue-bookings', json=VALID, headers=HEADERS)
+    assert query.call_args.kwargs['payload']['p_booking']['event_id'] == 4
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_unsuitable_venue_is_refused_with_its_shortfalls(query):
+    # The search page greys the venue out, but the rule is the database's, so
+    # the refusal has to reach the coordinator rather than be swallowed as a
+    # generic failure.
+    query.side_effect = [{'id': 'coordinator'}, {
+        'error': 'This venue does not meet the requirements recorded for this event.',
+        'unmet_requirements': ['Holds 80, but 400 are expected.'],
+        'status': 409,
+    }]
+    response = create_app().test_client().post('/api/venue-bookings', json=VALID, headers=HEADERS)
+    assert response.status_code == 409
+    assert response.json['unmet_requirements'] == ['Holds 80, but 400 are expected.']
     assert 'booking' not in response.json

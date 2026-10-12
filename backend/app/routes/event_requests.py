@@ -20,6 +20,7 @@ from app.services.event_request_workflow import (
     list_amendments,
     send_for_review,
 )
+from app.services.event_store import authenticated_user
 
 event_requests_bp = Blueprint(
     "event_requests", __name__, url_prefix="/api/event-requests"
@@ -182,8 +183,11 @@ def review(event_request_id):
     if payload is None:
         raise EventRequestError("Send the review outcome and comments as JSON.")
 
+    # Who is reviewing comes from the verified session, never from the body.
+    _, reviewer_id = authenticated_user()
+
     event_request, recorded, notifications = review_event_request(
-        event_request_id, payload
+        event_request_id, payload, reviewer_id
     )
 
     return jsonify(

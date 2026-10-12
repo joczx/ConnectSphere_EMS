@@ -188,23 +188,38 @@ Venue Search supports a simple venue-name search and an advanced filter search.
 It does not assess booking conflicts or produce a suitability verdict.
 
 - **[frontend/src/pages/VenueSearch.jsx](frontend/src/pages/VenueSearch.jsx)** —
-  The Venue Search entry page. It contains the feature heading and a link to
-  advanced filters; search results are intentionally on their own page.
+  The venue catalogue: the event being planned, the filters in force as
+  removable chips, and the results. Opened from an event it applies that
+  event's requirements once, marked in the URL by `applied=1` so clearing them
+  is not immediately undone.
+- **[frontend/src/services/venueSearch.js](frontend/src/services/venueSearch.js)** —
+  Reads and writes the search URL, which is the single source of truth for a
+  search. Add a new filter here, not in a page.
+- **[frontend/src/components/VenueResults.jsx](frontend/src/components/VenueResults.jsx)** —
+  The results and what may be done with each one, including the disabled request
+  action and the unmet requirements behind it.
+- **[frontend/src/components/EventVenueContext.jsx](frontend/src/components/EventVenueContext.jsx)** —
+  Which event the venue is being searched for: the removable condition when one
+  is in context, the picker when none is.
 - **[frontend/src/pages/VenueSearchResults.jsx](frontend/src/pages/VenueSearchResults.jsx)** —
-  Fetches and displays results. A normal search calls `GET /api/venues?name=`;
-  a name entered after filtering remains on the advanced endpoint so every
-  selected condition is retained.
+  Now a redirect to `/venue-search`, carrying every filter in the URL across.
+  Results moved onto the search page itself when the booking flow was reworked,
+  so there is one results surface rather than two that could disagree about what
+  may be requested. The route is kept so shared and bookmarked links still open.
 - **[frontend/src/components/VenueSearchBar.jsx](frontend/src/components/VenueSearchBar.jsx)** —
   Reusable header search bar with a magnifying-glass submit control and query
   clear control. It is shown inside the navbar only on Venue Search pages;
   clearing the input does not navigate or remove active filters.
-- **[frontend/src/pages/VenueSearchFilters.jsx](frontend/src/pages/VenueSearchFilters.jsx)** —
+- **[frontend/src/components/VenueFilterForm.jsx](frontend/src/components/VenueFilterForm.jsx)** —
   Advanced filter-conditions form for available start/end dates, expected attendance, location,
   accessibility, one or more acceptable room layouts and required facilities.
-  It blocks incomplete or invalid date ranges and invalid attendance, then shows
-  a reusable destructive alert below the action buttons before keeping the
-  selected values in the URL. Opening Filters from filtered results restores
-  those values so they can be adjusted.
+  Every condition is a tickbox or an empty-means-any field, so each one can be
+  switched on or off. It blocks incomplete or invalid date ranges and invalid
+  attendance, then shows a reusable destructive alert below the action buttons
+  before keeping the selected values in the URL. Shown inline on the catalogue
+  behind Add filters / Edit filters, and opened showing the filters in force.
+- **[frontend/src/pages/VenueSearchFilters.jsx](frontend/src/pages/VenueSearchFilters.jsx)** —
+  The same form on a page of its own, kept for links that still point here.
 - **[frontend/src/components/DateRangeCalendar.jsx](frontend/src/components/DateRangeCalendar.jsx)** —
   Reusable React Aria `RangeCalendar` wrapper used inside the date picker popup.
 - **[frontend/src/components/DateRangePicker.jsx](frontend/src/components/DateRangePicker.jsx)** —
@@ -232,5 +247,61 @@ It does not assess booking conflicts or produce a suitability verdict.
   `/venue-search/results` and `/venue-search/filters`; all require an
   authenticated session.
 
-Do not add suitability verdicts to this story; they belong
-to the separate Venue Suitability Checking feature.
+### Searching for the event being planned
+
+Venue Search opens from an event in planning, and the event's own requirements
+become its filters. See [docs/venue-bookings.md](docs/venue-bookings.md) for the
+flow and for the three places the requirement gate is enforced.
+
+- **[backend/app/services/event_venue_criteria.py](backend/app/services/event_venue_criteria.py)** —
+  What an event needs from a venue and whether a venue meets it. No Flask or
+  Supabase imports, so the rules are unit tested on their own. The weekly
+  operating-hours rule lives here and `venue_search_service` calls into it, so
+  the filter search and the event check cannot drift apart.
+- **[backend/tests/test_event_venue_criteria.py](backend/tests/test_event_venue_criteria.py)** —
+  The requirement rules, the Singapore-time day boundaries, and the two
+  event-aware endpoints.
+
+This is a verdict against **one event's recorded requirements**, which is not
+the Venue Suitability Checking story: that one compares a venue against an event
+and reports on the comparison, including the parts no filter can express.
+Keep that reporting out of here, and build it on
+`event_venue_criteria.unmet_requirements()` rather than a second copy of these
+rules.
+
+### Approve or reject venue booking requests
+
+Venue Staff review on `/review-venue-bookings`; coordinators follow their
+requests on `/venue-bookings`. See [docs/venue-bookings.md](docs/venue-bookings.md).
+
+- **[supabase/026_review_venue_bookings.sql](supabase/026_review_venue_bookings.sql)** —
+  `review_venue_booking()` holds every rule: Venue Staff only, a reason to
+  reject, a once-only decision, and approval rechecked against the event as it
+  is now. Also the coordinator's alert rows and the functions that read them.
+- **[backend/app/schemas/venue_booking_review.py](backend/app/schemas/venue_booking_review.py)** —
+  The same decision rules, checked before the database so errors are per field.
+- **[backend/app/routes/venue_bookings.py](backend/app/routes/venue_bookings.py)** —
+  Thin: validates, calls a database function, passes its refusal on unchanged.
+- **[frontend/src/pages/ReviewVenueBookings.jsx](frontend/src/pages/ReviewVenueBookings.jsx)**,
+  **[ReviewVenueBooking.jsx](frontend/src/pages/ReviewVenueBooking.jsx)** — The
+  queue and the decision, modelled on Review Event Requests.
+- **[frontend/src/pages/VenueBookings.jsx](frontend/src/pages/VenueBookings.jsx)** —
+  The coordinator's requests by stage, with the alert banner.
+- **[backend/tests/test_venue_booking_review.py](backend/tests/test_venue_booking_review.py)** —
+  Tests labelled with the acceptance criterion each covers.
+
+### Conflicting venue bookings
+
+Only an approved booking makes a venue unavailable. See
+[docs/venue-bookings.md](docs/venue-bookings.md#conflicting-bookings).
+
+- **[supabase/027_venue_booking_conflicts.sql](supabase/027_venue_booking_conflicts.sql)** —
+  The rule: refused requests and approvals, the exclusion constraint that holds
+  under concurrency, and `venue_booking_summary()`, which decides how much of
+  another coordinator's booking a reader may see.
+- **[backend/app/services/venue_availability.py](backend/app/services/venue_availability.py)** —
+  The same half-open overlap rule, used to mark search results in one lookup.
+- **[frontend/src/components/BookingConflicts.jsx](frontend/src/components/BookingConflicts.jsx)** —
+  How a conflicting booking is described, wherever one appears.
+- **[backend/tests/test_venue_booking_conflicts.py](backend/tests/test_venue_booking_conflicts.py)** —
+  The overlap boundaries and each acceptance criterion.

@@ -36,13 +36,18 @@ REVIEWABLE_STATUSES = frozenset({request_schema.STATUS_SUBMITTED})
 # without saying why leaves the Organiser with nothing to act on.
 OUTCOMES_NEEDING_COMMENTS = frozenset({OUTCOME_REJECTED, OUTCOME_CLARIFICATION})
 
-WRITABLE_FIELDS = ("reviewer_id", "outcome", "comments")
+# What a client may send. reviewer_id is deliberately absent: a review has to
+# be attributable to whoever actually made it, so the identity comes from the
+# authenticated session rather than the request body. A client that sends one
+# now gets "Unrecognised field", which is better than being quietly ignored.
+WRITABLE_FIELDS = ("outcome", "comments")
 
 
-def parse_payload(payload):
+def parse_payload(payload, reviewer_id=None):
     """Turn a review body into a database-ready record.
 
-    Returns (record, errors).
+    `reviewer_id` is the signed-in user, supplied by the route from the
+    verified session. Returns (record, errors).
     """
     errors = {}
 
@@ -55,13 +60,14 @@ def parse_payload(payload):
 
     record = {}
 
-    reviewer_id = request_schema.clean_user_id(payload.get("reviewer_id"))
-    if reviewer_id is None:
+    reviewer = request_schema.clean_user_id(reviewer_id)
+    if reviewer is None:
         errors["reviewer_id"] = (
-            "The reviewing Event Coordinator is required, as a user id (a UUID)."
+            "The reviewing Event Coordinator could not be identified. "
+            "Please sign in again."
         )
     else:
-        record["reviewer_id"] = reviewer_id
+        record["reviewer_id"] = reviewer
 
     outcome = payload.get("outcome")
     if not isinstance(outcome, str) or not outcome.strip():

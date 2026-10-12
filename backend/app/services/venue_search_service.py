@@ -1,9 +1,9 @@
 """Supabase query construction and operating-hours checks for Venue Search."""
 
-from datetime import timedelta
 from urllib.parse import quote
 
 from app.services.event_store import supabase_request
+from app.services.event_venue_criteria import closed_days
 
 VENUE_FIELDS = (
     "venue_id,venue_name,capacity,building_name,block_number,street_name,"
@@ -47,24 +47,9 @@ def filter_search_path(filters):
 
 
 def matches_operating_hours(venue, filters):
-    """Check the catalogue's weekly hours; booking conflicts are not covered."""
-    start = filters["start_date"]
-    end = filters["end_date"]
-    if start is None:
-        return True
+    """Check the catalogue's weekly hours; booking conflicts are not covered.
 
-    hours = venue.get("operating_hours")
-    if not isinstance(hours, dict):
-        return False
-
-    current_day = start
-    while current_day <= end:
-        day = hours.get(current_day.strftime("%A").lower())
-        if not _is_open_for_day(day):
-            return False
-        current_day += timedelta(days=1)
-    return True
-
-
-def _is_open_for_day(day):
-    return isinstance(day, dict) and day.get("closed") is not True
+    The day-by-day rule lives in event_venue_criteria, because an event checked
+    against a venue applies exactly the same one and the two must not drift.
+    """
+    return not closed_days(venue, filters["start_date"], filters["end_date"])

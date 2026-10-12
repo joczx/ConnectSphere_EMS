@@ -122,7 +122,7 @@ for endpoint, path in [('list', '/api/events'), ('detail', DETAIL)]:
         setattr(EventAcceptanceTests, f'test_{number:02d}_{endpoint}_{label}', auth_case(path, header, identity))
         number += 1
 
-# 17-24: viewing endpoints do not accept writes.
+# 17-23: viewing endpoints do not accept writes.
 def write_case(path, method):
     def test(self):
         response = self.client.open(path, method=method, headers=self.headers, json={'event_name': 'Changed'})
@@ -130,10 +130,31 @@ def write_case(path, method):
         self.query.assert_not_called()
     return test
 
+# The detail endpoint does accept PATCH: that is how an event is edited during
+# planning, for the "Update Event Information" story. Everything else on both
+# endpoints is still read only.
+REJECTED_METHODS = {
+    'list': ['POST', 'PUT', 'PATCH', 'DELETE'],
+    'detail': ['POST', 'PUT', 'DELETE'],
+}
+
 for endpoint, path in [('list', '/api/events'), ('detail', DETAIL)]:
-    for method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+    for method in REJECTED_METHODS[endpoint]:
         setattr(EventAcceptanceTests, f'test_{number:02d}_{endpoint}_rejects_{method.lower()}', write_case(path, method))
         number += 1
+
+
+# 24: the edit endpoint exists; a routed PATCH must not come back as "method
+# not allowed". Built by a factory like the cases above so the function is not
+# also collected as a module level test.
+def accepts_case(path, method):
+    def test(self):
+        response = self.client.open(path, method=method, headers=self.headers, json={'event_name': 'Changed'})
+        self.assertNotEqual(response.status_code, 405)
+    return test
+
+setattr(EventAcceptanceTests, f'test_{number:02d}_detail_accepts_patch', accepts_case(DETAIL, 'PATCH'))
+number += 1
 
 
 class SupabaseClientTests(unittest.TestCase):
@@ -187,6 +208,26 @@ class SupabaseClientTests(unittest.TestCase):
         self.assertEqual(request.get_header('Apikey'), 'test-key')
         self.assertEqual(self.transport.call_args.kwargs, {'timeout': 10})
 
+    def test_data_without_a_method_is_posted_not_dropped(self):
+        # A GET carrying a body is silently accepted by PostgREST, which then
+        # ignores the body: an RPC runs with no arguments, an insert becomes a
+        # read. Every caller that sends data relies on this being a POST.
+        self.transport.return_value.__enter__.return_value = io.BytesIO(b'{"ok":true}')
+        supabase_request('/rest/v1/rpc/submit_venue_booking', token='t', payload={'p_booking': {'a': 1}})
+        request = self.transport.call_args.args[0]
+        self.assertEqual(request.get_method(), 'POST')
+        self.assertEqual(request.data, b'{"p_booking": {"a": 1}}')
+
+    def test_an_empty_payload_is_still_posted(self):
+        self.transport.return_value.__enter__.return_value = io.BytesIO(b'[]')
+        supabase_request('/rest/v1/rpc/my_equipment_reservations', token='t', payload={})
+        self.assertEqual(self.transport.call_args.args[0].get_method(), 'POST')
+
+    def test_a_named_method_is_always_used(self):
+        self.transport.return_value.__enter__.return_value = io.BytesIO(b'[]')
+        supabase_request('/rest/v1/venues?venue_id=eq.x', token='t', payload={'capacity': 5}, method='PATCH')
+        self.assertEqual(self.transport.call_args.args[0].get_method(), 'PATCH')
+
     def test_49_json_object_response(self):
         self.transport.return_value.__enter__.return_value = io.BytesIO(b'{"id":"user-a"}')
         self.assertEqual(supabase_request('/auth/v1/user', token='user-a-token'), {'id': 'user-a'})
@@ -198,17 +239,24 @@ class SupabaseClientTests(unittest.TestCase):
 
 
 # 35-42: upstream failures are converted to the application's error contract.
-def http_case(status, expected):
+def http_case(status, expected, path='/rest/v1/events'):
     def test(self):
         self.transport.side_effect = HTTPError('https://example.invalid', status, 'private diagnostic', {}, None)
         with self.assertRaises(StoreError) as result:
-            supabase_request('/rest/v1/events', token='user-a-token')
+            supabase_request(path, token='user-a-token')
         self.assertEqual(result.exception.status, expected)
         self.assertNotIn('private', str(result.exception))
     return test
 
-for number, (status, expected) in enumerate([(400, 401), (401, 401), (403, 401), (404, 503), (429, 503), (500, 503), (502, 503), (503, 503)], 35):
+for number, (status, expected) in enumerate([(400, 503), (401, 401), (403, 403), (404, 503), (429, 503), (500, 503), (502, 503), (503, 503)], 35):
     setattr(SupabaseClientTests, f'test_{number:02d}_upstream_http_{status}', http_case(status, expected))
+
+SupabaseClientTests.test_51_auth_http_400_is_unauthorized = http_case(
+    400, 401, '/auth/v1/token?grant_type=password'
+)
+SupabaseClientTests.test_52_auth_http_403_is_unauthorized = http_case(
+    403, 401, '/auth/v1/user'
+)
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,63 +1,18 @@
-import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import Navbar from '../components/Navbar';
-import VenueSearchBar from '../components/VenueSearchBar';
-import { useAuth } from '../auth/AuthContext';
+import { Navigate, useSearchParams } from 'react-router-dom';
 
+// Results used to live on their own page, reached from the filter form and the
+// name search. The catalogue page now lists them beside the filters that
+// produced them and the event they are being searched for, so there is one
+// results surface rather than two that could disagree.
+//
+// The route is kept so that a bookmarked or shared result still opens, with
+// every filter in the URL carried across.
 export default function VenueSearchResults() {
-  const { api } = useAuth();
-  const [venues, setVenues] = useState([]);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [searchParams] = useSearchParams();
-  const isFilterSearch = searchParams.get('filter') === 'true';
-  const name = searchParams.get('name');
-
-  useEffect(() => {
-    if (!isFilterSearch && !name) return undefined;
-    const controller = new AbortController();
-
-    async function search() {
-      const path = isFilterSearch
-        ? '/api/venues/search?' + searchParams
-        : '/api/venues?name=' + encodeURIComponent(name);
-      setLoading(true);
-      setError('');
-      const result = await api(path, { cache: 'no-store', signal: controller.signal });
-      if (!controller.signal.aborted) setVenues(result.venues);
-    }
-
-    search().catch((searchError) => {
-      if (!controller.signal.aborted) {
-        setVenues([]);
-        setError(searchError.message);
-      }
-    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [api, isFilterSearch, name, searchParams]);
-
-  const filtersPath = searchParams.toString() ? `/venue-search/filters?${searchParams}` : '/venue-search/filters';
-
-  return (
-    <>
-      <Navbar searchBar={<VenueSearchBar />} />
-      <main className="container">
-        <Link to="/home">← Home</Link>
-        <div className="heading">
-          <h1>Search results</h1>
-          <Link className="button-link" to={filtersPath}>Filters</Link>
-        </div>
-        {error && <p className="panel error" role="alert">{error}</p>}
-        {loading && <p>Searching…</p>}
-        {!loading && !error && (isFilterSearch || name) && !venues.length && <p className="panel">No venues found.</p>}
-        {venues.length > 0 && <ul className="venue-results">
-          {venues.map((venue) => <li key={venue.venue_id}>
-            <h2>{venue.venue_name}</h2>
-            <Link to={`/venue-bookings?venue_id=${encodeURIComponent(venue.venue_id)}`}>Request booking</Link>
-            <p>{venue.capacity.toLocaleString()} people · {venue.building_name || `${venue.block_number} ${venue.street_name}`}</p>
-          </li>)}
-        </ul>}
-      </main>
-    </>
-  );
+  const [params] = useSearchParams();
+  const carried = new URLSearchParams(params);
+  // Only ever meant "these are filter results", which the filters in the URL
+  // now say for themselves.
+  carried.delete('filter');
+  const suffix = carried.toString();
+  return <Navigate replace to={suffix ? `/venue-search?${suffix}` : '/venue-search'} />;
 }
