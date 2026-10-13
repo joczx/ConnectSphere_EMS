@@ -83,8 +83,6 @@ export default function Events() {
   });
   const [submitState, setSubmitState] = useState({ message: '', error: '' });
   const [userNames, setUserNames] = useState({});
-  const [coordinatorChoices, setCoordinatorChoices] = useState([]);
-  const [reassignForm, setReassignForm] = useState({ open: false, value: '', busy: false, error: '', message: '' });
   const [edit, setEdit] = useState({ open: false, values: null, busy: false, error: '', details: null, message: '' });
   const [warning, setWarning] = useState(null);
   // `allowed`: whether this viewer takes part in venue booking at all.
@@ -216,13 +214,6 @@ export default function Events() {
     } else {
       setUserNames({});
     }
-
-    api('/api/users?role=event_coordinator', { cache: 'no-store' })
-      .then((data) => {
-        const options = Object.entries(data.users || {}).map(([id, name]) => ({ id, name }));
-        setCoordinatorChoices(options.filter(({ id }) => id !== event.event_coordinator_id));
-      })
-      .catch(() => setCoordinatorChoices([]));
   }, [api, event]);
 
   useEffect(() => {
@@ -238,23 +229,6 @@ export default function Events() {
       .catch(() => { if (!ignore) setVenue(current => ({ ...current, assigned: null })); });
     return () => { ignore = true; };
   }, [api, event?.venue_id]);
-
-  async function reassignCoordinator(eventSubmit) {
-    eventSubmit.preventDefault();
-    if (!event || !reassignForm.value) return;
-
-    setReassignForm((current) => ({ ...current, busy: true, error: '', message: '' }));
-    try {
-      const data = await api(`/api/events/${encodeURIComponent(eventId)}/coordinator`, {
-        method: 'PATCH',
-        body: { event_coordinator_id: reassignForm.value },
-      });
-      setReassignForm({ open: false, value: '', busy: false, error: '', message: data.message || 'Coordinator reassigned.' });
-      setRefresh(value => value + 1);
-    } catch (err) {
-      setReassignForm((current) => ({ ...current, busy: false, error: err.message || 'Unable to reassign the coordinator.' }));
-    }
-  }
 
   function startEditing() {
     // The version being edited. Sent back on save so the server can refuse
@@ -330,24 +304,11 @@ export default function Events() {
         <div className="heading" style={{ alignItems: 'center' }}>
           <h2 style={{ margin: 0 }}>{event.event_name}</h2>
           <div>
-            {editable && !edit.open && <button type="button" onClick={startEditing}>Edit event information</button>}{' '}
-            <button type="button" className="secondary" onClick={() => setReassignForm(current => ({ ...current, open: !current.open, value: '', error: '', message: '' }))}>Reassign Event Coordinator</button>
+            {editable && !edit.open && <button type="button" onClick={startEditing}>Edit event information</button>}
           </div>
         </div>
         {edit.message && <div className="success" style={{ marginBottom: '12px' }} role="status">{edit.message}</div>}
         {!editable && <p className="metadata">This event is {event.status}. Details can only be changed during planning.</p>}
-        {reassignForm.message && <div className="success" style={{ marginBottom: '12px' }}>{reassignForm.message}</div>}
-        {reassignForm.error && <div className="error" style={{ marginBottom: '12px' }}>{reassignForm.error}</div>}
-        {reassignForm.open && <form onSubmit={reassignCoordinator} style={{ display: 'grid', gap: '12px', marginBottom: '20px' }}>
-          <label>
-            Replacement event coordinator
-            <select value={reassignForm.value} onChange={(e) => setReassignForm((current) => ({ ...current, value: e.target.value }))} required>
-              <option value="">Select an event coordinator</option>
-              {coordinatorChoices.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
-            </select>
-          </label>
-          <button type="submit" disabled={reassignForm.busy}>{reassignForm.busy ? 'Reassigning…' : 'Save reassignment'}</button>
-        </form>}
 
         {!edit.open && <dl>
           <Detail label="Status" value={event.status ? event.status.charAt(0).toUpperCase() + event.status.slice(1) : null} />
