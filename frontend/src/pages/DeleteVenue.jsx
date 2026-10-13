@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useFeedback } from '../components/FeedbackProvider';
 import { useAuth } from '../auth/AuthContext';
 
 function when(value) {
@@ -8,6 +9,7 @@ function when(value) {
 }
 
 export default function DeleteVenue() {
+  const { confirm } = useFeedback();
   const { venueId } = useParams();
   const { api } = useAuth();
   const navigate = useNavigate();
@@ -28,6 +30,8 @@ export default function DeleteVenue() {
 
   async function deleteVenue() {
     if (!state.venue || state.confirmation !== state.venue.venue_name || state.events.length) return;
+    if (!(await confirm(`Delete "${state.venue.venue_name}" from the venue catalogue? This cannot be undone.`,
+      { title: 'Delete venue', confirmLabel: 'Delete venue', destructive: true }))) return;
     setState(current => ({ ...current, deleting: true, error: '' }));
     try {
       const result = await api(`/api/venues/${encodeURIComponent(venueId)}`, { method: 'DELETE' });

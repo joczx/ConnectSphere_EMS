@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useFeedback } from './FeedbackProvider';
 
 export default function AccountMenu() {
+  const { notify } = useFeedback();
   const { api, session, signOut } = useAuth();
   const [account, setAccount] = useState({ user: null, error: '' });
 
@@ -34,7 +36,7 @@ export default function AccountMenu() {
       <div className="account-menu-content">
         <span>Signed in</span>
         {account.error && <span role="status">{account.error}</span>}
-        <button type="button" className="secondary" onClick={signOut}>
+        <button type="button" className="secondary" onClick={() => { signOut(); notify('You have been signed out.', 'success', 'Signed out'); }}>
           Sign out
         </button>
       </div>

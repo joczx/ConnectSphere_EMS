@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useFeedback } from '../components/FeedbackProvider';
 import { useAuth } from '../auth/AuthContext';
 import { eventRequestsApi, humanise } from '../services/eventRequests';
 
@@ -8,6 +9,7 @@ const when = (iso) => iso && new Intl.DateTimeFormat('en-SG', { dateStyle: 'medi
 const list = (items, show) => items?.length ? items.map(show).join(', ') : 'None';
 
 export default function ReviewEventRequest() {
+  const { confirm } = useFeedback();
   const { api } = useAuth();
   const { requestId } = useParams();
   const location = useLocation();
@@ -26,7 +28,7 @@ export default function ReviewEventRequest() {
   async function review(e) {
     e.preventDefault();
     const outcome = e.nativeEvent.submitter.value;
-    if (!window.confirm(`${outcome === 'approved' ? 'Approve' : 'Reject'} this event request? This cannot be changed afterwards.`)) return;
+    if (!(await confirm(`${outcome === 'approved' ? 'Approve' : 'Reject'} this event request? This cannot be changed afterwards.`, { title: 'Confirm review decision', confirmLabel: outcome === 'approved' ? 'Approve request' : 'Reject request', destructive: outcome === 'rejected' }))) return;
     const comments = new FormData(e.currentTarget).get('comments');
     setState(current => ({ ...current, busy: true, error: null, details: null }));
     try {

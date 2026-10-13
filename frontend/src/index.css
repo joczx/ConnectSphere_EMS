@@ -290,3 +290,19 @@ label { font-size: 13px; }
   .portal-title { font-size: 10px; }
   .login-heading h1 { font-size: 24px; }
 }
+/* Shared action feedback for every role and feature. */
+.feedback-app { display: contents; }
+.feedback-stack { position: fixed; top: 20px; right: 20px; z-index: 10000; display: grid; gap: 12px; width: min(420px, calc(100vw - 32px)); pointer-events: none; }
+.feedback-toast { display: flex; gap: 12px; align-items: flex-start; background: var(--cs-color-surface); color: var(--cs-color-heading); border: 1px solid var(--cs-color-border); border-left: 5px solid #298067; border-radius: var(--cs-radius-panel); padding: 16px; box-shadow: 0 12px 32px #102a2226; pointer-events: auto; overflow-wrap: anywhere; }
+.feedback-toast p { margin: 5px 0 0; font-size: 14px; line-height: 1.5; }
+.feedback-toast strong { font-size: 15px; }
+.feedback-error { border-color: var(--cs-color-danger-soft); border-left-color: var(--cs-color-danger); color: var(--cs-color-danger); }
+.feedback-info { border-left-color: #426a9b; }
+.feedback-symbol { font-weight: 700; font-size: 20px; }
+button.feedback-dismiss { padding: 0 4px; margin-left: auto; border: 0; background: transparent; color: inherit; font-size: 24px; line-height: 1; min-width: 28px; }
+.feedback-dialog { width: min(480px, calc(100vw - 40px)); border: 1px solid var(--cs-color-border); border-radius: var(--cs-radius-panel); padding: 28px; background: var(--cs-color-surface); color: var(--cs-color-heading); box-shadow: 0 24px 80px #102a2240; }
+.feedback-dialog::backdrop { background: #142f2866; }
+.feedback-dialog h2 { margin-top: 0; }
+.feedback-dialog p { line-height: 1.6; overflow-wrap: anywhere; }
+.feedback-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+button.feedback-danger { background: var(--cs-color-danger); color: white; border-color: var(--cs-color-danger); }

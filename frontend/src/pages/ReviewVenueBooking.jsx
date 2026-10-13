@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useFeedback } from '../components/FeedbackProvider';
 import { Alert, AlertDescription, AlertTitle } from '../components/Alert';
 import VenueBookingDetails from '../components/VenueBookingDetails';
 import BookingConflicts, { approvedOnly } from '../components/BookingConflicts';
@@ -8,6 +9,7 @@ import { useAuth } from '../auth/AuthContext';
 import { venueBookingsApi } from '../services/venueBookings';
 
 export default function ReviewVenueBooking() {
+  const { confirm, notify } = useFeedback();
   const { api } = useAuth();
   const { bookingId } = useParams();
   const location = useLocation();
@@ -31,11 +33,12 @@ export default function ReviewVenueBooking() {
     // Checked here too, so the reviewer is told before anything is sent. The
     // database refuses a reasonless rejection either way.
     if (outcome === 'rejected' && !comments.trim()) {
+      notify('Enter a reason for rejecting this booking request.', 'error', 'Rejection reason required');
       setAttempt({ busy: false, error: '', fieldError: 'Enter a reason for rejecting this request. The Event Coordinator will see it.', unmet: [] });
       return;
     }
     const verb = outcome === 'approved' ? 'Approve' : 'Reject';
-    if (!window.confirm(`${verb} this booking request? This cannot be changed afterwards.`)) return;
+    if (!(await confirm(`${verb} this booking request? This cannot be changed afterwards.`, { title: 'Confirm booking decision', confirmLabel: `${verb} booking`, destructive: outcome === 'rejected' }))) return;
 
     setAttempt({ busy: true, error: '', fieldError: '', unmet: [] });
     try {

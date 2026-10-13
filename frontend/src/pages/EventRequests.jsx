@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useFeedback } from '../components/FeedbackProvider';
 import { useAuth } from '../auth/AuthContext';
 import { eventRequestsApi, humanise, userId } from '../services/eventRequests';
 
 export default function EventRequests() {
+  const { confirm } = useFeedback();
   const { api, token } = useAuth();
   const navigate = useNavigate();
   const [state, setState] = useState({ loading: true });
@@ -15,7 +17,7 @@ export default function EventRequests() {
     })();
   }, [api, token]);
   async function remove(item) {
-    if (!window.confirm(`Delete the draft "${item.event_name || 'Untitled request'}"? This cannot be undone.`)) return;
+    if (!(await confirm(`Delete the draft "${item.event_name || 'Untitled request'}"? This cannot be undone.`, { title: 'Delete draft', confirmLabel: 'Delete draft', destructive: true }))) return;
     try {
       await eventRequestsApi(api, '/' + item.event_request_id, { method: 'DELETE' });
       setState(current => ({ requests: current.requests.filter(r => r.event_request_id !== item.event_request_id) }));
@@ -23,7 +25,7 @@ export default function EventRequests() {
   }
   const requests = state.requests || [];
   async function cancel(item) {
-    if (!window.confirm(`Cancel "${item.event_name || 'Untitled request'}"? This cannot be undone.`)) return;
+    if (!(await confirm(`Cancel "${item.event_name || 'Untitled request'}"? This cannot be undone.`, { title: 'Cancel event request', confirmLabel: 'Cancel request', destructive: true }))) return;
     try {
       const result = await eventRequestsApi(api, '/' + item.event_request_id + '/cancel', { method: 'POST', body: {} });
       setState(current => ({ ...current, requests: current.requests.map(r => r.event_request_id === item.event_request_id ? result.event_request : r) }));

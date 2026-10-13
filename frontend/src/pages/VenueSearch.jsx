@@ -74,7 +74,8 @@ export default function VenueSearch() {
 
     const controller = new AbortController();
     setResults(current => ({ ...current, loading: true, error: '' }));
-    api(searchPath(params), { cache: 'no-store', signal: controller.signal })
+    api(searchPath(params), { cache: 'no-store', signal: controller.signal,
+      feedback: true, successMessage: data => `${(data.venues || []).length} venue${(data.venues || []).length === 1 ? '' : 's'} found. View the search results below.` })
       .then(data => {
         if (!controller.signal.aborted) {
           setResults({

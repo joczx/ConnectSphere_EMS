@@ -50,7 +50,7 @@ export default function EventRequest() {
     try {
       let data = isNew
         ? await eventRequestsApi(api, '', { method: 'POST', body: { ...body, event_organiser_id: userId(token), save_as_draft: !submit } })
-        : await eventRequestsApi(api, '/' + requestId, { method: 'PATCH', body });
+        : await eventRequestsApi(api, '/' + requestId, { method: 'PATCH', body, successFeedback: !submit });
       if (submit && !isNew) data = await eventRequestsApi(api, `/${requestId}/submit`, { method: 'POST' });
       navigate('/event-requests/' + data.event_request.event_request_id, { replace: true, state: { message: data.message } });
     } catch (err) {

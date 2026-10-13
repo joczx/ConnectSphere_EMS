@@ -25,7 +25,8 @@ export default function Venues() {
       setState(current => ({ ...current, loading: true, error: '' }));
       try {
         const path = isFiltered ? `/api/venues/search?${searchParams}` : '/api/venues/catalogue';
-        const result = await api(path, { cache: 'no-store', signal: controller.signal });
+        const result = await api(path, { cache: 'no-store', signal: controller.signal,
+          feedback: isFiltered, successMessage: result => `${(result.venues || []).length} venues found. View the results below.` });
         if (!controller.signal.aborted) setState({ venues: result.venues || [], loading: false, error: '' });
       } catch (error) {
         if (!controller.signal.aborted) setState({ venues: [], loading: false, error: error.message || 'Unable to load venues.' });

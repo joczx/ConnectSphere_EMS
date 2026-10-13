@@ -5,8 +5,10 @@ import EquipmentReservations from '../components/EquipmentReservations';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import ReserveEquipment from '../components/ReserveEquipment';
 import { useAuth } from '../auth/AuthContext';
+import { useFeedback } from '../components/FeedbackProvider';
 
 function ReviewForm({ request, equipment, onReviewed }) {
+  const { notify } = useFeedback();
   const { api } = useAuth();
   const [outcome, setOutcome] = useState('');
   const [equipmentId, setEquipmentId] = useState('');
@@ -21,6 +23,7 @@ function ReviewForm({ request, equipment, onReviewed }) {
     if (busy) return;
     const amount = Number(quantity);
     if (outcome === 'partially_accepted' && (!Number.isInteger(amount) || amount < 1 || amount >= request.quantity)) {
+      notify('Enter a quantity greater than zero and less than the requested quantity.', 'error', 'Check accepted quantity');
       setError('Enter a quantity greater than zero and less than the requested quantity.');
       return;
     }
@@ -56,7 +59,7 @@ function ReviewForm({ request, equipment, onReviewed }) {
       {outcome === 'rejected' && <label>Reason for rejection<textarea required value={reason} disabled={busy} onChange={e => setReason(e.target.value)} /></label>}
       {error && <p role="alert" className="error">{error}</p>}
       <button disabled={busy || (outcome !== 'rejected' && !equipmentId)}>{busy ? 'Saving...' : 'Confirm decision'}</button>
-      <button type="button" className="secondary" disabled={busy} onClick={() => { setOutcome(''); setError(''); }}>Cancel</button>
+      <button type="button" className="secondary" disabled={busy} onClick={() => { setOutcome(''); setError(''); notify('Review cancelled. No decision was recorded.', 'info'); }}>Cancel</button>
     </form>}
   </div>;
 }

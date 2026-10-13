@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { readApiResponse } from '../services/http';
+import { useFeedback } from '../components/FeedbackProvider';
+import { actionMessage, shouldNotify } from '../services/actionFeedback';
 
 const AuthContext = createContext(null);
 
@@ -16,6 +18,7 @@ function storedSession() {
 }
 
 export function AuthProvider({ children }) {
+  const { notify } = useFeedback();
   const [session, setSession] = useState(storedSession);
   const sessionRef = useRef(session);
   const refreshPromiseRef = useRef(null);
@@ -85,7 +88,7 @@ export function AuthProvider({ children }) {
   }, [refreshSession, signOut]);
 
   const api = useCallback(async (url, options = {}) => {
-    const { body, headers: suppliedHeaders, ...rest } = options;
+    const { body, headers: suppliedHeaders, feedback, successFeedback, successMessage, ...rest } = options;
     const headers = new Headers(suppliedHeaders);
     let requestBody = body;
 
@@ -98,13 +101,26 @@ export function AuthProvider({ children }) {
       requestBody = JSON.stringify(body);
     }
 
-    const response = await authFetch(url, {
-      ...rest,
-      headers,
-      ...(body !== undefined ? { body: requestBody } : {}),
-    });
-    return readApiResponse(response);
-  }, [authFetch]);
+    try {
+      const response = await authFetch(url, {
+        ...rest,
+        headers,
+        ...(body !== undefined ? { body: requestBody } : {}),
+      });
+      const data = await readApiResponse(response);
+      if (shouldNotify(url, options) && successFeedback !== false && !options.signal?.aborted) {
+        const message = typeof successMessage === 'function' ? successMessage(data)
+          : successMessage || actionMessage(url, (options.method || 'GET').toUpperCase(), data);
+        notify(message);
+      }
+      return data;
+    } catch (error) {
+      if (shouldNotify(url, options) && !options.signal?.aborted && error.name !== 'AbortError' && !error.data?.critical_fields) {
+        notify(error.message || 'Unable to complete this action. Please try again.', 'error');
+      }
+      throw error;
+    }
+  }, [authFetch, notify]);
 
   const value = useMemo(() => ({
     session,

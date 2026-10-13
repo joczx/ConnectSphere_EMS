@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { useFeedback } from './FeedbackProvider';
 
 export default function ReserveEquipment({ onReserved }) {
+  const { notify } = useFeedback();
   const { api } = useAuth();
   const [events, setEvents] = useState([]);
   const [eventId, setEventId] = useState('');
@@ -57,10 +59,12 @@ export default function ReserveEquipment({ onReserved }) {
     if (saving.current) return;
     const amount = Number(quantity);
     if (!item || !Number.isInteger(amount) || amount < 1) {
+      notify('Select equipment and enter a positive whole quantity.', 'error', 'Check reservation details');
       setState(s => ({ ...s, error: 'Select equipment and enter a positive whole quantity.' }));
       return;
     }
     if (amount > item.available_quantity) {
+      notify(`Only ${item.available_quantity} available for this event. Reduce the quantity and try again.`, 'error', 'Insufficient equipment');
       setState(s => ({ ...s, error: `Only ${item.available_quantity} available for this event.` }));
       return;
     }

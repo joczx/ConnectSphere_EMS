@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from './Alert';
+import { useFeedback } from './FeedbackProvider';
 import { VENUE_DAYS, VENUE_FACILITIES, VENUE_ROOM_LAYOUTS } from '../config/venueOptions';
 
 export default function VenueForm({ mode, venueId, initialVenue = {}, onSubmit, onSaveDraft, submitting = false, errors = {}, error = '' }) {
+  const { notify } = useFeedback();
   const isUpdate = mode === 'update';
   const cancelPath = isUpdate ? `/venues/${venueId}` : '/venues';
   const formRef = useRef(null);
@@ -120,7 +122,7 @@ export default function VenueForm({ mode, venueId, initialVenue = {}, onSubmit, 
       <div className="venue-page-actions">
         <button type="submit" disabled={submitting}>{submitting ? (isUpdate ? 'Updating venue…' : 'Creating venue…') : isUpdate ? 'Update venue' : 'Create venue'}</button>
         {isUpdate && <button type="button" className="secondary" disabled={submitting} onClick={() => onSaveDraft?.(new FormData(formRef.current))}>Save draft</button>}
-        <Link className="button-link secondary-link" to={cancelPath}>Cancel</Link>
+        <Link className="button-link secondary-link" to={cancelPath} onClick={() => notify('Venue editing cancelled. No changes were saved.', 'info')}>Cancel</Link>
       </div>
     </form>
   );

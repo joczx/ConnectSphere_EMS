@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext';
+import { useFeedback } from '../components/FeedbackProvider';
 
 const formatDateTime = (value) => {
   if (!value) return 'Not specified';
@@ -13,6 +14,7 @@ const formatDateTime = (value) => {
 };
 
 export default function EquipmentAvailability() {
+  const { notify } = useFeedback();
   const { api } = useAuth();
   const [form, setForm] = useState({
     equipment_type: '',
@@ -44,7 +46,7 @@ export default function EquipmentAvailability() {
         end_datetime: new Date(form.end_datetime).toISOString(),
       });
 
-      const data = await api(`/api/equipment-availability?${params.toString()}`, { cache: 'no-store' });
+      const data = await api(`/api/equipment-availability?${params.toString()}`, { cache: 'no-store', feedback: true, successMessage: 'Equipment availability checked. See the results below.' });
 
       setState({
         loading: false,
@@ -53,6 +55,7 @@ export default function EquipmentAvailability() {
         error: '',
       });
     } catch (err) {
+      if (err instanceof RangeError) notify('Enter valid start and end dates before checking availability.', 'error', 'Check event dates');
       setState({ loading: false, results: [], message: '', error: err.message || 'Unable to check equipment availability.' });
     }
   }

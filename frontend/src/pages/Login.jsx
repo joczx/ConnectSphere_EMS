@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useFeedback } from '../components/FeedbackProvider';
 
 export default function Login() {
+  const { notify } = useFeedback();
   const { signIn } = useAuth();
-  const [error, setError] = useState('');
+  const [error, setErrorState] = useState('');
+  const setError = message => { setErrorState(message); if (message) notify(message, 'error', 'Unable to sign in'); };
   const [busy, setBusy] = useState(false);
   async function submit(e) {
     e.preventDefault();
@@ -29,6 +32,7 @@ export default function Login() {
       const data = await response.json();
 
       signIn(data);
+      notify('You are signed in. Welcome to ConnectSphere.', 'success', 'Signed in');
 
     } catch {
       setError('Unable to sign in right now. Please try again.');

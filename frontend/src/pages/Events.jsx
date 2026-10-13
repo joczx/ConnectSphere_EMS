@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useFeedback } from '../components/FeedbackProvider';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import { useAuth } from '../auth/AuthContext';
 import { statusLabel } from '../services/venueBookings';
@@ -73,10 +74,12 @@ function saved(event, field) {
 }
 
 export default function Events() {
+  const { confirm, notify } = useFeedback();
   const { api, token } = useAuth();
   const { eventId } = useParams();
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
+  const manualRefresh = useRef(false);
   const [form, setForm] = useState({
     equipment_type: '',
     quantity: 1,
@@ -87,7 +90,6 @@ export default function Events() {
   const [coordinatorChoices, setCoordinatorChoices] = useState([]);
   const [reassignForm, setReassignForm] = useState({ open: false, value: '', busy: false, error: '', message: '' });
   const [edit, setEdit] = useState({ open: false, values: null, busy: false, error: '', details: null, message: '' });
-  const [warning, setWarning] = useState(null);
   const [lifecycle, setLifecycle] = useState({ busy: false, error: '', message: '' });
   // `allowed`: whether this viewer takes part in venue booking at all.
   // `canRequest`: whether they may request one (coordinators, not staff).
@@ -96,13 +98,17 @@ export default function Events() {
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
+      const showFeedback = manualRefresh.current;
+      manualRefresh.current = false;
       setState((current) => ({ ...current, loading: true, error: null }));
       try {
         const path = '/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : '');
         await api('/api/events/status-refresh', { method: 'POST', body: {}, signal: controller.signal });
-        const data = await api(path, { cache: 'no-store', signal: controller.signal });
+        const data = await api(path, { cache: 'no-store', signal: controller.signal,
+          feedback: showFeedback, successMessage: 'Event information refreshed.' });
         if (!controller.signal.aborted) setState((current) => ({ ...current, data, key: eventId, loading: false, error: null }));
       } catch (err) {
+        if (showFeedback && !controller.signal.aborted) notify(err.message || 'Unable to refresh event information.', 'error');
         if (!controller.signal.aborted) setState((current) => ({ ...current, loading: false, error: err.message || 'Unable to load event information.' }));
       }
     }
@@ -111,7 +117,7 @@ export default function Events() {
     const timer = setInterval(reload, 60000);
     window.addEventListener('focus', reload);
     return () => { controller.abort(); clearInterval(timer); window.removeEventListener('focus', reload); };
-  }, [api, eventId, refresh]);
+  }, [api, eventId, refresh, notify]);
 
   useEffect(() => {
     if (!eventId) return;
@@ -204,7 +210,7 @@ export default function Events() {
     && [event.event_coordinator_id, event.event_organiser_id].includes(viewerId);
 
   async function updateLifecycle(action, ready) {
-    if (action === 'cancel' && !window.confirm('Cancel this event? This cannot be undone.')) return;
+    if (action === 'cancel' && !(await confirm('Cancel this event? This cannot be undone.', { title: 'Cancel event', confirmLabel: 'Cancel event', destructive: true }))) return;
     setLifecycle({ busy: true, error: '', message: '' });
     try {
       const result = await api(`/api/events/${encodeURIComponent(eventId)}/${action}`, {
@@ -284,14 +290,13 @@ export default function Events() {
     // The version being edited. Sent back on save so the server can refuse
     // rather than overwrite if someone else has saved in the meantime.
     setEdit({ open: true, values: formFrom(event), base: event.updated_at, busy: false, error: '', details: null, message: '' });
-    setWarning(null);
   }
 
   // "The system discards all pending edits and status if the user clicks
   // Cancel" - from the warning modal and from the form alike.
   function discardEdits() {
+    notify('Your unsaved event changes have been discarded.', 'info');
     setEdit({ open: false, values: null, busy: false, error: '', details: null, message: '' });
-    setWarning(null);
   }
 
   const setField = (name, value) => setEdit(current => ({ ...current, values: { ...current.values, [name]: value } }));
@@ -303,21 +308,22 @@ export default function Events() {
         method: 'PATCH',
         body: { ...body, expected_updated_at: edit.base, ...(confirmCritical ? { confirm_critical: true } : {}) },
       });
-      setWarning(null);
       setEdit({ open: false, values: null, busy: false, error: '', details: null, message: result.message || 'Event information updated.' });
       setRefresh(value => value + 1);
     } catch (err) {
       // The server refuses a critical change until it is confirmed, and names
       // the fields so the warning can list them.
       if (err.data?.critical_fields) {
-        setWarning({ fields: err.data.critical_fields, body });
         setEdit(current => ({ ...current, busy: false }));
+        const accepted = await confirm(`You changed ${err.data.critical_fields.join(', ')}. These changes may affect existing venue bookings and equipment reservations and will be recorded as a Critical Edit. Review the arrangements after saving.`,
+          { title: 'Confirm changes to existing arrangements', confirmLabel: 'Confirm and save', cancelLabel: 'Discard changes' });
+        if (accepted) await save(body, true);
+        else discardEdits();
         return;
       }
       // Someone else saved first. Their version is loaded so it can be read
       // before deciding what to do; the edits are kept in the form meanwhile.
       if (err.data?.stale) {
-        setWarning(null);
         setEdit(current => ({ ...current, busy: false, error: err.message, details: null }));
         setRefresh(value => value + 1);
         return;
@@ -330,6 +336,7 @@ export default function Events() {
     submitEvent.preventDefault();
     const body = changedFields(event, edit.values);
     if (!Object.keys(body).length) {
+      notify('Nothing has been changed yet.', 'info');
       setEdit(current => ({ ...current, error: 'Nothing has been changed yet.' }));
       return;
     }
@@ -341,7 +348,7 @@ export default function Events() {
     <main className="container">
       {eventId && <Link to="/events">← My events</Link>}
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{eventId ? 'Event information' : 'My events'}</h1></div>
-        <button className="secondary" onClick={() => setRefresh(value => value + 1)} disabled={state.loading}>Refresh</button></div>
+        <button className="secondary" onClick={() => { manualRefresh.current = true; setRefresh(value => value + 1); }} disabled={state.loading}>Refresh</button></div>
       <p>All times are in Singapore time (SGT). Information refreshes every minute and when you return to this window.</p>
       {state.loading && <p role="status">Loading latest information…</p>}
       {state.error && <div role="alert" className="panel error">{state.error} Use Refresh to try again.</div>}
@@ -435,16 +442,6 @@ export default function Events() {
         </form>}
       </article>}
 
-      {warning && <div role="alertdialog" aria-modal="true" aria-labelledby="critical-heading" className="panel" style={{ border: '2px solid currentColor', marginTop: '16px' }}>
-        <h2 id="critical-heading">Confirm changes to existing arrangements</h2>
-        <p>You have changed information that other arrangements may already depend on:</p>
-        <ul>{warning.fields.map(field => <li key={field}>{field}</li>)}</ul>
-        <p>Venue bookings and equipment reservations made for this event may no longer be suitable. Please review the impact before saving. This will be recorded as a Critical Edit in the Activity History.</p>
-        <div className="heading">
-          <button type="button" className="secondary" onClick={discardEdits} disabled={edit.busy}>Cancel</button>
-          <button type="button" onClick={() => save(warning.body, true)} disabled={edit.busy}>{edit.busy ? 'Saving…' : 'Confirm and save'}</button>
-        </div>
-      </div>}
 
       {eventId && event && venue.allowed && <section className="panel" style={{ marginTop: '24px' }}>
         <h2>Venue</h2>

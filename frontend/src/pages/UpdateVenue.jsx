@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useFeedback } from '../components/FeedbackProvider';
 import VenueForm from '../components/VenueForm';
 import { useAuth } from '../auth/AuthContext';
 import { changedVenueFields, venuePayloadFromForm } from '../services/venueForm';
@@ -23,6 +24,7 @@ function removeDraft(venueId) {
 }
 
 export default function UpdateVenue() {
+  const { notify } = useFeedback();
   const { venueId } = useParams();
   const { api } = useAuth();
   const navigate = useNavigate();
@@ -59,8 +61,10 @@ export default function UpdateVenue() {
     const values = venuePayloadFromForm(data);
     try {
       localStorage.setItem(draftKey(venueId), JSON.stringify({ version: state.venue.version, values }));
+      notify('Your venue draft has been saved on this device.', 'success', 'Draft saved');
       setState(current => ({ ...current, values, notice: 'Draft saved on this device. You can return to finish it later.', error: '', errors: {} }));
     } catch {
+      notify('The draft could not be saved on this device. Please try again.', 'error');
       setState(current => ({ ...current, error: 'The draft could not be saved on this device. Please try again.', errors: {} }));
     }
   }
@@ -70,6 +74,7 @@ export default function UpdateVenue() {
     const values = venuePayloadFromForm(new FormData(event.currentTarget));
     const changes = changedVenueFields(state.venue, values);
     if (Object.keys(changes).length === 0) {
+      notify('Change at least one venue field before updating.', 'info', 'No changes to save');
       setState(current => ({ ...current, error: 'Change at least one venue field before updating.', errors: {} }));
       return;
     }
