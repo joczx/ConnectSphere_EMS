@@ -126,7 +126,7 @@ def test_a_non_object_body_is_rejected():
 
 # AC: The system records the outcome of the review.
 def test_approving_moves_the_request_into_planning():
-    """An approved event is one whose arrangements are now being planned."""
+    """Approval starts planning; it is a review outcome, not a status."""
     assert review.OUTCOME_TO_STATUS["approved"] == request_schema.STATUS_PLANNING
 
 

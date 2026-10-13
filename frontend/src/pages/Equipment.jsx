@@ -99,7 +99,7 @@ export default function Equipment() {
     <Navbar />
     <main className="container">
       <Link to="/home">Home</Link>
-      <div className="heading"><div><p className="eyebrow">EQUIPMENT</p><h1>Reserve equipment</h1></div>
+      <div className="heading"><div><p className="eyebrow">EQUIPMENT</p><h1>Equipment</h1></div>
         <button className="secondary" disabled={loading} onClick={() => setRefresh(value => value + 1)}>Refresh</button></div>
       <ReserveEquipment onReserved={() => setReservationsRefresh(value => value + 1)} />
       <p>View your events and review equipment requests submitted by your account.</p>

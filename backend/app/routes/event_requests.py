@@ -20,7 +20,9 @@ from app.services.event_request_workflow import (
     list_amendments,
     send_for_review,
 )
-from app.services.event_store import authenticated_user
+from app.services.event_store import authenticated_user, StoreError
+from app.services.event_status_service import lifecycle_call
+from app.services.event_service import EventError
 
 event_requests_bp = Blueprint(
     "event_requests", __name__, url_prefix="/api/event-requests"
@@ -37,6 +39,28 @@ MESSAGES = {
 @event_requests_bp.errorhandler(EventRequestError)
 def handle_event_request_error(error):
     return jsonify(error.to_dict()), error.status_code
+
+
+@event_requests_bp.after_request
+def prevent_caching(response):
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@event_requests_bp.errorhandler(StoreError)
+def handle_store_error(error):
+    return jsonify(error.to_dict()), error.status
+
+
+@event_requests_bp.errorhandler(EventError)
+def handle_lifecycle_error(error):
+    return jsonify(error.to_dict()), error.status
+
+
+@event_requests_bp.post('/<int:event_request_id>/cancel')
+def cancel(event_request_id):
+    token, _ = authenticated_user()
+    return jsonify(lifecycle_call('cancel_event_request', token, {'p_request_id': event_request_id}))
 
 
 @event_requests_bp.post("")

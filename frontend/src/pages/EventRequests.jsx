@@ -22,6 +22,13 @@ export default function EventRequests() {
     } catch (err) { setState(current => ({ ...current, error: err.message })); }
   }
   const requests = state.requests || [];
+  async function cancel(item) {
+    if (!window.confirm(`Cancel "${item.event_name || 'Untitled request'}"? This cannot be undone.`)) return;
+    try {
+      const result = await eventRequestsApi(api, '/' + item.event_request_id + '/cancel', { method: 'POST', body: {} });
+      setState(current => ({ ...current, requests: current.requests.map(r => r.event_request_id === item.event_request_id ? result.event_request : r) }));
+    } catch (err) { setState(current => ({ ...current, error: err.message })); }
+  }
   const section = (title, items) => items.length > 0 && <section>
     <h2>{title}</h2>
     <div className="event-list">{items.map(item => <div className="request-card" key={item.event_request_id}>
@@ -30,6 +37,7 @@ export default function EventRequests() {
         <p className="metadata">Status: {humanise(item.status)}</p>
         <span>{item.status === 'draft' ? 'Continue editing →' : item.status === 'rejected' ? 'Amend and resubmit →' : 'View request →'}</span>
       </Link>
+      {['draft', 'submitted', 'rejected'].includes(item.status) && <button type="button" className="secondary" onClick={() => cancel(item)}>Cancel request</button>}
       {item.status === 'draft' && <button className="delete-draft" title="Delete draft" aria-label={`Delete draft ${item.event_name || 'Untitled request'}`} onClick={() => remove(item)}>−</button>}
     </div>)}</div>
   </section>;

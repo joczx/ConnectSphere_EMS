@@ -1,7 +1,7 @@
 """Review and Approve Event Request user-story tests.
 
 Schema tests check validation and mappings; HTTP tests check routes/services
-with mocked Supabase. Two strict expected failures document known AC5/AC6 gaps.
+with mocked Supabase. One strict expected failure documents the known AC6 gap.
 Browser rendering and live database delivery require separate acceptance checks.
 """
 from unittest.mock import Mock, patch
@@ -24,7 +24,7 @@ COORDINATOR = '3f1b9c64-7a2e-4d51-9b0f-2c8e5a6d4f10'
 @pytest.mark.parametrize("outcome", sorted(review.OUTCOMES))
 def test_each_outcome_is_accepted(outcome):
     record, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": outcome, "comments": "Looks reasonable."}
+        {"outcome": outcome, "comments": "Looks reasonable."}, COORDINATOR
     )
 
     assert errors == {}
@@ -33,13 +33,13 @@ def test_each_outcome_is_accepted(outcome):
 
 
 def test_an_unknown_outcome_is_rejected():
-    _, errors = review.parse_payload({"reviewer_id": COORDINATOR, "outcome": "maybe"})
+    _, errors = review.parse_payload({"outcome": "maybe"}, COORDINATOR)
 
     assert "outcome" in errors
 
 
 def test_an_outcome_is_required():
-    _, errors = review.parse_payload({"reviewer_id": COORDINATOR})
+    _, errors = review.parse_payload({}, COORDINATOR)
 
     assert "outcome" in errors
 
@@ -51,7 +51,7 @@ def test_a_reviewer_is_required():
 
 
 def test_the_reviewer_must_be_a_user_id():
-    _, errors = review.parse_payload({"reviewer_id": "seven", "outcome": "approved"})
+    _, errors = review.parse_payload({"outcome": "approved"}, "seven")
 
     assert "reviewer_id" in errors
 
@@ -59,7 +59,7 @@ def test_the_reviewer_must_be_a_user_id():
 # AC: The Event Coordinator can add comments along with the outcome.
 def test_comments_are_kept_with_the_outcome():
     record, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": "approved", "comments": "  Approved for Hall A. "}
+        {"outcome": "approved", "comments": "  Approved for Hall A. "}, COORDINATOR
     )
 
     assert errors == {}
@@ -67,7 +67,7 @@ def test_comments_are_kept_with_the_outcome():
 
 
 def test_approving_without_a_comment_is_allowed():
-    record, errors = review.parse_payload({"reviewer_id": COORDINATOR, "outcome": "approved"})
+    record, errors = review.parse_payload({"outcome": "approved"}, COORDINATOR)
 
     assert errors == {}
     assert record["comments"] is None
@@ -76,7 +76,7 @@ def test_approving_without_a_comment_is_allowed():
 @pytest.mark.parametrize("outcome", sorted(review.OUTCOMES_NEEDING_COMMENTS))
 def test_a_reason_is_required_when_not_approving(outcome):
     """An Organiser told "rejected" with no reason has nothing to act on."""
-    _, errors = review.parse_payload({"reviewer_id": COORDINATOR, "outcome": outcome})
+    _, errors = review.parse_payload({"outcome": outcome}, COORDINATOR)
 
     assert "comments" in errors
 
@@ -84,7 +84,7 @@ def test_a_reason_is_required_when_not_approving(outcome):
 @pytest.mark.parametrize("outcome", sorted(review.OUTCOMES_NEEDING_COMMENTS))
 def test_a_blank_reason_does_not_count(outcome):
     _, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": outcome, "comments": "   "}
+        {"outcome": outcome, "comments": "   "}, COORDINATOR
     )
 
     assert "comments" in errors
@@ -92,7 +92,7 @@ def test_a_blank_reason_does_not_count(outcome):
 
 def test_comments_must_be_text():
     _, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": "approved", "comments": 42}
+        {"outcome": "approved", "comments": 42}, COORDINATOR
     )
 
     assert "comments" in errors
@@ -100,7 +100,7 @@ def test_comments_must_be_text():
 
 def test_unknown_fields_are_rejected():
     _, errors = review.parse_payload(
-        {"reviewer_id": COORDINATOR, "outcome": "approved", "decision": "yes"}
+        {"outcome": "approved", "decision": "yes"}, COORDINATOR
     )
 
     assert "_body" in errors
@@ -114,7 +114,6 @@ def test_a_non_object_body_is_rejected():
 
 # AC: The system records the outcome of the review.
 def test_approving_moves_the_request_into_planning():
-    """An approved event is one whose arrangements are now being planned."""
     assert review.OUTCOME_TO_STATUS["approved"] == request_schema.STATUS_PLANNING
 
 
@@ -182,7 +181,8 @@ def review_http():
     table.execute.return_value.data = []
     with patch.object(db, 'get_supabase', return_value=database), \
          patch.object(review_service, 'get_supabase', return_value=database), \
-         patch('app.routes.notifications.get_supabase', return_value=database):
+         patch('app.routes.notifications.get_supabase', return_value=database), \
+         patch('app.routes.event_requests.authenticated_user', return_value=('user-token', COORDINATOR)):
         yield app.test_client(), table
 
 
@@ -209,9 +209,9 @@ def test_ac2_http_returns_every_event_detail_and_requirement(review_http):
 @pytest.mark.parametrize('outcome', ['approved', 'rejected'])
 def test_ac3_ac4_ac5_ac6_review_persists_decision_and_notifies_organiser(review_http, outcome):
     http, table = review_http
-    old = {**valid_payload(), 'event_request_id': 42, 'status': 'submitted'}
-    payload = {'reviewer_id': COORDINATOR, 'outcome': outcome, 'comments': 'Reduce attendance.'}
-    recorded = {**payload, 'review_id': 7, 'event_request_id': 42, 'created_at': '2026-10-05T00:00:00Z'}
+    old = {**valid_payload(), 'event_request_id': 42, 'status': 'submitted', 'event_coordinator_id': COORDINATOR}
+    payload = {'outcome': outcome, 'comments': 'Reduce attendance.'}
+    recorded = {**payload, 'reviewer_id': COORDINATOR, 'review_id': 7, 'event_request_id': 42, 'created_at': '2026-10-05T00:00:00Z'}
     updated = {**old, 'status': review.OUTCOME_TO_STATUS[outcome]}
     def execute():
         if table.execute.call_count <= 3:
@@ -223,7 +223,7 @@ def test_ac3_ac4_ac5_ac6_review_persists_decision_and_notifies_organiser(review_
     assert response.json['event_request'] == updated
     assert response.json['review'] == recorded
     assert ('approved' if outcome == 'approved' else 'rejected') in response.json['message']
-    assert table.insert.call_args_list[0].args[0] == {**payload, 'event_request_id': 42}
+    assert table.insert.call_args_list[0].args[0] == {**payload, 'reviewer_id': COORDINATOR, 'event_request_id': 42}
     assert table.update.call_args.args[0]['status'] == updated['status']
     assert table.update.call_args.args[0]['updated_at']
     notification = next(n for n in table.insert.call_args.args[0] if n['recipient_id'] == old['event_organiser_id'])
@@ -245,7 +245,7 @@ def test_ac3_ac4_ac5_ac6_review_persists_decision_and_notifies_organiser(review_
 def test_ac4_rejection_requires_reason_before_any_write(review_http, comments):
     http, table = review_http
     response = http.post('/api/event-requests/42/review', json={
-        'reviewer_id': COORDINATOR, 'outcome': 'rejected', 'comments': comments})
+        'outcome': 'rejected', 'comments': comments})
     assert response.status_code == 400
     assert 'comments' in response.json['errors']
     table.execute.assert_not_called()
@@ -253,29 +253,28 @@ def test_ac4_rejection_requires_reason_before_any_write(review_http, comments):
 
 def test_ac5_failed_review_insert_has_error_and_no_confirmation(review_http):
     http, table = review_http
-    table.execute.side_effect = [Mock(data=[{'status': 'submitted'}]), Mock(data=[])]
-    response = http.post('/api/event-requests/42/review', json={'reviewer_id': COORDINATOR, 'outcome': 'approved'})
+    table.execute.side_effect = [Mock(data=[{'status': 'submitted', 'event_coordinator_id': COORDINATOR}]), Mock(data=[])]
+    response = http.post('/api/event-requests/42/review', json={'outcome': 'approved'})
     assert response.status_code == 502
     assert 'error' in response.json and 'message' not in response.json
     table.update.assert_not_called()
 
 
-@pytest.mark.xfail(strict=True, reason='AC5 gap: empty status update returns success with unchanged status.')
 def test_ac5_empty_status_update_must_not_confirm_success(review_http):
     http, table = review_http
-    old = {'event_request_id': 42, 'status': 'submitted'}
+    old = {'event_request_id': 42, 'status': 'submitted', 'event_coordinator_id': COORDINATOR}
     table.execute.side_effect = [Mock(data=[old]), Mock(data=[{'outcome': 'approved'}]), Mock(data=[]), Mock(data=[])]
-    response = http.post('/api/event-requests/42/review', json={'reviewer_id': COORDINATOR, 'outcome': 'approved'})
-    assert response.status_code == 502
+    response = http.post('/api/event-requests/42/review', json={'outcome': 'approved'})
+    assert response.status_code == 409
     assert 'message' not in response.json
 
 
 @pytest.mark.xfail(strict=True, reason='AC6 gap: confirmation claims delivery when notification storage fails.')
 def test_ac6_failed_notification_must_not_claim_organiser_was_notified(review_http):
     http, table = review_http
-    table.execute.side_effect = [Mock(data=[{'status': 'submitted'}]), Mock(data=[{'outcome': 'approved'}]),
+    table.execute.side_effect = [Mock(data=[{'status': 'submitted', 'event_coordinator_id': COORDINATOR}]), Mock(data=[{'outcome': 'approved'}]),
         Mock(data=[{'event_request_id': 42, 'status': review.OUTCOME_TO_STATUS['approved']}]), RuntimeError('offline')]
-    response = http.post('/api/event-requests/42/review', json={'reviewer_id': COORDINATOR, 'outcome': 'approved'})
+    response = http.post('/api/event-requests/42/review', json={'outcome': 'approved'})
     assert response.status_code == 200
     assert response.json['event_request']['status'] == review.OUTCOME_TO_STATUS['approved']
     assert response.json['notified'] == []

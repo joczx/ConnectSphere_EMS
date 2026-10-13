@@ -15,13 +15,9 @@ OUTCOME_CLARIFICATION = "clarification_requested"
 OUTCOMES = frozenset({OUTCOME_APPROVED, OUTCOME_REJECTED, OUTCOME_CLARIFICATION})
 
 # What the request's status becomes once the outcome is recorded. Approving
-# moves it straight into planning: the customer described "approved" and
-# "planning (approved event)" as the same state seen from two angles.
-#
-# Requesting clarification deliberately leaves the request where it is. The
-# customer confirmed clarification "can be a sub-state of under_review" rather
-# than a status of its own, and with under_review retired that sub-state is
-# derived from the latest review row against a still-submitted request.
+# moves the request into Planning; a database trigger creates its event.
+# Requesting clarification leaves it Submitted, with the latest review
+# recording the question. Under Review is not a separate lifecycle status.
 OUTCOME_TO_STATUS = {
     OUTCOME_APPROVED: request_schema.STATUS_PLANNING,
     OUTCOME_REJECTED: request_schema.STATUS_REJECTED,

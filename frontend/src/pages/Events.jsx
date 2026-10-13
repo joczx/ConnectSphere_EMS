@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import { useAuth } from '../auth/AuthContext';
 import { statusLabel } from '../services/venueBookings';
+import { userId } from '../services/eventRequests';
 import {
   FACILITIES, LAYOUTS,
   display, label, toInput, toIso, toItems, toLines,
@@ -72,7 +73,7 @@ function saved(event, field) {
 }
 
 export default function Events() {
-  const { api } = useAuth();
+  const { api, token } = useAuth();
   const { eventId } = useParams();
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
@@ -87,6 +88,7 @@ export default function Events() {
   const [reassignForm, setReassignForm] = useState({ open: false, value: '', busy: false, error: '', message: '' });
   const [edit, setEdit] = useState({ open: false, values: null, busy: false, error: '', details: null, message: '' });
   const [warning, setWarning] = useState(null);
+  const [lifecycle, setLifecycle] = useState({ busy: false, error: '', message: '' });
   // `allowed`: whether this viewer takes part in venue booking at all.
   // `canRequest`: whether they may request one (coordinators, not staff).
   const [venue, setVenue] = useState({ assigned: null, bookings: [], error: '', allowed: true, canRequest: false });
@@ -97,6 +99,7 @@ export default function Events() {
       setState((current) => ({ ...current, loading: true, error: null }));
       try {
         const path = '/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : '');
+        await api('/api/events/status-refresh', { method: 'POST', body: {}, signal: controller.signal });
         const data = await api(path, { cache: 'no-store', signal: controller.signal });
         if (!controller.signal.aborted) setState((current) => ({ ...current, data, key: eventId, loading: false, error: null }));
       } catch (err) {
@@ -195,6 +198,27 @@ export default function Events() {
   const equipmentRequests = state.equipment || [];
   const activity = state.activity || [];
   const editable = event?.status === 'planning';
+  const viewerId = token ? userId(token) : null;
+  const isCoordinator = !!event && viewerId === event.event_coordinator_id;
+  const canCancel = !!event && ['planning', 'confirmed'].includes(event.status)
+    && [event.event_coordinator_id, event.event_organiser_id].includes(viewerId);
+
+  async function updateLifecycle(action, ready) {
+    if (action === 'cancel' && !window.confirm('Cancel this event? This cannot be undone.')) return;
+    setLifecycle({ busy: true, error: '', message: '' });
+    try {
+      const result = await api(`/api/events/${encodeURIComponent(eventId)}/${action}`, {
+        method: action === 'cancel' ? 'POST' : 'PATCH',
+        body: action === 'cancel' ? {} : { ready },
+      });
+      setState(current => ({ ...current, data: { ...current.data, event: result.event } }));
+      setLifecycle({ busy: false, error: '', message: action === 'cancel'
+        ? 'Event cancelled.' : `Registration readiness saved. Event status: ${label(result.event.status)}.` });
+      setRefresh(value => value + 1);
+    } catch (error) {
+      setLifecycle({ busy: false, error: error.message || 'Unable to update the event.', message: '' });
+    }
+  }
   const approvedVenues = venue.bookings
     .filter(booking => booking.status === 'approved')
     .map(booking => booking.venue_name);
@@ -335,6 +359,18 @@ export default function Events() {
           </div>
         </div>
         {edit.message && <div className="success" style={{ marginBottom: '12px' }} role="status">{edit.message}</div>}
+        {lifecycle.error && <p role="alert" className="error">{lifecycle.error}</p>}
+        {lifecycle.message && <p role="status" className="success">{lifecycle.message}</p>}
+        {event.registration_needs && <div style={{ marginBottom: '16px' }}>
+          <p>Registration arrangements: {event.registration_ready ? 'Ready' : 'Awaiting coordinator confirmation'}</p>
+          {isCoordinator && ['planning', 'confirmed'].includes(event.status) && <label>
+            <input type="checkbox" checked={!!event.registration_ready} disabled={lifecycle.busy}
+              onChange={e => updateLifecycle('registration-readiness', e.target.checked)} />
+            Registration arrangements are ready
+          </label>}
+        </div>}
+        {canCancel && <button type="button" className="secondary" disabled={lifecycle.busy}
+          onClick={() => updateLifecycle('cancel')}>Cancel event</button>}
         {!editable && <p className="metadata">This event is {event.status}. Details can only be changed during planning.</p>}
         {reassignForm.message && <div className="success" style={{ marginBottom: '12px' }}>{reassignForm.message}</div>}
         {reassignForm.error && <div className="error" style={{ marginBottom: '12px' }}>{reassignForm.error}</div>}
@@ -495,9 +531,9 @@ export default function Events() {
         {state.activityError && <div role="alert" className="error">{state.activityError} Use Refresh to try again.</div>}
         {!state.activityError && activity.length === 0 ? <p>No changes have been recorded for this event yet.</p> : activity.length > 0 && <dl>
           {activity.map(entry => <div key={entry.activity_id}>
-            <dt>{entry.change_type === 'critical_edit' ? 'Critical Edit' : 'Edit'} — {date(entry.created_at)}</dt>
+            <dt>{entry.change_type === 'status_change' ? 'Status Change' : entry.change_type === 'critical_edit' ? 'Critical Edit' : 'Edit'} — {date(entry.created_at)}</dt>
             <dd>
-              {userNames[entry.changed_by] || (entry.changed_by ? entry.changed_by.slice(0, 8) : 'Unknown user')}
+              {userNames[entry.changed_by] || (entry.changed_by ? entry.changed_by.slice(0, 8) : 'System')}
               <ul>{Object.entries(entry.changes || {}).map(([field, change]) => <li key={field}>
                 {label(field)}: {display(field, change.from)} → {display(field, change.to)}
               </li>)}</ul>

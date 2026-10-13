@@ -23,10 +23,11 @@ import VenueDetails from './pages/VenueDetails';
 import CreateVenue from './pages/CreateVenue';
 import UpdateVenue from './pages/UpdateVenue';
 import DeleteVenue from './pages/DeleteVenue';
+import AppShell from './components/AppShell';
 
 export default function App() {
   const { token } = useAuth();
-  const protectedView = (element) => token ? element : <Navigate to="/" replace />;
+  const protectedView = (element) => token ? <AppShell>{element}</AppShell> : <Navigate to="/" replace />;
 
   return <HashRouter><Routes>
     <Route path="/" element={token ? <Navigate to="/home" replace /> : <Login />} />

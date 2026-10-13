@@ -10,16 +10,35 @@ export default function ReserveEquipment({ onReserved }) {
   const [quantity, setQuantity] = useState('1');
   const [state, setState] = useState({ loadingEvents: true, equipment: [] });
   const [refresh, setRefresh] = useState(0);
+  const [access, setAccess] = useState({ loading: true, allowed: false });
   const saving = useRef(false);
   const generation = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
-    api('/api/equipment/reservable-events', { signal: controller.signal, cache: 'no-store' })
-      .then(data => { if (!controller.signal.aborted) { setEvents(data.events); setState(s => ({ ...s, loadingEvents: false })); } })
-      .catch(err => { if (!controller.signal.aborted) setState(s => ({ ...s, loadingEvents: false, error: err.message })); });
+    api('/api/users/me', { signal: controller.signal, cache: 'no-store' })
+      .then(data => {
+        if (controller.signal.aborted) return;
+        const allowed = (data.user?.roles || []).some(role =>
+          ['technical support staff', 'technical support'].includes(role.trim().replaceAll('_', ' ').toLowerCase()));
+        setAccess({ loading: false, allowed });
+      })
+      .catch(err => { if (!controller.signal.aborted) setAccess({ loading: false, allowed: false, error: err.message }); });
     return () => controller.abort();
   }, [api]);
+
+  useEffect(() => {
+    if (!access.allowed) return;
+    const controller = new AbortController();
+    api('/api/equipment/reservable-events', { signal: controller.signal, cache: 'no-store' })
+      .then(data => { if (!controller.signal.aborted) { setEvents(data.events); setState(s => ({ ...s, loadingEvents: false })); } })
+      .catch(err => {
+        if (controller.signal.aborted) return;
+        if (err.status === 403) setAccess({ loading: false, allowed: false });
+        else setState(s => ({ ...s, loadingEvents: false, error: err.message }));
+      });
+    return () => controller.abort();
+  }, [api, access.allowed]);
 
   useEffect(() => {
     if (!eventId) return;
@@ -62,9 +81,13 @@ export default function ReserveEquipment({ onReserved }) {
     }
   }
 
+  if (access.loading) return <p role="status">Checking reservation access...</p>;
+  if (access.error) return <p role="alert" className="error">{access.error}</p>;
+  if (!access.allowed) return null;
+
   return <section className="panel" aria-labelledby="reserve-heading">
     <h2 id="reserve-heading">Reserve available equipment</h2>
-    <p>Select an event assigned to you. Availability uses the event dates and existing overlapping reservations.</p>
+    <p>Technical Support Staff can reserve equipment for events assigned to them. Availability uses the event dates and existing overlapping reservations.</p>
     <Link to="/equipment-availability">Check equipment availability for other dates</Link>
     {state.loadingEvents && <p role="status">Loading assigned events...</p>}
     {!state.loadingEvents && !events.length && !state.error && <p>No events are assigned to you for technical support.</p>}

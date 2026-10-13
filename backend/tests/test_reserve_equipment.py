@@ -48,3 +48,12 @@ def test_database_stock_or_assignment_rejection_is_displayed(client, status, mes
 def test_login_required(client):
     assert client.get('/api/equipment/reservable-events').status_code == 401
     assert client.post('/api/equipment/reservations', json={}).status_code == 401
+
+
+def test_nontechnical_staff_cannot_list_reservable_events(client):
+    with patch('app.routes.equipment.authenticated_token', return_value='organiser-token'), \
+         patch('app.routes.equipment.supabase_request', return_value={
+             'error': 'Only Technical Support Staff can reserve equipment.', 'status': 403}):
+        response = client.get('/api/equipment/reservable-events')
+    assert response.status_code == 403
+    assert 'events' not in response.json

@@ -14,7 +14,8 @@ no reservation. Non-overlapping events reuse the stock.
 
 One direct reservation per event/model is allowed. Users change its quantity in
 the existing reservation-management UI. Request-linked reservations remain
-separate. Assignment in `events.technical_support_id` is the authorization rule;
+separate. Both the Technical Support Staff role and assignment in
+`events.technical_support_id` are required to create a direct reservation;
 an Organiser who is not assigned technical support cannot create a direct
 reservation after this migration. Request-review workflows are unchanged.
 
@@ -24,6 +25,10 @@ Apply `supabase/022_reserve_available_equipment.sql` after the equipment migrati
 010 through 016, before deploying the application. It enables the assigned-event
 RPC and updates reservation/availability functions. No production Supabase
 database is changed by editing this repository.
+
+Then apply `supabase/032_technical_support_reservations.sql` to enforce the role
+requirement. The reservation form is hidden from other roles; the database
+also refuses direct RPC calls and keeps the underlying allocator private.
 
 ## AC tests
 
