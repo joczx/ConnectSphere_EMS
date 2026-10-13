@@ -244,6 +244,9 @@ def _translate(exc, action):
     if code == "22P02":
         return EventRequestError(f"Some details are not in the expected format: {detail}")
 
+    if code == "23514":
+        return EventRequestError("The request cannot advance until its required conditions are met.", status_code=409)
+
     # 23503: foreign key violation, i.e. the organiser is not a known user.
     if code == "23503":
         return EventRequestError(

@@ -1,11 +1,14 @@
+import RequiredIndicator from './RequiredIndicator';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useFeedback } from './FeedbackProvider';
 
 const date = value => new Intl.DateTimeFormat('en-SG', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Singapore',
 }).format(new Date(value));
 
 export default function EquipmentReservations({ refresh, onChanged, eventId = '' }) {
+  const { notify, confirm } = useFeedback();
   const { api } = useAuth();
   const [rows, setRows] = useState([]);
   const [quantity, setQuantity] = useState('');
@@ -14,7 +17,6 @@ export default function EquipmentReservations({ refresh, onChanged, eventId = ''
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [confirmId, setConfirmId] = useState(null);
   const [reload, setReload] = useState(0);
 
   const reservationsApi = useCallback((path = '', options = {}) => (
@@ -23,7 +25,6 @@ export default function EquipmentReservations({ refresh, onChanged, eventId = ''
 
   useEffect(() => {
     setEditing(null);
-    setConfirmId(null);
     setError('');
     setMessage('');
   }, [eventId]);
@@ -33,7 +34,6 @@ export default function EquipmentReservations({ refresh, onChanged, eventId = ''
     setLoading(true);
     setError('');
     setEditing(null);
-    setConfirmId(null);
     reservationsApi('', { signal: controller.signal }).then(result => {
       if (!controller.signal.aborted) setRows(result.reservations);
     }).catch(err => {
@@ -46,8 +46,11 @@ export default function EquipmentReservations({ refresh, onChanged, eventId = ''
 
   async function change(row, cancel = false) {
     if (busy) return;
+    if (cancel && !(await confirm(`Cancel all ${row.quantity} units of ${row.name} for ${row.event_name}?`,
+      { title: 'Cancel equipment reservation', confirmLabel: 'Cancel reservation', destructive: true }))) return;
     const amount = Number(quantity);
     if (!cancel && (!Number.isInteger(amount) || amount < 1 || amount > 2147483647)) {
+      notify('Quantity must be a positive whole number.', 'error', 'Check reservation quantity');
       setError('Quantity must be a positive whole number.');
       return;
     }
@@ -59,7 +62,6 @@ export default function EquipmentReservations({ refresh, onChanged, eventId = ''
         method: cancel ? 'DELETE' : 'PATCH',
         ...(!cancel && { body: { quantity: amount } }),
       });
-      setConfirmId(null);
       setEditing(null);
       setMessage(cancel ? `Cancelled ${row.name} for ${row.event_name}.` : `Updated ${row.name} to ${amount} for ${row.event_name}.`);
       onChanged?.(result);
@@ -89,20 +91,15 @@ export default function EquipmentReservations({ refresh, onChanged, eventId = ''
         <p>Reserved quantity: {row.quantity}</p>
         {editing === row.reservation_id ? <form onSubmit={event => { event.preventDefault(); change(row); }}>
           <label>Quantity for {row.name}
-            <input autoFocus type="number" min="1" max="2147483647" step="1" required
+            <RequiredIndicator /><input autoFocus type="number" min="1" max="2147483647" step="1" required
               value={quantity} disabled={busy} onChange={event => setQuantity(event.target.value)} />
           </label>
           <button disabled={busy || Number(quantity) === row.quantity}>{busy ? 'Saving...' : 'Save changes'}</button>
-          <button type="button" className="secondary" disabled={busy} onClick={() => setEditing(null)}>Cancel editing</button>
+          <button type="button" className="secondary" disabled={busy} onClick={() => { setEditing(null); notify('Reservation editing cancelled. No changes were saved.', 'info'); }}>Cancel editing</button>
         </form> : <button type="button" className="secondary" disabled={busy} onClick={() => {
-          setEditing(row.reservation_id); setQuantity(String(row.quantity)); setConfirmId(null); setError(''); setMessage('');
+          setEditing(row.reservation_id); setQuantity(String(row.quantity)); setError(''); setMessage('');
         }}>Edit quantity</button>}
-        <button type="button" className="secondary" disabled={busy} onClick={() => { setConfirmId(row.reservation_id); setEditing(null); }}>Cancel reservation</button>
-        {confirmId === row.reservation_id && <div>
-          <p>Cancel all {row.quantity} units of {row.name} for {row.event_name}?</p>
-          <button type="button" disabled={busy} onClick={() => change(row, true)}>{busy ? 'Cancelling...' : 'Confirm cancellation'}</button>
-          <button type="button" className="secondary" disabled={busy} onClick={() => setConfirmId(null)}>Keep reservation</button>
-        </div>}
+        <button type="button" className="secondary" disabled={busy} onClick={() => change(row, true)}>Cancel reservation</button>
       </article>)}
     </>}
   </section>;

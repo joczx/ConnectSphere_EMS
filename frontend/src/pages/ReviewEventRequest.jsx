@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useFeedback } from '../components/FeedbackProvider';
+import RequiredIndicator from '../components/RequiredIndicator';
 import { useAuth } from '../auth/AuthContext';
 import { eventRequestsApi, humanise } from '../services/eventRequests';
 
@@ -8,6 +10,7 @@ const when = (iso) => iso && new Intl.DateTimeFormat('en-SG', { dateStyle: 'medi
 const list = (items, show) => items?.length ? items.map(show).join(', ') : 'None';
 
 export default function ReviewEventRequest() {
+  const { confirm, notify } = useFeedback();
   const { api } = useAuth();
   const { requestId } = useParams();
   const location = useLocation();
@@ -26,8 +29,13 @@ export default function ReviewEventRequest() {
   async function review(e) {
     e.preventDefault();
     const outcome = e.nativeEvent.submitter.value;
-    if (!window.confirm(`${outcome === 'approved' ? 'Approve' : 'Reject'} this event request? This cannot be changed afterwards.`)) return;
     const comments = new FormData(e.currentTarget).get('comments');
+    if (outcome === 'rejected' && !comments?.trim()) {
+      notify('Enter remarks explaining why this event request is rejected.', 'error', 'Remarks required');
+      setState(current => ({ ...current, error: 'Remarks are required when rejecting an event request.' }));
+      return;
+    }
+    if (!(await confirm(`${outcome === 'approved' ? 'Approve' : 'Reject'} this event request? This cannot be changed afterwards.`, { title: 'Confirm review decision', confirmLabel: outcome === 'approved' ? 'Approve request' : 'Reject request', destructive: outcome === 'rejected' }))) return;
     setState(current => ({ ...current, busy: true, error: null, details: null }));
     try {
       // The reviewer is taken from the signed-in session by the API, not sent
@@ -71,7 +79,7 @@ export default function ReviewEventRequest() {
       {request?.status === 'submitted' && <form className="panel" onSubmit={review}>
         <fieldset disabled={state.busy}>
           {errorBox}
-          <label>Remarks (required when rejecting)<textarea name="comments" rows="4" /></label>
+          <label>Remarks (required when rejecting)<RequiredIndicator title="Required when rejecting" /><textarea name="comments" rows="4" /></label>
           <div className="heading">
             <button type="submit" value="rejected" className="secondary">Reject</button>
             <button type="submit" value="approved">Approve</button>

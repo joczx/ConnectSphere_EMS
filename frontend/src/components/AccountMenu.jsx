@@ -1,29 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useFeedback } from './FeedbackProvider';
 
 export default function AccountMenu() {
-  const { api, session, signOut } = useAuth();
-  const [account, setAccount] = useState({ user: null, error: '' });
+  const { notify } = useFeedback();
+  const { api, session, account, signOut } = useAuth();
   const [notifications, setNotifications] = useState({ items: [], error: '' });
-
-  useEffect(() => {
-    let ignore = false;
-    if (!session?.access_token) {
-      setAccount({ user: null, error: '' });
-      setNotifications({ items: [], error: '' });
-      return () => { ignore = true; };
-    }
-
-    api('/api/users/me', { cache: 'no-store' })
-      .then(data => {
-        if (!ignore) setAccount({ user: data.user, error: '' });
-      })
-      .catch(() => {
-        if (!ignore) setAccount({ user: null, error: 'Unable to load account details.' });
-      });
-
-    return () => { ignore = true; };
-  }, [api, session?.access_token]);
 
   useEffect(() => {
     let ignore = false;
@@ -74,7 +56,7 @@ export default function AccountMenu() {
           </div>
         )}
         {notifications.error && <span role="status">{notifications.error}</span>}
-        <button type="button" className="secondary" onClick={signOut}>
+        <button type="button" className="secondary" onClick={() => { signOut(); notify('You have been signed out.', 'success', 'Signed out'); }}>
           Sign out
         </button>
       </div>

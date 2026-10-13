@@ -1,5 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { hasAccess, rolesForPath } from './access';
 import { readApiResponse } from '../services/http';
+import { useFeedback } from '../components/FeedbackProvider';
+import { actionMessage, shouldNotify } from '../services/actionFeedback';
 
 const AuthContext = createContext(null);
 
@@ -16,6 +19,7 @@ function storedSession() {
 }
 
 export function AuthProvider({ children }) {
+  const { notify } = useFeedback();
   const [session, setSession] = useState(storedSession);
   const sessionRef = useRef(session);
   const refreshPromiseRef = useRef(null);
@@ -85,7 +89,7 @@ export function AuthProvider({ children }) {
   }, [refreshSession, signOut]);
 
   const api = useCallback(async (url, options = {}) => {
-    const { body, headers: suppliedHeaders, ...rest } = options;
+    const { body, headers: suppliedHeaders, feedback, successFeedback, successMessage, ...rest } = options;
     const headers = new Headers(suppliedHeaders);
     let requestBody = body;
 
@@ -98,13 +102,39 @@ export function AuthProvider({ children }) {
       requestBody = JSON.stringify(body);
     }
 
-    const response = await authFetch(url, {
-      ...rest,
-      headers,
-      ...(body !== undefined ? { body: requestBody } : {}),
-    });
-    return readApiResponse(response);
-  }, [authFetch]);
+    try {
+      const response = await authFetch(url, {
+        ...rest,
+        headers,
+        ...(body !== undefined ? { body: requestBody } : {}),
+      });
+      const data = await readApiResponse(response);
+      if (shouldNotify(url, options) && successFeedback !== false && !options.signal?.aborted) {
+        const message = typeof successMessage === 'function' ? successMessage(data)
+          : successMessage || actionMessage(url, (options.method || 'GET').toUpperCase(), data);
+        notify(message);
+      }
+      return data;
+    } catch (error) {
+      if (shouldNotify(url, options) && !options.signal?.aborted && error.name !== 'AbortError' && !error.data?.critical_fields) {
+        notify(error.message || 'Unable to complete this action. Please try again.', 'error');
+      }
+      throw error;
+    }
+  }, [authFetch, notify]);
+
+  const [account, setAccount] = useState({ user: null, loading: true, error: '' });
+  const accountId = session?.user?.id || session?.access_token;
+  useEffect(() => {
+    const controller = new AbortController();
+    setAccount({ user: null, loading: !!accountId, error: '', accountId });
+    if (accountId) api('/api/users/me', { cache: 'no-store', signal: controller.signal })
+      .then(data => { if (!controller.signal.aborted) setAccount({ user: data.user, loading: false, error: '', accountId }); })
+      .catch(error => { if (!controller.signal.aborted) setAccount({ user: null, loading: false, error: error.message, accountId }); });
+    return () => controller.abort();
+  }, [api, accountId]);
+  const accountReady = account.accountId === accountId && !account.loading;
+  const canAccess = useCallback(path => accountReady && !account.error && hasAccess(account.user?.roles, rolesForPath(path)), [account, accountReady]);
 
   const value = useMemo(() => ({
     session,
@@ -113,7 +143,10 @@ export function AuthProvider({ children }) {
     signOut,
     authFetch,
     api,
-  }), [session, saveSession, signOut, authFetch, api]);
+    account,
+    accountReady,
+    canAccess,
+  }), [session, saveSession, signOut, authFetch, api, account, accountReady, canAccess]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

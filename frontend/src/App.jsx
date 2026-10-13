@@ -1,4 +1,4 @@
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -25,10 +25,21 @@ import VenueDetails from './pages/VenueDetails';
 import CreateVenue from './pages/CreateVenue';
 import UpdateVenue from './pages/UpdateVenue';
 import DeleteVenue from './pages/DeleteVenue';
+import AppShell from './components/AppShell';
+
+function ProtectedPage({ children }) {
+  const { token, account, accountReady, canAccess } = useAuth();
+  const { pathname } = useLocation();
+  if (!token) return <Navigate to="/" replace />;
+  if (!accountReady) return <p role="status">Loading your workspace...</p>;
+  if (account.error) return <AppShell><p role="alert">{account.error}</p><button onClick={() => window.location.reload()}>Retry</button></AppShell>;
+  if (pathname !== '/home' && !canAccess(pathname)) return <Navigate to="/home" replace />;
+  return <AppShell>{children}</AppShell>;
+}
 
 export default function App() {
   const { token } = useAuth();
-  const protectedView = (element) => token ? element : <Navigate to="/" replace />;
+  const protectedView = (element) => <ProtectedPage>{element}</ProtectedPage>;
 
   return <HashRouter><Routes>
     <Route path="/" element={token ? <Navigate to="/home" replace /> : <Login />} />

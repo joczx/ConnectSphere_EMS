@@ -1,7 +1,9 @@
+import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext';
+import { useFeedback } from '../components/FeedbackProvider';
 
 const formatDateTime = (value) => {
   if (!value) return 'Not specified';
@@ -13,6 +15,7 @@ const formatDateTime = (value) => {
 };
 
 export default function EquipmentAvailability() {
+  const { notify } = useFeedback();
   const { api } = useAuth();
   const [form, setForm] = useState({
     equipment_type: '',
@@ -44,7 +47,7 @@ export default function EquipmentAvailability() {
         end_datetime: new Date(form.end_datetime).toISOString(),
       });
 
-      const data = await api(`/api/equipment-availability?${params.toString()}`, { cache: 'no-store' });
+      const data = await api(`/api/equipment-availability?${params.toString()}`, { cache: 'no-store', feedback: true, successMessage: 'Equipment availability checked. See the results below.' });
 
       setState({
         loading: false,
@@ -53,6 +56,7 @@ export default function EquipmentAvailability() {
         error: '',
       });
     } catch (err) {
+      if (err instanceof RangeError) notify('Enter valid start and end dates before checking availability.', 'error', 'Check event dates');
       setState({ loading: false, results: [], message: '', error: err.message || 'Unable to check equipment availability.' });
     }
   }
@@ -78,7 +82,7 @@ export default function EquipmentAvailability() {
               placeholder="Projector"
               required
             /> */}
-            <select value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required>
+            <RequiredIndicator /><select value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required>
                 <option value="">Select</option>
                 {equipmentTypes.map(type => <option key={type} value={type}>{type}</option>)}
                 </select>
@@ -86,7 +90,7 @@ export default function EquipmentAvailability() {
 
           <label>
             Requested quantity
-            <input
+            <RequiredIndicator /><input
               type="number"
               min="1"
               value={form.quantity}
@@ -97,7 +101,7 @@ export default function EquipmentAvailability() {
 
           <label>
             Required start date and time
-            <input
+            <RequiredIndicator /><input
               type="datetime-local"
               value={form.start_datetime}
               onChange={(e) => setForm({ ...form, start_datetime: e.target.value })}
@@ -107,7 +111,7 @@ export default function EquipmentAvailability() {
 
           <label>
             Required end date and time
-            <input
+            <RequiredIndicator /><input
               type="datetime-local"
               value={form.end_datetime}
               onChange={(e) => setForm({ ...form, end_datetime: e.target.value })}

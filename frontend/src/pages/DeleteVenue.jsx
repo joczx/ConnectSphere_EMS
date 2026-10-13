@@ -1,6 +1,8 @@
+import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useFeedback } from '../components/FeedbackProvider';
 import { useAuth } from '../auth/AuthContext';
 
 function when(value) {
@@ -8,6 +10,7 @@ function when(value) {
 }
 
 export default function DeleteVenue() {
+  const { confirm } = useFeedback();
   const { venueId } = useParams();
   const { api } = useAuth();
   const navigate = useNavigate();
@@ -28,6 +31,8 @@ export default function DeleteVenue() {
 
   async function deleteVenue() {
     if (!state.venue || state.confirmation !== state.venue.venue_name || state.events.length) return;
+    if (!(await confirm(`Delete "${state.venue.venue_name}" from the venue catalogue? This cannot be undone.`,
+      { title: 'Delete venue', confirmLabel: 'Delete venue', destructive: true }))) return;
     setState(current => ({ ...current, deleting: true, error: '' }));
     try {
       const result = await api(`/api/venues/${encodeURIComponent(venueId)}`, { method: 'DELETE' });
@@ -60,7 +65,7 @@ export default function DeleteVenue() {
               <p>The venue will no longer be available for planning. Historic event records will keep their venue information. Type the venue name exactly to confirm.</p>
               <label>
                 Type <strong>{state.venue.venue_name}</strong> to confirm
-                <input type="text" value={state.confirmation} onChange={event => setState(current => ({ ...current, confirmation: event.target.value }))} autoComplete="off" />
+                <RequiredIndicator /><input type="text" required value={state.confirmation} onChange={event => setState(current => ({ ...current, confirmation: event.target.value }))} autoComplete="off" />
               </label>
             </>}
             <div className="venue-page-actions">

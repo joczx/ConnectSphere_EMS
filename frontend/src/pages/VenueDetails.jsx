@@ -23,7 +23,7 @@ function hours(operatingHours) {
 
 export default function VenueDetails() {
   const { venueId } = useParams();
-  const { api } = useAuth();
+  const { api, canAccess } = useAuth();
   const location = useLocation();
   const [state, setState] = useState({ loading: true, venue: null, error: '' });
 
@@ -60,10 +60,10 @@ export default function VenueDetails() {
             <p className="eyebrow">VENUE MANAGEMENT</p>
             <h1>{venue?.venue_name || 'Venue information'}</h1>
           </div>
-          <div className="venue-page-actions">
+          {canAccess(`/venues/${venueId}/edit`) && <div className="venue-page-actions">
             <Link className="button-link" to={`/venues/${venueId}/edit`}>Update information</Link>
             <Link className="button-link danger-link" to={`/venues/${venueId}/delete`}>Delete venue</Link>
-          </div>
+          </div>}
         </div>
         {location.state?.message && <p className="panel venue-success" role="status">{location.state.message}</p>}
         {state.loading && <p role="status">Loading venue information…</p>}

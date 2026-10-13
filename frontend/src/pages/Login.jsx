@@ -1,9 +1,13 @@
+import RequiredIndicator from '../components/RequiredIndicator';
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useFeedback } from '../components/FeedbackProvider';
 
 export default function Login() {
+  const { notify } = useFeedback();
   const { signIn } = useAuth();
-  const [error, setError] = useState('');
+  const [error, setErrorState] = useState('');
+  const setError = message => { setErrorState(message); if (message) notify(message, 'error', 'Unable to sign in'); };
   const [busy, setBusy] = useState(false);
   async function submit(e) {
     e.preventDefault();
@@ -29,19 +33,20 @@ export default function Login() {
       const data = await response.json();
 
       signIn(data);
+      notify('You are signed in. Welcome to ConnectSphere.', 'success', 'Signed in');
 
     } catch {
       setError('Unable to sign in right now. Please try again.');
     }
     finally { setBusy(false); }
   }
-  return <main className="login-card panel">
-    <p className="brand">ConnectSphere</p><h1>Sign in</h1><p>Access your event planning information.</p>
+  return <div className="login-page"><div className="login-heading"><p>ConnectSphere</p><h1>Event Management System</h1><span>Your workspace for seamless event planning</span></div><main className="login-card panel">
+    <h2>Welcome back</h2><p>Sign in to your account to continue.</p>
     <form onSubmit={submit} noValidate>
-      <label>Email<input name="email" type="email" autoComplete="username" required /></label>
-      <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
+      <label>Email<RequiredIndicator /><input name="email" type="email" autoComplete="username" required /></label>
+      <label>Password<RequiredIndicator /><input name="password" type="password" autoComplete="current-password" required /></label>
       {error && <p role="alert" className="error">{error}</p>}
       <button disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
     </form>
-  </main>;
+  </main></div>;
 }

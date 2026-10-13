@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import RequiredIndicator from '../components/RequiredIndicator';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useFeedback } from '../components/FeedbackProvider';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import { useAuth } from '../auth/AuthContext';
 import { statusLabel } from '../services/venueBookings';
+import { userId } from '../services/eventRequests';
 import {
   FACILITIES, LAYOUTS,
   display, label, toInput, toIso, toItems, toLines,
@@ -72,10 +75,12 @@ function saved(event, field) {
 }
 
 export default function Events() {
-  const { api } = useAuth();
+  const { confirm, notify } = useFeedback();
+  const { api, token } = useAuth();
   const { eventId } = useParams();
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
+  const manualRefresh = useRef(false);
   const [form, setForm] = useState({
     equipment_type: '',
     quantity: 1,
@@ -84,7 +89,7 @@ export default function Events() {
   const [submitState, setSubmitState] = useState({ message: '', error: '' });
   const [userNames, setUserNames] = useState({});
   const [edit, setEdit] = useState({ open: false, values: null, busy: false, error: '', details: null, message: '' });
-  const [warning, setWarning] = useState(null);
+  const [lifecycle, setLifecycle] = useState({ busy: false, error: '', message: '' });
   // `allowed`: whether this viewer takes part in venue booking at all.
   // `canRequest`: whether they may request one (coordinators, not staff).
   const [venue, setVenue] = useState({ assigned: null, bookings: [], error: '', allowed: true, canRequest: false });
@@ -92,12 +97,17 @@ export default function Events() {
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
+      const showFeedback = manualRefresh.current;
+      manualRefresh.current = false;
       setState((current) => ({ ...current, loading: true, error: null }));
       try {
         const path = '/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : '');
-        const data = await api(path, { cache: 'no-store', signal: controller.signal });
+        await api('/api/events/status-refresh', { method: 'POST', body: {}, signal: controller.signal });
+        const data = await api(path, { cache: 'no-store', signal: controller.signal,
+          feedback: showFeedback, successMessage: 'Event information refreshed.' });
         if (!controller.signal.aborted) setState((current) => ({ ...current, data, key: eventId, loading: false, error: null }));
       } catch (err) {
+        if (showFeedback && !controller.signal.aborted) notify(err.message || 'Unable to refresh event information.', 'error');
         if (!controller.signal.aborted) setState((current) => ({ ...current, loading: false, error: err.message || 'Unable to load event information.' }));
       }
     }
@@ -106,7 +116,7 @@ export default function Events() {
     const timer = setInterval(reload, 60000);
     window.addEventListener('focus', reload);
     return () => { controller.abort(); clearInterval(timer); window.removeEventListener('focus', reload); };
-  }, [api, eventId, refresh]);
+  }, [api, eventId, refresh, notify]);
 
   useEffect(() => {
     if (!eventId) return;
@@ -193,6 +203,27 @@ export default function Events() {
   const equipmentRequests = state.equipment || [];
   const activity = state.activity || [];
   const editable = event?.status === 'planning';
+  const viewerId = token ? userId(token) : null;
+  const isCoordinator = !!event && viewerId === event.event_coordinator_id;
+  const canCancel = !!event && ['planning', 'confirmed'].includes(event.status)
+    && [event.event_coordinator_id, event.event_organiser_id].includes(viewerId);
+
+  async function updateLifecycle(action, ready) {
+    if (action === 'cancel' && !(await confirm('Cancel this event? This cannot be undone.', { title: 'Cancel event', confirmLabel: 'Cancel event', destructive: true }))) return;
+    setLifecycle({ busy: true, error: '', message: '' });
+    try {
+      const result = await api(`/api/events/${encodeURIComponent(eventId)}/${action}`, {
+        method: action === 'cancel' ? 'POST' : 'PATCH',
+        body: action === 'cancel' ? {} : { ready },
+      });
+      setState(current => ({ ...current, data: { ...current.data, event: result.event } }));
+      setLifecycle({ busy: false, error: '', message: action === 'cancel'
+        ? 'Event cancelled.' : `Registration readiness saved. Event status: ${label(result.event.status)}.` });
+      setRefresh(value => value + 1);
+    } catch (error) {
+      setLifecycle({ busy: false, error: error.message || 'Unable to update the event.', message: '' });
+    }
+  }
   const approvedVenues = venue.bookings
     .filter(booking => booking.status === 'approved')
     .map(booking => booking.venue_name);
@@ -234,14 +265,13 @@ export default function Events() {
     // The version being edited. Sent back on save so the server can refuse
     // rather than overwrite if someone else has saved in the meantime.
     setEdit({ open: true, values: formFrom(event), base: event.updated_at, busy: false, error: '', details: null, message: '' });
-    setWarning(null);
   }
 
   // "The system discards all pending edits and status if the user clicks
   // Cancel" - from the warning modal and from the form alike.
   function discardEdits() {
+    notify('Your unsaved event changes have been discarded.', 'info');
     setEdit({ open: false, values: null, busy: false, error: '', details: null, message: '' });
-    setWarning(null);
   }
 
   const setField = (name, value) => setEdit(current => ({ ...current, values: { ...current.values, [name]: value } }));
@@ -253,21 +283,22 @@ export default function Events() {
         method: 'PATCH',
         body: { ...body, expected_updated_at: edit.base, ...(confirmCritical ? { confirm_critical: true } : {}) },
       });
-      setWarning(null);
       setEdit({ open: false, values: null, busy: false, error: '', details: null, message: result.message || 'Event information updated.' });
       setRefresh(value => value + 1);
     } catch (err) {
       // The server refuses a critical change until it is confirmed, and names
       // the fields so the warning can list them.
       if (err.data?.critical_fields) {
-        setWarning({ fields: err.data.critical_fields, body });
         setEdit(current => ({ ...current, busy: false }));
+        const accepted = await confirm(`You changed ${err.data.critical_fields.join(', ')}. These changes may affect existing venue bookings and equipment reservations and will be recorded as a Critical Edit. Review the arrangements after saving.`,
+          { title: 'Confirm changes to existing arrangements', confirmLabel: 'Confirm and save', cancelLabel: 'Discard changes' });
+        if (accepted) await save(body, true);
+        else discardEdits();
         return;
       }
       // Someone else saved first. Their version is loaded so it can be read
       // before deciding what to do; the edits are kept in the form meanwhile.
       if (err.data?.stale) {
-        setWarning(null);
         setEdit(current => ({ ...current, busy: false, error: err.message, details: null }));
         setRefresh(value => value + 1);
         return;
@@ -280,6 +311,7 @@ export default function Events() {
     submitEvent.preventDefault();
     const body = changedFields(event, edit.values);
     if (!Object.keys(body).length) {
+      notify('Nothing has been changed yet.', 'info');
       setEdit(current => ({ ...current, error: 'Nothing has been changed yet.' }));
       return;
     }
@@ -291,7 +323,7 @@ export default function Events() {
     <main className="container">
       {eventId && <Link to="/events">← My events</Link>}
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{eventId ? 'Event information' : 'My events'}</h1></div>
-        <button className="secondary" onClick={() => setRefresh(value => value + 1)} disabled={state.loading}>Refresh</button></div>
+        <button className="secondary" onClick={() => { manualRefresh.current = true; setRefresh(value => value + 1); }} disabled={state.loading}>Refresh</button></div>
       <p>All times are in Singapore time (SGT). Information refreshes every minute and when you return to this window.</p>
       {state.loading && <p role="status">Loading latest information…</p>}
       {state.error && <div role="alert" className="panel error">{state.error} Use Refresh to try again.</div>}
@@ -308,6 +340,18 @@ export default function Events() {
           </div>
         </div>
         {edit.message && <div className="success" style={{ marginBottom: '12px' }} role="status">{edit.message}</div>}
+        {lifecycle.error && <p role="alert" className="error">{lifecycle.error}</p>}
+        {lifecycle.message && <p role="status" className="success">{lifecycle.message}</p>}
+        {event.registration_needs && <div style={{ marginBottom: '16px' }}>
+          <p>Registration arrangements: {event.registration_ready ? 'Ready' : 'Awaiting coordinator confirmation'}</p>
+          {isCoordinator && ['planning', 'confirmed'].includes(event.status) && <label>
+            <input type="checkbox" checked={!!event.registration_ready} disabled={lifecycle.busy}
+              onChange={e => updateLifecycle('registration-readiness', e.target.checked)} />
+            Registration arrangements are ready
+          </label>}
+        </div>}
+        {canCancel && <button type="button" className="secondary" disabled={lifecycle.busy}
+          onClick={() => updateLifecycle('cancel')}>Cancel event</button>}
         {!editable && <p className="metadata">This event is {event.status}. Details can only be changed during planning.</p>}
 
         {!edit.open && <dl>
@@ -334,14 +378,14 @@ export default function Events() {
           {edit.error && <div role="alert" className="error">{edit.error}
             {edit.details && <ul>{Object.values(edit.details).map(message => <li key={message}>{message}</li>)}</ul>}</div>}
           <fieldset disabled={edit.busy} style={{ display: 'grid', gap: '12px', border: 0, padding: 0 }}>
-            <label>Event name<input value={edit.values.event_name} onChange={e => setField('event_name', e.target.value)} required /></label>
-            <label>Purpose<input value={edit.values.purpose} onChange={e => setField('purpose', e.target.value)} required /></label>
-            <label>Description<textarea rows="4" value={edit.values.description} onChange={e => setField('description', e.target.value)} required /></label>
+            <label>Event name<RequiredIndicator /><input value={edit.values.event_name} onChange={e => setField('event_name', e.target.value)} required /></label>
+            <label>Purpose<RequiredIndicator /><input value={edit.values.purpose} onChange={e => setField('purpose', e.target.value)} required /></label>
+            <label>Description<RequiredIndicator /><textarea rows="4" value={edit.values.description} onChange={e => setField('description', e.target.value)} required /></label>
             <label>Registration needs<textarea rows="3" value={edit.values.registration_needs} onChange={e => setField('registration_needs', e.target.value)} /></label>
-            <label>Start date and time<input type="datetime-local" value={edit.values.start_datetime} onChange={e => setField('start_datetime', e.target.value)} required /></label>
-            <label>End date and time<input type="datetime-local" value={edit.values.end_datetime} onChange={e => setField('end_datetime', e.target.value)} required /></label>
-            <label>Expected attendance<input type="number" min="1" value={edit.values.capacity_needed} onChange={e => setField('capacity_needed', e.target.value)} required /></label>
-            <label>Room layout<select value={edit.values.room_layout} onChange={e => setField('room_layout', e.target.value)} required>
+            <label>Start date and time<RequiredIndicator /><input type="datetime-local" value={edit.values.start_datetime} onChange={e => setField('start_datetime', e.target.value)} required /></label>
+            <label>End date and time<RequiredIndicator /><input type="datetime-local" value={edit.values.end_datetime} onChange={e => setField('end_datetime', e.target.value)} required /></label>
+            <label>Expected attendance<RequiredIndicator /><input type="number" min="1" value={edit.values.capacity_needed} onChange={e => setField('capacity_needed', e.target.value)} required /></label>
+            <label>Room layout<RequiredIndicator /><select value={edit.values.room_layout} onChange={e => setField('room_layout', e.target.value)} required>
               <option value="">Select a layout</option>{LAYOUTS.map(layout => <option key={layout} value={layout}>{label(layout)}</option>)}
             </select></label>
             <label>Required facilities (hold Ctrl or ⌘ to select several)
@@ -360,16 +404,6 @@ export default function Events() {
         </form>}
       </article>}
 
-      {warning && <div role="alertdialog" aria-modal="true" aria-labelledby="critical-heading" className="panel" style={{ border: '2px solid currentColor', marginTop: '16px' }}>
-        <h2 id="critical-heading">Confirm changes to existing arrangements</h2>
-        <p>You have changed information that other arrangements may already depend on:</p>
-        <ul>{warning.fields.map(field => <li key={field}>{field}</li>)}</ul>
-        <p>Venue bookings and equipment reservations made for this event may no longer be suitable. Please review the impact before saving. This will be recorded as a Critical Edit in the Activity History.</p>
-        <div className="heading">
-          <button type="button" className="secondary" onClick={discardEdits} disabled={edit.busy}>Cancel</button>
-          <button type="button" onClick={() => save(warning.body, true)} disabled={edit.busy}>{edit.busy ? 'Saving…' : 'Confirm and save'}</button>
-        </div>
-      </div>}
 
       {eventId && event && venue.allowed && <section className="panel" style={{ marginTop: '24px' }}>
         <h2>Venue</h2>
@@ -417,24 +451,24 @@ export default function Events() {
         {submitState.error && <div className="error">{submitState.error}</div>}
         {submitState.message && <div className="success">{submitState.message}</div>}
 
-        <form onSubmit={submitEquipmentRequest} style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
+        {isCoordinator && editable && <form onSubmit={submitEquipmentRequest} style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
           <label>
             Equipment Type
-            <select value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required>
+            <RequiredIndicator /><select value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required>
               <option value="">Select</option>
               {equipmentTypes.map(type => <option key={type} value={type}>{type}</option>)}
             </select>
           </label>
           <label>
             Quantity
-            <input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
+            <RequiredIndicator /><input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
           </label>
           <label>
             Technical requirements
             <textarea value={form.technical_requirements} onChange={(e) => setForm({ ...form, technical_requirements: e.target.value })} rows="6" />
           </label>
           <button type="submit">Submit equipment request</button>
-        </form>
+        </form>}
 
         <div style={{ marginTop: '24px' }}>
           {equipmentRequests.length === 0 ? (
@@ -456,9 +490,9 @@ export default function Events() {
         {state.activityError && <div role="alert" className="error">{state.activityError} Use Refresh to try again.</div>}
         {!state.activityError && activity.length === 0 ? <p>No changes have been recorded for this event yet.</p> : activity.length > 0 && <dl>
           {activity.map(entry => <div key={entry.activity_id}>
-            <dt>{entry.change_type === 'critical_edit' ? 'Critical Edit' : 'Edit'} — {date(entry.created_at)}</dt>
+            <dt>{entry.change_type === 'status_change' ? 'Status Change' : entry.change_type === 'critical_edit' ? 'Critical Edit' : 'Edit'} — {date(entry.created_at)}</dt>
             <dd>
-              {userNames[entry.changed_by] || (entry.changed_by ? entry.changed_by.slice(0, 8) : 'Unknown user')}
+              {userNames[entry.changed_by] || (entry.changed_by ? entry.changed_by.slice(0, 8) : 'System')}
               <ul>{Object.entries(entry.changes || {}).map(([field, change]) => <li key={field}>
                 {label(field)}: {display(field, change.from)} → {display(field, change.to)}
               </li>)}</ul>

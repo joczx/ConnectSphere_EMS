@@ -14,7 +14,7 @@ TABLE_NAME = "event_request"
 
 # public.event_status, shared with public.events so that one vocabulary covers
 # the whole lifecycle. A request lives in the approval phase and leaves it at
-# either "planning" (an events row now exists) or "rejected".
+# either "planning" (an operational event now exists) or "rejected".
 STATUS_DRAFT = "draft"
 STATUS_SUBMITTED = "submitted"
 STATUS_PLANNING = "planning"

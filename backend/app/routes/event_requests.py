@@ -27,6 +27,10 @@ from app.services.event_store import (
     supabase_request,
 )
 
+from app.services.event_status_service import lifecycle_call
+from app.services.event_service import EventError
+
+
 event_requests_bp = Blueprint(
     "event_requests", __name__, url_prefix="/api/event-requests"
 )
@@ -110,6 +114,17 @@ def assign_coordinator(event_request_id):
         method="POST",
     )
     return _assignment_result(result)
+
+
+@event_requests_bp.errorhandler(EventError)
+def handle_lifecycle_error(error):
+    return jsonify(error.to_dict()), error.status
+
+
+@event_requests_bp.post('/<int:event_request_id>/cancel')
+def cancel(event_request_id):
+    token, _ = authenticated_user()
+    return jsonify(lifecycle_call('cancel_event_request', token, {'p_request_id': event_request_id}))
 
 
 @event_requests_bp.post("")

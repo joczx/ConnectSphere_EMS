@@ -94,6 +94,15 @@ def availability():
     return jsonify(result), (400 if result.get('error') else 200)
 
 
+@equipment.get('/equipment/reservable-events')
+def reservable_events():
+    token = authenticated_token()
+    rows = supabase_request('/rest/v1/rpc/reservable_equipment_events', token=token, payload={})
+    if isinstance(rows, dict) and rows.get('error'):
+        return jsonify(rows), rows.get('status', 403)
+    return jsonify(events=rows)
+
+
 @equipment.post('/equipment/reservations')
 def reserve():
     token = authenticated_token()

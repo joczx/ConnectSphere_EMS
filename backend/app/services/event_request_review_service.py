@@ -114,11 +114,17 @@ def _apply_outcome(event_request_id, outcome):
         request_schema.TABLE_NAME,
         lambda table: table.update({"status": new_status, "updated_at": db.utc_now()})
         .eq("event_request_id", event_request_id)
+        .eq("status", request_schema.STATUS_SUBMITTED)
         .execute(),
         action="update the event request status",
     )
 
-    return rows[0] if rows else None
+    if not rows:
+        raise EventRequestError(
+            "The request changed or you no longer have permission to review it. Reload it before continuing.",
+            status_code=409,
+        )
+    return rows[0]
 
 
 def _notify(event_request, record):
@@ -229,6 +235,14 @@ def _translate_review_error(exc, action):
             "clarification.",
             errors={"comments": detail},
         )
+
+    if code == "23514":
+        return EventRequestError(
+            "The request cannot advance from its current stage. Reload it and check the required conditions.",
+            status_code=409,
+        )
+    if code == "42501":
+        return EventRequestError("Only the assigned Event Coordinator can decide this request.", status_code=403)
 
     return EventRequestError(
         f"Could not {action} because the database is unavailable. Please try again.",

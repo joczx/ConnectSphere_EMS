@@ -4,6 +4,7 @@ from app.schemas import event as event_schema
 from app.services.event_store import StoreError, supabase_request, authenticated_token
 from app.services.event_service import EventError, list_activity, load_event, update_event
 from app.services.event_venue_criteria import criteria_from_event, describe, search_filters
+from app.services.event_status_service import lifecycle_call
 
 events = Blueprint('events', __name__, url_prefix='/api')
 
@@ -23,6 +24,10 @@ def prevent_caching(response):
 
 @events.errorhandler(StoreError)
 def store_error(error):
+    if error.code == '23514':
+        return jsonify(error='This change is not allowed at the current event stage or required conditions are incomplete.'), 409
+    if error.status == 403:
+        return jsonify(error='You do not have permission to change this event.'), 403
     message = 'Please sign in again.' if error.status == 401 else 'Event service is temporarily unavailable.'
     return jsonify(error=message), error.status
 
@@ -38,6 +43,28 @@ def list_events():
     token = authenticated_token(supabase_request)
     rows = supabase_request('/rest/v1/events?select=event_id,event_name,status,start_datetime,end_datetime&order=start_datetime.asc.nullslast', token=token)
     return jsonify(events=rows)
+
+
+@events.post('/events/status-refresh')
+def refresh_statuses():
+    token = authenticated_token(supabase_request)
+    return jsonify(lifecycle_call('refresh_visible_event_statuses', token, {}))
+
+
+@events.patch('/events/<int:event_id>/registration-readiness')
+def registration_readiness(event_id):
+    token = authenticated_token(supabase_request)
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or set(payload) != {'ready'} or type(payload['ready']) is not bool:
+        return jsonify(error='Send ready as true or false.'), 400
+    return jsonify(lifecycle_call('set_event_registration_ready', token,
+                                 {'p_event_id': event_id, 'p_ready': payload['ready']}))
+
+
+@events.post('/events/<int:event_id>/cancel')
+def cancel_event(event_id):
+    token = authenticated_token(supabase_request)
+    return jsonify(lifecycle_call('cancel_planned_event', token, {'p_event_id': event_id}))
 
 
 def valid_event_id(event_id):

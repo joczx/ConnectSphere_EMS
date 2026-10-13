@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { VENUE_FACILITIES, VENUE_ROOM_LAYOUTS } from '../config/venueOptions';
 
 export default function Venues() {
-  const { api } = useAuth();
+  const { api, canAccess } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -25,7 +25,8 @@ export default function Venues() {
       setState(current => ({ ...current, loading: true, error: '' }));
       try {
         const path = isFiltered ? `/api/venues/search?${searchParams}` : '/api/venues/catalogue';
-        const result = await api(path, { cache: 'no-store', signal: controller.signal });
+        const result = await api(path, { cache: 'no-store', signal: controller.signal,
+          feedback: isFiltered, successMessage: result => `${(result.venues || []).length} venues found. View the results below.` });
         if (!controller.signal.aborted) setState({ venues: result.venues || [], loading: false, error: '' });
       } catch (error) {
         if (!controller.signal.aborted) setState({ venues: [], loading: false, error: error.message || 'Unable to load venues.' });
@@ -69,7 +70,7 @@ export default function Venues() {
             >
               {filtersOpen ? 'Hide filters' : isFiltered ? 'Show active filters' : 'Show filters'}
             </button>
-            <Link className="button-link" to="/venues/new">Create venue</Link>
+            {canAccess('/venues/new') && <Link className="button-link" to="/venues/new">Create venue</Link>}
           </div>
         </div>
         <p>View and manage the venues available to ConnectSphere.</p>

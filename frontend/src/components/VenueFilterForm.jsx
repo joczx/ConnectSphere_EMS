@@ -8,6 +8,7 @@
 import { useRef, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from './Alert';
 import DateRangePicker from './DateRangePicker';
+import { useFeedback } from './FeedbackProvider';
 import { VENUE_FACILITIES, VENUE_ROOM_LAYOUTS } from '../config/venueOptions';
 import { APPLIED_KEY, EVENT_KEY, withoutFilters } from '../services/venueSearch';
 
@@ -21,6 +22,7 @@ function dateValue(value) {
 }
 
 export default function VenueFilterForm({ params, onApply, onCancel }) {
+  const { notify } = useFeedback();
   const [issues, setIssues] = useState([]);
   const [dates, setDates] = useState(() => ({
     startDate: params.get('start_date') || '',
@@ -42,9 +44,11 @@ export default function VenueFilterForm({ params, onApply, onCancel }) {
     setDates({ startDate: '', endDate: '' });
     setCalendarKey(key => key + 1);
     setIssues([]);
+    notify('The filter fields have been cleared.', 'info');
   }
 
   function showIssues(nextIssues) {
+    notify(nextIssues.map(issue => issue.message).join(' '), 'error', 'Check filter conditions');
     setIssues(nextIssues);
     requestAnimationFrame(() => {
       alertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
