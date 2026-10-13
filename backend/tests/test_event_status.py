@@ -65,3 +65,11 @@ def test_failed_condition_is_a_conflict_not_a_service_outage(client):
          patch('app.services.event_status_service.supabase_request', side_effect=StoreError(503, code='23514')):
         response = client.post('/api/events/1/cancel', headers={'Authorization': 'Bearer user-token'})
     assert response.status_code == 409
+
+
+def test_missing_status_rpc_identifies_required_migration(client):
+    with patch('app.routes.events.supabase_request', return_value={'id': 'user'}), \
+         patch('app.services.event_status_service.supabase_request', side_effect=StoreError(503, code='PGRST202')):
+        response = client.post('/api/events/status-refresh', headers={'Authorization': 'Bearer user-token'})
+    assert response.status_code == 503
+    assert '030_event_status_automation.sql' in response.json['error']

@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 import { useFeedback } from '../components/FeedbackProvider';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import { useAuth } from '../auth/AuthContext';
+import { loadEvents } from '../services/eventLoading';
 import { statusLabel } from '../services/venueBookings';
 import { userId } from '../services/eventRequests';
 import {
@@ -102,10 +103,9 @@ export default function Events() {
       setState((current) => ({ ...current, loading: true, error: null }));
       try {
         const path = '/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : '');
-        await api('/api/events/status-refresh', { method: 'POST', body: {}, signal: controller.signal });
-        const data = await api(path, { cache: 'no-store', signal: controller.signal,
+        const { data, statusWarning } = await loadEvents(api, path, { cache: 'no-store', signal: controller.signal,
           feedback: showFeedback, successMessage: 'Event information refreshed.' });
-        if (!controller.signal.aborted) setState((current) => ({ ...current, data, key: eventId, loading: false, error: null }));
+        if (!controller.signal.aborted) setState((current) => ({ ...current, data, key: eventId, loading: false, error: null, statusWarning }));
       } catch (err) {
         if (showFeedback && !controller.signal.aborted) notify(err.message || 'Unable to refresh event information.', 'error');
         if (!controller.signal.aborted) setState((current) => ({ ...current, loading: false, error: err.message || 'Unable to load event information.' }));
@@ -168,14 +168,18 @@ export default function Events() {
   }, [api, eventId, refresh]);
 
   const [equipmentTypes, setEquipmentTypes] = useState([]);
+  const canRequestEquipment = !!eventId && state.key === eventId
+    && state.data?.event?.status === 'planning'
+    && state.data.event.event_coordinator_id === (token ? userId(token) : null);
 
   useEffect(() => {
+    if (!canRequestEquipment) return;
     let ignore = false;
     api('/api/equipment-types', { cache: 'no-store' })
       .then(data => { if (!ignore) setEquipmentTypes(data.equipment_types || []); })
       .catch(err => { if (!ignore) setSubmitState({ message: '', error: err.message }); });
     return () => { ignore = true; };
-  }, [api]);
+  }, [api, canRequestEquipment]);
 
   async function submitEquipmentRequest(event) {
     event.preventDefault();
@@ -327,6 +331,7 @@ export default function Events() {
       <p>All times are in Singapore time (SGT). Information refreshes every minute and when you return to this window.</p>
       {state.loading && <p role="status">Loading latest information…</p>}
       {state.error && <div role="alert" className="panel error">{state.error} Use Refresh to try again.</div>}
+      {state.statusWarning && <p role="status" className="panel">{state.statusWarning}</p>}
       {data?.events && <section className="event-list" aria-label="Your events">
         {data.events.length === 0 && <div className="panel">No events are available to you yet. Contact your event organiser or coordinator to arrange access.</div>}
         {data.events.map(item => <Link className="panel event-link" key={item.event_id} to={'/events/' + item.event_id}><h2>{item.event_name}</h2><p>{date(item.start_datetime)}</p><p className="metadata">Status: {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : 'Not specified'}</p><span>View event information →</span></Link>)}
