@@ -235,7 +235,9 @@ def test_ac3_ac4_ac5_ac6_review_persists_decision_and_notifies_organiser(review_
     assert http.get('/api/event-requests/42/reviews').json['reviews'] == [recorded]
     table.execute.side_effect = None
     table.execute.return_value.data = [notification]
-    response = http.get('/api/notifications?recipient_id=' + old['event_organiser_id'])
+    with patch('app.routes.notifications.authenticated_user',
+               return_value=('organiser-token', old['event_organiser_id'])):
+        response = http.get('/api/notifications')
     assert response.status_code == 200
     assert response.json['notifications'] == [notification]
     table.eq.assert_called_with('recipient_id', old['event_organiser_id'])

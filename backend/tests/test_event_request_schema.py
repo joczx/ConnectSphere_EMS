@@ -15,6 +15,7 @@ def test_every_status_the_database_accepts_is_known_to_the_code():
         "planning",
         "rejected",
         "confirmed",
+        "pending_safety_checks",
         "completed",
         "cancelled",
     }

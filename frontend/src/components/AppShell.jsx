@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import UiIcon from './UiIcon';
 
 export const APP_ICONS = {
+  'assign-event-coordinators': 'requests', 'reassign-event-coordinators': 'events',
   events: 'events', 'event-requests': 'requests', 'review-event-requests': 'check',
   'venue-bookings': 'requests', equipment: 'equipment', 'equipment-availability': 'equipment',
   'venue-management': 'venues', 'venue-search': 'search', 'venue-suitability': 'check',

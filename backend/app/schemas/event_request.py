@@ -22,6 +22,7 @@ STATUS_REJECTED = "rejected"
 
 # Set on public.events rather than here, but part of the same enum.
 STATUS_CONFIRMED = "confirmed"
+STATUS_PENDING_SAFETY_CHECKS = "pending_safety_checks"
 STATUS_COMPLETED = "completed"
 STATUS_CANCELLED = "cancelled"
 
@@ -32,6 +33,7 @@ ALL_STATUSES = frozenset(
         "planning",
         "rejected",
         "confirmed",
+        "pending_safety_checks",
         "completed",
         "cancelled",
     }
