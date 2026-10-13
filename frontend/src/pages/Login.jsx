@@ -1,3 +1,4 @@
+import RequiredIndicator from '../components/RequiredIndicator';
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useFeedback } from '../components/FeedbackProvider';
@@ -42,8 +43,8 @@ export default function Login() {
   return <div className="login-page"><div className="login-heading"><p>ConnectSphere</p><h1>Event Management System</h1><span>Your workspace for seamless event planning</span></div><main className="login-card panel">
     <h2>Welcome back</h2><p>Sign in to your account to continue.</p>
     <form onSubmit={submit} noValidate>
-      <label>Email<input name="email" type="email" autoComplete="username" required /></label>
-      <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
+      <label>Email<RequiredIndicator /><input name="email" type="email" autoComplete="username" required /></label>
+      <label>Password<RequiredIndicator /><input name="password" type="password" autoComplete="current-password" required /></label>
       {error && <p role="alert" className="error">{error}</p>}
       <button disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
     </form>

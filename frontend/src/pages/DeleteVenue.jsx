@@ -1,3 +1,4 @@
+import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -64,7 +65,7 @@ export default function DeleteVenue() {
               <p>The venue will no longer be available for planning. Historic event records will keep their venue information. Type the venue name exactly to confirm.</p>
               <label>
                 Type <strong>{state.venue.venue_name}</strong> to confirm
-                <input type="text" value={state.confirmation} onChange={event => setState(current => ({ ...current, confirmation: event.target.value }))} autoComplete="off" />
+                <RequiredIndicator /><input type="text" required value={state.confirmation} onChange={event => setState(current => ({ ...current, confirmation: event.target.value }))} autoComplete="off" />
               </label>
             </>}
             <div className="venue-page-actions">

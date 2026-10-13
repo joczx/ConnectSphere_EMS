@@ -306,3 +306,4 @@ button.feedback-dismiss { padding: 0 4px; margin-left: auto; border: 0; backgrou
 .feedback-dialog p { line-height: 1.6; overflow-wrap: anywhere; }
 .feedback-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
 button.feedback-danger { background: var(--cs-color-danger); color: white; border-color: var(--cs-color-danger); }
+.required-indicator { color: var(--cs-color-danger); font-weight: 700; white-space: nowrap; }

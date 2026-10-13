@@ -1,3 +1,4 @@
+import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -81,7 +82,7 @@ export default function EquipmentAvailability() {
               placeholder="Projector"
               required
             /> */}
-            <select value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required>
+            <RequiredIndicator /><select value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required>
                 <option value="">Select</option>
                 {equipmentTypes.map(type => <option key={type} value={type}>{type}</option>)}
                 </select>
@@ -89,7 +90,7 @@ export default function EquipmentAvailability() {
 
           <label>
             Requested quantity
-            <input
+            <RequiredIndicator /><input
               type="number"
               min="1"
               value={form.quantity}
@@ -100,7 +101,7 @@ export default function EquipmentAvailability() {
 
           <label>
             Required start date and time
-            <input
+            <RequiredIndicator /><input
               type="datetime-local"
               value={form.start_datetime}
               onChange={(e) => setForm({ ...form, start_datetime: e.target.value })}
@@ -110,7 +111,7 @@ export default function EquipmentAvailability() {
 
           <label>
             Required end date and time
-            <input
+            <RequiredIndicator /><input
               type="datetime-local"
               value={form.end_datetime}
               onChange={(e) => setForm({ ...form, end_datetime: e.target.value })}

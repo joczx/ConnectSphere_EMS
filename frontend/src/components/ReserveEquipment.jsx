@@ -1,3 +1,4 @@
+import RequiredIndicator from './RequiredIndicator';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
@@ -97,20 +98,20 @@ export default function ReserveEquipment({ onReserved }) {
     {!state.loadingEvents && !events.length && !state.error && <p>No events are assigned to you for technical support.</p>}
     <form onSubmit={reserve}>
       <fieldset disabled={state.busy || state.loadingEvents}>
-        <label>Event to reserve for<select required value={eventId} onChange={e => {
+        <label>Event to reserve for<RequiredIndicator /><select required value={eventId} onChange={e => {
           ++generation.current;
           setEventId(e.target.value); setEquipmentId('');
           setState(s => ({ ...s, equipment: [], starts_at: null, ends_at: null, error: '', message: '', loading: !!e.target.value }));
         }}><option value="">Select an event</option>{events.map(event => <option key={event.event_id} value={event.event_id}>{event.event_name}</option>)}</select></label>
         {state.loading && <p role="status">Checking availability...</p>}
         {state.starts_at && eventId && <p>Event period: {new Date(state.starts_at).toLocaleString()} to {new Date(state.ends_at).toLocaleString()}</p>}
-        <label>Equipment model<select required disabled={!eventId || state.loading} value={equipmentId} onChange={e => setEquipmentId(e.target.value)}>
+        <label>Equipment model<RequiredIndicator /><select required disabled={!eventId || state.loading} value={equipmentId} onChange={e => setEquipmentId(e.target.value)}>
           <option value="">Select equipment</option>{state.equipment.map(row => <option key={row.equipment_id} value={row.equipment_id} disabled={row.available_quantity < 1 || row.standalone_reserved}>
             {row.name} — {row.available_quantity} available{row.standalone_reserved ? ' (already reserved)' : ''}
           </option>)}
         </select></label>
         {item && <p>Available quantity: {item.available_quantity}. Reserved for this event: {item.reserved_quantity}.</p>}
-        <label>Quantity to reserve<input type="number" required min="1" step="1" max={item?.available_quantity || undefined} value={quantity} onChange={e => setQuantity(e.target.value)} /></label>
+        <label>Quantity to reserve<RequiredIndicator /><input type="number" required min="1" step="1" max={item?.available_quantity || undefined} value={quantity} onChange={e => setQuantity(e.target.value)} /></label>
         <button disabled={!item || state.loading || item.available_quantity < 1 || item.standalone_reserved}>{state.busy ? 'Reserving...' : 'Confirm reservation'}</button>
         <button type="button" className="secondary" disabled={!eventId || state.loading} onClick={() => { setState(s => ({ ...s, error: '', message: '' })); setRefresh(v => v + 1); }}>Refresh availability</button>
       </fieldset>

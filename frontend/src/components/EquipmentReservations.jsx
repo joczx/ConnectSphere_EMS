@@ -1,3 +1,4 @@
+import RequiredIndicator from './RequiredIndicator';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useFeedback } from './FeedbackProvider';
@@ -90,7 +91,7 @@ export default function EquipmentReservations({ refresh, onChanged, eventId = ''
         <p>Reserved quantity: {row.quantity}</p>
         {editing === row.reservation_id ? <form onSubmit={event => { event.preventDefault(); change(row); }}>
           <label>Quantity for {row.name}
-            <input autoFocus type="number" min="1" max="2147483647" step="1" required
+            <RequiredIndicator /><input autoFocus type="number" min="1" max="2147483647" step="1" required
               value={quantity} disabled={busy} onChange={event => setQuantity(event.target.value)} />
           </label>
           <button disabled={busy || Number(quantity) === row.quantity}>{busy ? 'Saving...' : 'Save changes'}</button>

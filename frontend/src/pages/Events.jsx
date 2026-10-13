@@ -1,3 +1,4 @@
+import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -384,7 +385,7 @@ export default function Events() {
         {reassignForm.open && <form onSubmit={reassignCoordinator} style={{ display: 'grid', gap: '12px', marginBottom: '20px' }}>
           <label>
             Replacement event coordinator
-            <select value={reassignForm.value} onChange={(e) => setReassignForm((current) => ({ ...current, value: e.target.value }))} required>
+            <RequiredIndicator /><select value={reassignForm.value} onChange={(e) => setReassignForm((current) => ({ ...current, value: e.target.value }))} required>
               <option value="">Select an event coordinator</option>
               {coordinatorChoices.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
             </select>
@@ -416,14 +417,14 @@ export default function Events() {
           {edit.error && <div role="alert" className="error">{edit.error}
             {edit.details && <ul>{Object.values(edit.details).map(message => <li key={message}>{message}</li>)}</ul>}</div>}
           <fieldset disabled={edit.busy} style={{ display: 'grid', gap: '12px', border: 0, padding: 0 }}>
-            <label>Event name<input value={edit.values.event_name} onChange={e => setField('event_name', e.target.value)} required /></label>
-            <label>Purpose<input value={edit.values.purpose} onChange={e => setField('purpose', e.target.value)} required /></label>
-            <label>Description<textarea rows="4" value={edit.values.description} onChange={e => setField('description', e.target.value)} required /></label>
+            <label>Event name<RequiredIndicator /><input value={edit.values.event_name} onChange={e => setField('event_name', e.target.value)} required /></label>
+            <label>Purpose<RequiredIndicator /><input value={edit.values.purpose} onChange={e => setField('purpose', e.target.value)} required /></label>
+            <label>Description<RequiredIndicator /><textarea rows="4" value={edit.values.description} onChange={e => setField('description', e.target.value)} required /></label>
             <label>Registration needs<textarea rows="3" value={edit.values.registration_needs} onChange={e => setField('registration_needs', e.target.value)} /></label>
-            <label>Start date and time<input type="datetime-local" value={edit.values.start_datetime} onChange={e => setField('start_datetime', e.target.value)} required /></label>
-            <label>End date and time<input type="datetime-local" value={edit.values.end_datetime} onChange={e => setField('end_datetime', e.target.value)} required /></label>
-            <label>Expected attendance<input type="number" min="1" value={edit.values.capacity_needed} onChange={e => setField('capacity_needed', e.target.value)} required /></label>
-            <label>Room layout<select value={edit.values.room_layout} onChange={e => setField('room_layout', e.target.value)} required>
+            <label>Start date and time<RequiredIndicator /><input type="datetime-local" value={edit.values.start_datetime} onChange={e => setField('start_datetime', e.target.value)} required /></label>
+            <label>End date and time<RequiredIndicator /><input type="datetime-local" value={edit.values.end_datetime} onChange={e => setField('end_datetime', e.target.value)} required /></label>
+            <label>Expected attendance<RequiredIndicator /><input type="number" min="1" value={edit.values.capacity_needed} onChange={e => setField('capacity_needed', e.target.value)} required /></label>
+            <label>Room layout<RequiredIndicator /><select value={edit.values.room_layout} onChange={e => setField('room_layout', e.target.value)} required>
               <option value="">Select a layout</option>{LAYOUTS.map(layout => <option key={layout} value={layout}>{label(layout)}</option>)}
             </select></label>
             <label>Required facilities (hold Ctrl or ⌘ to select several)
@@ -492,14 +493,14 @@ export default function Events() {
         <form onSubmit={submitEquipmentRequest} style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
           <label>
             Equipment Type
-            <select value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required>
+            <RequiredIndicator /><select value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required>
               <option value="">Select</option>
               {equipmentTypes.map(type => <option key={type} value={type}>{type}</option>)}
             </select>
           </label>
           <label>
             Quantity
-            <input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
+            <RequiredIndicator /><input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
           </label>
           <label>
             Technical requirements

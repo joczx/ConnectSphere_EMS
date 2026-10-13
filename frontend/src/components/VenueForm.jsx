@@ -1,3 +1,4 @@
+import RequiredIndicator from './RequiredIndicator';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from './Alert';
@@ -29,11 +30,11 @@ export default function VenueForm({ mode, venueId, initialVenue = {}, onSubmit, 
         <div className="venue-form-grid">
           <label>
             Venue name
-            <input name="venue_name" required placeholder="Enter venue name" defaultValue={initialVenue.venue_name || ''} />
+            <RequiredIndicator /><input name="venue_name" required placeholder="Enter venue name" defaultValue={initialVenue.venue_name || ''} />
           </label>
           <label>
             Capacity
-            <input name="capacity" type="number" min="1" required placeholder="Maximum number of people" defaultValue={initialVenue.capacity ?? ''} />
+            <RequiredIndicator /><input name="capacity" type="number" min="1" required placeholder="Maximum number of people" defaultValue={initialVenue.capacity ?? ''} />
           </label>
         </div>
       </fieldset>
@@ -43,15 +44,15 @@ export default function VenueForm({ mode, venueId, initialVenue = {}, onSubmit, 
         <div className="venue-form-grid">
           <label>
             Postal code
-            <input name="postal_code" inputMode="numeric" maxLength="6" required placeholder="6-digit postal code" defaultValue={initialVenue.postal_code || ''} />
+            <RequiredIndicator /><input name="postal_code" inputMode="numeric" maxLength="6" required placeholder="6-digit postal code" defaultValue={initialVenue.postal_code || ''} />
           </label>
           <label>
             Block number
-            <input name="block_number" required placeholder="Block number" defaultValue={initialVenue.block_number || ''} />
+            <RequiredIndicator /><input name="block_number" required placeholder="Block number" defaultValue={initialVenue.block_number || ''} />
           </label>
           <label>
             Street name
-            <input name="street_name" required placeholder="Street name" defaultValue={initialVenue.street_name || ''} />
+            <RequiredIndicator /><input name="street_name" required placeholder="Street name" defaultValue={initialVenue.street_name || ''} />
           </label>
           <label>
             Building name <span className="metadata">(optional)</span>
@@ -81,11 +82,11 @@ export default function VenueForm({ mode, venueId, initialVenue = {}, onSubmit, 
         <div className="venue-form-grid">
           <label>
             Default setup time (minutes)
-            <input name="default_setup_minutes" type="number" min="0" required placeholder="0" defaultValue={initialVenue.default_setup_minutes ?? ''} />
+            <RequiredIndicator /><input name="default_setup_minutes" type="number" min="0" required placeholder="0" defaultValue={initialVenue.default_setup_minutes ?? ''} />
           </label>
           <label>
             Default turnaround time (minutes)
-            <input name="default_turnaround_minutes" type="number" min="0" required placeholder="0" defaultValue={initialVenue.default_turnaround_minutes ?? ''} />
+            <RequiredIndicator /><input name="default_turnaround_minutes" type="number" min="0" required placeholder="0" defaultValue={initialVenue.default_turnaround_minutes ?? ''} />
           </label>
         </div>
         <div className="layout-options">
@@ -110,9 +111,9 @@ export default function VenueForm({ mode, venueId, initialVenue = {}, onSubmit, 
           {VENUE_DAYS.map(([day, label]) => (
             <div className="operating-hours-row" key={day}>
               <strong>{label}</strong>
-              <label><span className="sr-only">{label} opening time</span><input name={`${day}_open`} type="time" aria-label={`${label} opening time`} required={!closedDays[day]} disabled={closedDays[day]} defaultValue={initialVenue.operating_hours?.[day]?.open || ''} /></label>
+              <label><span className="sr-only">{label} opening time</span><RequiredIndicator required={!closedDays[day]} /><input name={`${day}_open`} type="time" aria-label={`${label} opening time`} required={!closedDays[day]} disabled={closedDays[day]} defaultValue={initialVenue.operating_hours?.[day]?.open || ''} /></label>
               <span aria-hidden="true">to</span>
-              <label><span className="sr-only">{label} closing time</span><input name={`${day}_close`} type="time" aria-label={`${label} closing time`} required={!closedDays[day]} disabled={closedDays[day]} defaultValue={initialVenue.operating_hours?.[day]?.close || ''} /></label>
+              <label><span className="sr-only">{label} closing time</span><RequiredIndicator required={!closedDays[day]} /><input name={`${day}_close`} type="time" aria-label={`${label} closing time`} required={!closedDays[day]} disabled={closedDays[day]} defaultValue={initialVenue.operating_hours?.[day]?.close || ''} /></label>
               <label className="venue-checkbox"><input name={`${day}_closed`} type="checkbox" checked={Boolean(closedDays[day])} onChange={event => setClosedDays(current => ({ ...current, [day]: event.target.checked }))} /> Closed</label>
             </div>
           ))}

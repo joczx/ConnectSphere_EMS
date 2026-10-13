@@ -1,3 +1,4 @@
+import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -49,14 +50,14 @@ function ReviewForm({ request, equipment, onReviewed }) {
     </div> : <form onSubmit={submit}>
       <h4>{outcome === 'accepted' ? 'Accept request' : outcome === 'rejected' ? 'Reject request' : 'Partially accept request'}</h4>
       {outcome !== 'rejected' && <>
-        <label>Equipment model<select required value={equipmentId} disabled={busy} onChange={e => setEquipmentId(e.target.value)}>
+        <label>Equipment model<RequiredIndicator /><select required value={equipmentId} disabled={busy} onChange={e => setEquipmentId(e.target.value)}>
           <option value="">Select equipment</option>{matching.map(item => <option key={item.equipment_id} value={item.equipment_id}>{item.equipment_model}</option>)}
         </select></label>
         {!matching.length && <p>No matching equipment is in the catalogue.</p>}
-        {outcome === 'partially_accepted' ? <label>Quantity to accept<input autoFocus type="number" required min="1" max={request.quantity - 1} step="1" value={quantity} disabled={busy} onChange={e => setQuantity(e.target.value)} /></label>
+        {outcome === 'partially_accepted' ? <label>Quantity to accept<RequiredIndicator /><input autoFocus type="number" required min="1" max={request.quantity - 1} step="1" value={quantity} disabled={busy} onChange={e => setQuantity(e.target.value)} /></label>
           : <p>Accept all {request.quantity} requested units.</p>}
       </>}
-      {outcome === 'rejected' && <label>Reason for rejection<textarea required value={reason} disabled={busy} onChange={e => setReason(e.target.value)} /></label>}
+      {outcome === 'rejected' && <label>Reason for rejection<RequiredIndicator /><textarea required value={reason} disabled={busy} onChange={e => setReason(e.target.value)} /></label>}
       {error && <p role="alert" className="error">{error}</p>}
       <button disabled={busy || (outcome !== 'rejected' && !equipmentId)}>{busy ? 'Saving...' : 'Confirm decision'}</button>
       <button type="button" className="secondary" disabled={busy} onClick={() => { setOutcome(''); setError(''); notify('Review cancelled. No decision was recorded.', 'info'); }}>Cancel</button>

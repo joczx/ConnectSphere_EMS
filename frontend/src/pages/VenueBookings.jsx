@@ -1,3 +1,4 @@
+import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -221,7 +222,7 @@ export default function VenueBookings() {
           Expected attendance
           {/* Fixed by the event whenever the event records it, so a request can
               never ask for a headcount the event does not have. */}
-          <input
+          <RequiredIndicator /><input
             type="number"
             min="1"
             max="2147483647"
@@ -234,7 +235,7 @@ export default function VenueBookings() {
         </label>
         <label>
           Venue requirements
-          <textarea
+          <RequiredIndicator /><textarea
             required
             maxLength={5000}
             rows={6}

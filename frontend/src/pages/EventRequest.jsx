@@ -1,3 +1,4 @@
+import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -95,22 +96,22 @@ export default function EventRequest() {
       </section>}
       {(isNew || state.request) && <form className="panel" hidden={!!state.preview} key={request.updated_at} onSubmit={save}>
         <fieldset disabled={!editable || state.busy || !!state.preview}>
-          <label>Event name<input name="event_name" required defaultValue={value('event_name')} /></label>
-          <label>Purpose<input name="purpose" required defaultValue={value('purpose')} /></label>
-          <label>Description<textarea name="description" rows="4" required defaultValue={value('description')} /></label>
-          <label>Start date and time<input name="start_datetime" type="datetime-local" required defaultValue={toInput(request.start_datetime)} /></label>
-          <label>End date and time<input name="end_datetime" type="datetime-local" required defaultValue={toInput(request.end_datetime)} /></label>
-          <label>Expected attendance<input name="capacity_needed" type="number" min="1" required defaultValue={value('capacity_needed')} /></label>
-          <label>Room layout<select name="room_layout" required defaultValue={value('room_layout')}>
+          <label>Event name<RequiredIndicator /><input name="event_name" required defaultValue={value('event_name')} /></label>
+          <label>Purpose<RequiredIndicator /><input name="purpose" required defaultValue={value('purpose')} /></label>
+          <label>Description<RequiredIndicator /><textarea name="description" rows="4" required defaultValue={value('description')} /></label>
+          <label>Start date and time<RequiredIndicator /><input name="start_datetime" type="datetime-local" required defaultValue={toInput(request.start_datetime)} /></label>
+          <label>End date and time<RequiredIndicator /><input name="end_datetime" type="datetime-local" required defaultValue={toInput(request.end_datetime)} /></label>
+          <label>Expected attendance<RequiredIndicator /><input name="capacity_needed" type="number" min="1" required defaultValue={value('capacity_needed')} /></label>
+          <label>Room layout<RequiredIndicator /><select name="room_layout" required defaultValue={value('room_layout')}>
             <option value="">Select a layout</option>{LAYOUTS.map(layout => <option key={layout} value={layout}>{humanise(layout)}</option>)}
           </select></label>
-          <label>Required facilities (hold Ctrl or ⌘ to select several)<select name="required_facilities" multiple required defaultValue={request.required_facilities?.length === 0 ? ['none'] : request.required_facilities || []}>
+          <label>Required facilities (hold Ctrl or ⌘ to select several)<RequiredIndicator /><select name="required_facilities" multiple required defaultValue={request.required_facilities?.length === 0 ? ['none'] : request.required_facilities || []}>
             <option value="none">No facilities needed</option>{FACILITIES.map(facility => <option key={facility} value={facility}>{humanise(facility)}</option>)}
           </select></label>
           {[['need_wheelchair_accessibility', 'Wheelchair accessibility needed'], ['need_blind_accessibility', 'Accessibility for blind attendees needed']].map(([name, text]) =>
             <label key={name}>{text}<select name={name} defaultValue={request[name] ? 'yes' : 'no'}><option value="no">No</option><option value="yes">Yes</option></select></label>)}
-          <label>Equipment requirements (one per line: type, quantity, notes — or write "none")<textarea name="equipment_requirements" rows="3" required placeholder="projector, 2, HDMI input" defaultValue={toLines(request.equipment_requirements)} /></label>
-          <label>Registration needs (write "none" if not needed)<textarea name="registration_needs" rows="3" required defaultValue={value('registration_needs')} /></label>
+          <label>Equipment requirements (one per line: type, quantity, notes — or write "none")<RequiredIndicator /><textarea name="equipment_requirements" rows="3" required placeholder="projector, 2, HDMI input" defaultValue={toLines(request.equipment_requirements)} /></label>
+          <label>Registration needs (write "none" if not needed)<RequiredIndicator /><textarea name="registration_needs" rows="3" required defaultValue={value('registration_needs')} /></label>
           {editable && <div className="heading">
             <button type="submit" value="draft" className="secondary" formNoValidate>{state.busy ? 'Saving…' : rejected ? 'Save changes' : 'Save draft'}</button>
             <button type="submit" value="submit">Review before submitting</button>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import RequiredIndicator from '../components/RequiredIndicator';
 import { useFeedback } from '../components/FeedbackProvider';
 import { Alert, AlertDescription, AlertTitle } from '../components/Alert';
 import VenueBookingDetails from '../components/VenueBookingDetails';
@@ -103,6 +104,7 @@ export default function ReviewVenueBooking() {
           </div>}
           <label>
             Comments for the Event Coordinator (required when rejecting)
+            <RequiredIndicator title="Required when rejecting" />
             <textarea
               rows="4"
               maxLength={2000}
