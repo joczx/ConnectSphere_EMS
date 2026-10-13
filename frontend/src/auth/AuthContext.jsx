@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { hasAccess, rolesForPath } from './access';
 import { readApiResponse } from '../services/http';
 import { useFeedback } from '../components/FeedbackProvider';
 import { actionMessage, shouldNotify } from '../services/actionFeedback';
@@ -122,6 +123,19 @@ export function AuthProvider({ children }) {
     }
   }, [authFetch, notify]);
 
+  const [account, setAccount] = useState({ user: null, loading: true, error: '' });
+  const accountId = session?.user?.id || session?.access_token;
+  useEffect(() => {
+    const controller = new AbortController();
+    setAccount({ user: null, loading: !!accountId, error: '', accountId });
+    if (accountId) api('/api/users/me', { cache: 'no-store', signal: controller.signal })
+      .then(data => { if (!controller.signal.aborted) setAccount({ user: data.user, loading: false, error: '', accountId }); })
+      .catch(error => { if (!controller.signal.aborted) setAccount({ user: null, loading: false, error: error.message, accountId }); });
+    return () => controller.abort();
+  }, [api, accountId]);
+  const accountReady = account.accountId === accountId && !account.loading;
+  const canAccess = useCallback(path => accountReady && !account.error && hasAccess(account.user?.roles, rolesForPath(path)), [account, accountReady]);
+
   const value = useMemo(() => ({
     session,
     token: session?.access_token ?? null,
@@ -129,7 +143,10 @@ export function AuthProvider({ children }) {
     signOut,
     authFetch,
     api,
-  }), [session, saveSession, signOut, authFetch, api]);
+    account,
+    accountReady,
+    canAccess,
+  }), [session, saveSession, signOut, authFetch, api, account, accountReady, canAccess]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

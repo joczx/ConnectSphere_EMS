@@ -11,7 +11,7 @@ export const APP_ICONS = {
 };
 
 export default function AppShell({ children }) {
-  const { session, signOut } = useAuth();
+  const { session, signOut, canAccess } = useAuth();
   const [open, setOpen] = useState(false);
   const user = session?.user;
   const name = user?.user_metadata?.full_name || user?.email || 'Signed in';
@@ -22,7 +22,7 @@ export default function AppShell({ children }) {
       <NavLink to="/home" className="sidebar-brand" onClick={() => setOpen(false)}><span>ConnectSphere</span><strong>Event Management</strong></NavLink>
       <nav aria-label="Main navigation">
         <NavLink to="/home" className="sidebar-link" onClick={() => setOpen(false)}><UiIcon name="home" />Dashboard</NavLink>
-        {HOME_APPS.map(app => <NavLink key={app.id} to={app.path} className="sidebar-link" onClick={() => setOpen(false)}><UiIcon name={APP_ICONS[app.id]} /><span>{app.label}</span></NavLink>)}
+        {HOME_APPS.filter(app => canAccess(app.path)).map(app => <NavLink key={app.id} to={app.path} className="sidebar-link" onClick={() => setOpen(false)}><UiIcon name={APP_ICONS[app.id]} /><span>{app.label}</span></NavLink>)}
       </nav>
       <div className="sidebar-account"><span>Connected account</span><strong>{name}</strong>{user?.email && name !== user.email && <span>{user.email}</span>}<button onClick={signOut}>Sign out →</button></div>
     </aside>

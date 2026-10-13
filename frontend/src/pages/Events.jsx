@@ -490,7 +490,7 @@ export default function Events() {
         {submitState.error && <div className="error">{submitState.error}</div>}
         {submitState.message && <div className="success">{submitState.message}</div>}
 
-        <form onSubmit={submitEquipmentRequest} style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
+        {isCoordinator && editable && <form onSubmit={submitEquipmentRequest} style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
           <label>
             Equipment Type
             <RequiredIndicator /><select value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required>
@@ -507,7 +507,7 @@ export default function Events() {
             <textarea value={form.technical_requirements} onChange={(e) => setForm({ ...form, technical_requirements: e.target.value })} rows="6" />
           </label>
           <button type="submit">Submit equipment request</button>
-        </form>
+        </form>}
 
         <div style={{ marginTop: '24px' }}>
           {equipmentRequests.length === 0 ? (

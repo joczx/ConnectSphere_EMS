@@ -1,3 +1,5 @@
+import { rolesForPath } from '../auth/access';
+
 /**
  * Home-page app definition shape:
  * {
@@ -9,7 +11,7 @@
  *   roles: string[]
  * }
  */
-export const HOME_APPS = [
+const apps = [
   {
     id: 'venue-bookings',
     label: 'Venue Bookings',
@@ -93,3 +95,5 @@ export const HOME_APPS = [
     roles: [],
   },
 ];
+
+export const HOME_APPS = apps.map(app => ({ ...app, roles: rolesForPath(app.path) }));
