@@ -3,6 +3,10 @@ import unittest
 from unittest.mock import patch
 
 from app import create_app
+from app.services.equipment_request_service import (
+    EquipmentRequestError,
+    create_equipment_request,
+)
 
 
 class EquipmentRequestRouteTests(unittest.TestCase):
@@ -105,6 +109,54 @@ class EquipmentRequestRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertIn('Authentication required.', response.json['error'])
+
+    def test_create_equipment_request_requires_auth(self):
+        response = self.client.post('/api/events/2/equipment-requests', json={})
+
+        self.assertEqual(response.status_code, 401)
+        self.assertIn('Authentication required.', response.json['error'])
+
+    def test_store_error_is_returned_by_route(self):
+        from app.services.event_store import StoreError
+
+        with patch(
+            'app.routes.equipment_requests.list_equipment_requests',
+            side_effect=StoreError(503, 'Database unavailable'),
+        ):
+            response = self.client.get('/api/events/2/equipment-requests', headers=self.headers)
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json, {'error': 'Database unavailable'})
+
+    def test_create_request_rejects_invalid_payload_fields(self):
+        invalid_payloads = (
+            None,
+            [],
+            {'equipment_type': 'Projector', 'quantity': 1, 'technical_requirements': 1},
+            {'equipment_type': '  ', 'quantity': 1},
+        )
+        for payload in invalid_payloads:
+            responses = [{'id': 'user'}, [{'event_id': 1}]] if isinstance(payload, dict) else []
+            with self.subTest(payload=payload), patch(
+                'app.services.equipment_request_service.supabase_request', side_effect=responses,
+            ):
+                with self.assertRaises(EquipmentRequestError):
+                    create_equipment_request(1, payload, 'token')
+
+    def test_create_request_rejects_missing_user_or_unavailable_event(self):
+        payload = {'equipment_type': 'Projector', 'quantity': 1}
+        with patch('app.services.equipment_request_service.supabase_request', return_value={}):
+            with self.assertRaises(EquipmentRequestError):
+                create_equipment_request(1, payload, 'token')
+        with patch('app.services.equipment_request_service.supabase_request', side_effect=[{'id': 'user'}, []]):
+            with self.assertRaises(EquipmentRequestError):
+                create_equipment_request(1, payload, 'token')
+
+    def test_create_request_keeps_record_when_database_returns_no_representation(self):
+        with patch('app.services.equipment_request_service.supabase_request', side_effect=[{'id': 'user'}, [{'event_id': 1}], []]):
+            record = create_equipment_request(1, {'equipment_type': ' Projector ', 'quantity': 1}, 'token')
+        self.assertEqual(record['equipment_type'], 'Projector')
+        self.assertIsNone(record['technical_requirements'])
 
 
 if __name__ == '__main__':
