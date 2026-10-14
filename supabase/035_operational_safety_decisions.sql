@@ -23,7 +23,10 @@ create index operational_safety_decision_event_idx
 alter table public.events
     add column if not exists safety_rework_required boolean not null default false,
     add column if not exists safety_rework_requested_at timestamptz,
-    add column if not exists safety_rework_arrangements text[] not null default array[]::text[];
+    add column if not exists safety_rework_arrangements text[] not null default array[]::text[],
+    -- Written only by the safety decision workflow. It lets a previously
+    -- approved safety review satisfy confirmation once registration is ready.
+    add column if not exists safety_approved_at timestamptz;
 
 alter table public.notification
     add column if not exists safety_decision_id bigint
@@ -48,8 +51,13 @@ begin
     end if;
     if 'venue' = any(requirements) and not exists (
         select 1 from public.venue_booking_requests b
+        join public.venues v using (venue_id)
         where b.event_id = p_event.event_id and b.status = 'approved'
           and b.reviewed_at >= p_event.safety_rework_requested_at
+          and b.starts_at = p_event.start_datetime and b.ends_at = p_event.end_datetime
+          and (p_event.capacity_needed is null or b.attendance = p_event.capacity_needed)
+          and v.deleted_at is null
+          and cardinality(public.venue_shortfalls_for_event(v, p_event)) = 0
     ) then
         blockers := array_append(blockers, 'The affected venue arrangement must be reviewed and confirmed again.');
     end if;
@@ -74,7 +82,11 @@ declare previous_id text; next_id text;
 begin
     if TG_OP <> 'INSERT' then previous_id := old.event_id::text; end if;
     if TG_OP <> 'DELETE' then next_id := new.event_id::text; end if;
-    update public.events set updated_at = clock_timestamp(), safety_rework_required = false
+    -- This trigger is a trusted workflow write. A changed arrangement must be
+    -- checked by Safety again, even if the event was previously confirmed.
+    perform set_config('connectsphere.safety_workflow', 'true', true);
+    update public.events set updated_at = clock_timestamp(), safety_rework_required = false,
+        safety_approved_at = null
     where event_id::text in (previous_id, next_id)
       and status in ('planning', 'pending_safety_checks', 'confirmed');
     return null;
@@ -91,9 +103,24 @@ begin
             raise check_violation using message = 'New operational events start in Planning.';
         end if;
     else
+        -- The rework/approval fields are workflow state, not arrangement data.
+        -- RLS lets assigned users edit event details, so refusing direct writes
+        -- here closes the otherwise available PostgREST bypass. Trusted RPCs
+        -- and arrangement triggers set this transaction-local flag themselves.
+        if (new.safety_rework_required is distinct from old.safety_rework_required
+            or new.safety_rework_requested_at is distinct from old.safety_rework_requested_at
+            or new.safety_rework_arrangements is distinct from old.safety_rework_arrangements
+            or new.safety_approved_at is distinct from old.safety_approved_at)
+            and current_setting('connectsphere.safety_workflow', true) is distinct from 'true' then
+            raise insufficient_privilege using message = 'Safety workflow fields can only be changed by the safety workflow.';
+        end if;
         if old.status = 'confirmed' and
-            (to_jsonb(new) - array['status', 'registration_ready', 'updated_at']) is distinct from
-            (to_jsonb(old) - array['status', 'registration_ready', 'updated_at']) then
+            (to_jsonb(new) - array['status', 'registration_ready', 'updated_at',
+                                   'safety_rework_required', 'safety_rework_requested_at',
+                                   'safety_rework_arrangements', 'safety_approved_at']) is distinct from
+            (to_jsonb(old) - array['status', 'registration_ready', 'updated_at',
+                                   'safety_rework_required', 'safety_rework_requested_at',
+                                   'safety_rework_arrangements', 'safety_approved_at']) then
             raise check_violation using message = 'Confirmed event arrangements cannot be edited.';
         end if;
         if new.registration_ready is distinct from old.registration_ready
@@ -103,13 +130,17 @@ begin
         if new.registration_needs is distinct from old.registration_needs then
             new.registration_ready := false;
         end if;
-        if old.safety_rework_required and new.safety_rework_required
-            and (to_jsonb(new) - array['status', 'updated_at', 'safety_rework_required',
-                                       'safety_rework_requested_at', 'safety_rework_arrangements'])
+        if (to_jsonb(new) - array['status', 'updated_at', 'registration_ready',
+                                  'safety_rework_required', 'safety_rework_requested_at',
+                                  'safety_rework_arrangements', 'safety_approved_at'])
                 is distinct from
-                (to_jsonb(old) - array['status', 'updated_at', 'safety_rework_required',
-                                       'safety_rework_requested_at', 'safety_rework_arrangements']) then
+                (to_jsonb(old) - array['status', 'updated_at', 'registration_ready',
+                                       'safety_rework_required', 'safety_rework_requested_at',
+                                       'safety_rework_arrangements', 'safety_approved_at']) then
+            -- A real event-detail change addresses a general change request,
+            -- but always invalidates a previous safety approval.
             new.safety_rework_required := false;
+            new.safety_approved_at := null;
         end if;
         if old.status in ('completed', 'cancelled') and new is distinct from old then
             raise check_violation using message = 'Completed and cancelled events cannot be changed.';
@@ -140,10 +171,20 @@ begin
     end if;
     if new.status in ('planning', 'pending_safety_checks') then
         blockers := public.event_safety_check_blockers(new);
-        new.status := case when cardinality(blockers) = 0 then 'pending_safety_checks'::public.event_status
+        if cardinality(blockers) > 0 then
+            new.status := 'planning'::public.event_status;
+        elsif new.safety_approved_at is not null
+            and cardinality(public.event_confirmation_blockers(new)) = 0 then
+            new.status := 'confirmed'::public.event_status;
+        else
+            new.status := 'pending_safety_checks'::public.event_status;
+        end if;
+    elsif new.status = 'confirmed' and cardinality(public.event_confirmation_blockers(new)) > 0 then
+        -- Safety approval remains recorded, but no longer bypasses the
+        -- established registration-readiness and full-arrangement checks.
+        new.status := case when cardinality(public.event_safety_check_blockers(new)) = 0
+                           then 'pending_safety_checks'::public.event_status
                            else 'planning'::public.event_status end;
-    elsif new.status = 'confirmed' and cardinality(public.event_safety_check_blockers(new)) > 0 then
-        new.status := 'planning'::public.event_status;
     end if;
     if TG_OP = 'UPDATE' then new.updated_at := clock_timestamp(); end if;
     return new;
@@ -172,21 +213,32 @@ begin
 
     insert into public.operational_safety_decision (event_id, safety_officer_id, outcome, remarks, affected_arrangements)
     values (planned.event_id, auth.uid(), outcome, remarks, affected) returning * into saved;
+    perform set_config('connectsphere.safety_workflow', 'true', true);
     if outcome = 'approved' then
         update public.events set status = 'confirmed', safety_rework_required = false,
-            safety_rework_arrangements = array[]::text[] where event_id = planned.event_id returning * into planned;
-        note := 'Safety arrangements approved. The event is confirmed.';
+            safety_rework_arrangements = array[]::text[], safety_approved_at = saved.created_at
+        where event_id = planned.event_id returning * into planned;
+        note := case when planned.status = 'confirmed' then 'Safety arrangements approved. The event is confirmed.'
+                     else 'Safety arrangements approved. The event will be confirmed once its remaining readiness checks are complete.' end;
     else
         update public.events set status = 'planning', safety_rework_required = true,
-            safety_rework_requested_at = saved.created_at, safety_rework_arrangements = affected
+            safety_rework_requested_at = saved.created_at, safety_rework_arrangements = affected,
+            safety_approved_at = null
         where event_id = planned.event_id returning * into planned;
         note := case when outcome = 'rejected' then 'Safety arrangements rejected. Address the remarks before proceeding.'
                      else 'Safety changes requested. Address the remarks before proceeding.' end;
     end if;
-    insert into public.notification (recipient_id, safety_decision_id, notification_type, message)
-    values (planned.event_coordinator_id, saved.safety_decision_id, 'operational_safety_' || outcome,
-        'Safety decision for ' || coalesce(planned.event_name, 'your event') || ': ' || note
-        || case when remarks is null then '' else ' Remarks: ' || remarks end);
+    -- Recording the safety decision is more important than a notification row.
+    -- This matches the venue-review workflow: a missing profile/notification
+    -- constraint must not make the officer lose a successfully made decision.
+    begin
+        insert into public.notification (recipient_id, safety_decision_id, notification_type, message)
+        values (planned.event_coordinator_id, saved.safety_decision_id, 'operational_safety_' || outcome,
+            'Safety decision for ' || coalesce(planned.event_name, 'your event') || ': ' || note
+            || case when remarks is null then '' else ' Remarks: ' || remarks end);
+    exception when foreign_key_violation or check_violation or not_null_violation then
+        null;
+    end;
     return jsonb_build_object('event', to_jsonb(planned), 'decision', to_jsonb(saved), 'message', note);
 end;
 $$;
