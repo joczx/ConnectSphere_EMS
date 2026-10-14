@@ -25,6 +25,8 @@ import VenueDetails from './pages/VenueDetails';
 import CreateVenue from './pages/CreateVenue';
 import UpdateVenue from './pages/UpdateVenue';
 import DeleteVenue from './pages/DeleteVenue';
+import OperationalSafetyReviews from './pages/OperationalSafetyReviews';
+import OperationalSafetyReview from './pages/OperationalSafetyReview';
 import AppShell from './components/AppShell';
 
 function ProtectedPage({ children }) {
@@ -65,6 +67,8 @@ export default function App() {
     <Route path="/equipment-availability" element={protectedView(<EquipmentAvailability />)} />
     <Route path="/venue-suitability" element={protectedView(<VenueSuitability />)} />
     <Route path="/venue-suitability/check/:eventId" element={protectedView(<VenueSuitabilityCheck />)} />
+    <Route path="/operational-safety-reviews" element={protectedView(<OperationalSafetyReviews />)} />
+    <Route path="/operational-safety-reviews/:eventId" element={protectedView(<OperationalSafetyReview />)} />
     <Route path="/venues" element={protectedView(<Venues />)} />
     <Route path="/venues/new" element={protectedView(<CreateVenue />)} />
     <Route path="/venues/:venueId" element={protectedView(<VenueDetails />)} />

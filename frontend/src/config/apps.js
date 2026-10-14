@@ -110,6 +110,14 @@ const apps = [
     icon: '✅',
     roles: [],
   },
+  {
+    id: 'operational-safety-reviews',
+    label: 'Safety Reviews',
+    description: 'Review operational safety arrangements for planned events',
+    path: '/operational-safety-reviews',
+    icon: '✅',
+    roles: ['Safety Officer'],
+  },
 ];
 
 export const HOME_APPS = apps.map(app => ({ ...app, roles: rolesForPath(app.path) }));

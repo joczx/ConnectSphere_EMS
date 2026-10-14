@@ -88,3 +88,16 @@ def test_database_permission_error_is_preserved(client):
         response = client.post('/api/equipment/reservations', json={'event_id': '1', 'equipment_id': EQUIPMENT_ID, 'quantity': 2})
     assert response.status_code == 403
     assert response.json['error'] == message
+
+
+def test_equipment_types_require_bearer_token_and_return_sorted_unique_values(client):
+    assert client.get('/api/equipment-types').status_code == 401
+    rows = [
+        {'equipment_type': 'Projector'}, {'equipment_type': 'Microphone'},
+        {'equipment_type': 'Projector'}, {'equipment_type': ''},
+    ]
+    with patch('app.routes.equipment.supabase_request', return_value=rows) as rpc:
+        response = client.get('/api/equipment-types', headers={'Authorization': 'Bearer catalogue-token'})
+    assert response.status_code == 200
+    assert response.json == {'equipment_types': ['Microphone', 'Projector']}
+    rpc.assert_called_once_with('/rest/v1/equipment?select=equipment_type', token='catalogue-token')

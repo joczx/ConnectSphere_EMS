@@ -2,6 +2,10 @@ import unittest
 from unittest.mock import patch
 
 from app import create_app
+from app.services.equipment_availability_service import (
+    EquipmentAvailabilityError,
+    check_equipment_availability,
+)
 
 
 class EquipmentAvailabilityTests(unittest.TestCase):
@@ -112,6 +116,45 @@ class EquipmentAvailabilityTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json['error'], 'Authentication required.')
+
+    def test_availability_rejects_non_object_or_missing_equipment_type(self):
+        for payload in (None, [], {'equipment_type': None}, {'equipment_type': '  '}):
+            with self.subTest(payload=payload):
+                with self.assertRaises(EquipmentAvailabilityError):
+                    check_equipment_availability(payload, 'token')
+
+    def test_availability_rejects_invalid_quantities_and_datetimes(self):
+        valid = {
+            'equipment_type': 'Projector', 'quantity': 1,
+            'start_datetime': '2026-10-01T09:00:00Z',
+            'end_datetime': '2026-10-01T10:00:00Z',
+        }
+        for payload in (
+            {**valid, 'quantity': 'not-a-number'},
+            {**valid, 'quantity': None},
+            {**valid, 'start_datetime': None},
+            {**valid, 'end_datetime': 1},
+            {**valid, 'start_datetime': '2026-10-01T09:00:00'},
+            {**valid, 'end_datetime': 'not-a-date'},
+        ):
+            with self.subTest(payload=payload):
+                with self.assertRaises(EquipmentAvailabilityError):
+                    check_equipment_availability(payload, 'token')
+
+    @patch('app.services.equipment_availability_service.supabase_request')
+    def test_skips_malformed_unmatched_and_unavailable_catalogue_items(self, query):
+        query.side_effect = [
+            {'id': 'user'},
+            [None, {'equipment_type': '  '}, {'equipment_type': 'Microphone'}, {
+                'equipment_id': 10, 'equipment_type': 'Projector', 'available_quantity': 0,
+            }],
+        ]
+        result = check_equipment_availability({
+            'equipment_type': 'Projector', 'quantity': 1,
+            'start_datetime': '2026-10-01T09:00:00Z',
+            'end_datetime': '2026-10-01T10:00:00Z',
+        }, 'token')
+        self.assertEqual(result['results'], [])
 
 
 if __name__ == '__main__':

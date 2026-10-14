@@ -2,6 +2,7 @@ export const normalizeRole = role => role.trim().replaceAll('_', ' ').toLowerCas
 const coordinator = ['event coordinator'];
 const technical = ['technical support staff', 'technical support'];
 const venueStaff = ['venue staff'];
+const safetyOfficer = ['safety officer'];
 export const PAGE_ROLES = {
   '/assign-event-coordinators': ['event coordinator lead'],
   '/reassign-event-coordinators': ['event coordinator lead'],
@@ -13,6 +14,7 @@ export const PAGE_ROLES = {
   '/equipment-availability': [...coordinator, ...technical],
   '/venue-search': coordinator,
   '/venue-suitability': coordinator,
+  '/operational-safety-reviews': safetyOfficer,
 };
 export function rolesForPath(path) {
   if (/^\/venues\/(new|[^/]+\/(edit|delete))$/.test(path)) return venueStaff;

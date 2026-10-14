@@ -9,6 +9,7 @@ export const APP_ICONS = {
   events: 'events', 'event-requests': 'requests', 'review-event-requests': 'check',
   'venue-bookings': 'requests', equipment: 'equipment', 'equipment-availability': 'equipment',
   'venue-management': 'venues', 'venue-search': 'search', 'venue-suitability': 'check',
+  'operational-safety-reviews': 'check',
 };
 
 export default function AppShell({ children }) {
