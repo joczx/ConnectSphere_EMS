@@ -58,7 +58,7 @@ begin
             end if;
             select coalesce(sum(r.quantity), 0) into reserved
             from public.equipment_reservations r join public.equipment q using (equipment_id)
-            where r.event_id = p_event.event_id::text
+            where r.event_id = p_event.event_id
               and lower(btrim(q.equipment_type)) = lower(btrim(item->>'equipment_type'))
               and r.starts_at <= p_event.start_datetime and r.ends_at >= p_event.end_datetime;
             if reserved < (item->>'quantity')::numeric then
