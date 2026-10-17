@@ -213,7 +213,7 @@ begin
                 union all
                 select q.equipment_type || ' – ' || q.equipment_model || ' (quantity ' || r.quantity || ')'
                 from public.equipment_reservations r join public.equipment q using (equipment_id)
-                where r.event_id = event_row.event_id::text
+                where r.event_id = event_row.event_id
             ) arranged_equipment
         ), '[]'::jsonb),
         'crowd_movement', event_row.crowd_movement_plan,

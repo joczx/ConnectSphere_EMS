@@ -63,7 +63,7 @@ begin
     end if;
     if 'technical' = any(requirements) and not exists (
         select 1 from public.equipment_reservations r
-        where r.event_id = p_event.event_id::text
+        where r.event_id = p_event.event_id
           and r.created_at >= p_event.safety_rework_requested_at
     ) then
         blockers := array_append(blockers, 'The affected technical arrangement must be reviewed and confirmed again.');
