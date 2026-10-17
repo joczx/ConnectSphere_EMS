@@ -52,7 +52,7 @@ def load_event(event_id, token):
 
 
 def update_event(event_id, payload, token, confirm_critical=False,
-                 expected_updated_at=None):
+                 expected_updated_at=None, actor_id=None):
     """Apply an edit to an event in planning.
 
     Returns (row, activity). `activity` is the history entry written, or None
@@ -70,6 +70,12 @@ def update_event(event_id, payload, token, confirm_critical=False,
     already moved.
     """
     existing = load_event(event_id, token)
+
+    if actor_id and existing.get("event_organiser_id") == actor_id:
+        raise EventError(
+            "Event Organisers must submit an event change request instead of editing the event directly.",
+            status=403,
+        )
 
     if not schema.is_editable(existing):
         raise EventError(schema.why_not_editable(existing), status=409)

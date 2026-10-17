@@ -55,6 +55,14 @@ const apps = [
     roles: [],
   },
   {
+    id: 'event-change-requests',
+    label: 'Request Event Changes',
+    description: 'Propose changes to an event you submitted',
+    path: '/event-change-requests/new',
+    icon: '📝',
+    roles: [],
+  },
+  {
     id: 'review-event-requests',
     label: 'Review Event Requests',
     description: 'Open Review Event Requests',

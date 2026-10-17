@@ -7,6 +7,7 @@ export const PAGE_ROLES = {
   '/assign-event-coordinators': ['event coordinator lead'],
   '/reassign-event-coordinators': ['event coordinator lead'],
   '/event-requests': ['event organiser', 'event organizer'],
+  '/event-change-requests': ['event organiser', 'event organizer'],
   '/review-event-requests': coordinator,
   '/venue-bookings': coordinator,
   '/review-venue-bookings': venueStaff,
