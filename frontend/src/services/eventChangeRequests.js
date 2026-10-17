@@ -28,7 +28,6 @@ export function formFromEvent(event) {
 }
 
 function saved(event, field) {
-  if (field.endsWith('_datetime')) return event[field] ? new Date(event[field]).toISOString() : null;
   if (field === 'equipment_requirements') return toItems(toLines(event[field]));
   if (field === 'required_facilities') return event[field] ?? [];
   if (field.startsWith('need_')) return !!event[field];
@@ -46,9 +45,22 @@ export function changedValues(event, form) {
     need_blind_accessibility: form.need_blind_accessibility,
     equipment_requirements: toItems(form.equipment_requirements),
   };
-  return Object.fromEntries(Object.entries(next).filter(
-    ([field, value]) => JSON.stringify(value) !== JSON.stringify(saved(event, field)),
-  ));
+  return Object.fromEntries(Object.entries(next).filter(([field, value]) => {
+    // Compare date inputs in the same minute-precision format shown to the
+    // Organiser. Stored seconds or milliseconds are invisible in the form and
+    // therefore must not become an accidental proposed change.
+    if (field.endsWith('_datetime')) {
+      return form[field] !== toInput(event[field]);
+    }
+
+    // Venue facilities are a set. A different array order is not a change.
+    if (field === 'required_facilities') {
+      const ordered = facilities => [...(facilities || [])].sort();
+      return JSON.stringify(ordered(value)) !== JSON.stringify(ordered(saved(event, field)));
+    }
+
+    return JSON.stringify(value) !== JSON.stringify(saved(event, field));
+  }));
 }
 
 export function submissionBody(event, form, confirmCritical = false) {
