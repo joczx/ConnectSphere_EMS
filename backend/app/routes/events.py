@@ -41,7 +41,7 @@ def event_error(error):
 @events.get('/events')
 def list_events():
     token = authenticated_token(supabase_request)
-    rows = supabase_request('/rest/v1/events?select=event_id,event_name,status,start_datetime,end_datetime&order=start_datetime.asc.nullslast', token=token)
+    rows = supabase_request('/rest/v1/events?select=event_id,event_name,status,start_datetime,end_datetime,event_coordinator_id&order=start_datetime.asc.nullslast', token=token)
     return jsonify(events=rows)
 
 

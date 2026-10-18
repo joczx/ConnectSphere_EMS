@@ -39,6 +39,14 @@ def prevent_caching(response):
 
 @equipment.errorhandler(StoreError)
 def store_error(error):
+    if error.status == 403:
+        return jsonify(error='You do not have permission to access this equipment action.'), 403
+    if error.code == '42883':
+        return jsonify(error=(
+            'Equipment database functions are incompatible with the current schema. '
+            'Apply supabase/033_equipment_list_event_ids.sql and reload the API schema cache. '
+            'If this persists, check the Supabase error in the backend log.'
+        )), 503
     if error.code in {'PGRST202', 'PGRST205', '42P01', '42703'}:
         return jsonify(error='Equipment reservations are not configured in the database yet. Please contact your administrator.'), 503
     message = 'Please sign in again.' if error.status == 401 else 'Equipment service is temporarily unavailable.'

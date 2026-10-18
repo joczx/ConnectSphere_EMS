@@ -1,3 +1,4 @@
+import EventRequestPeople from '../components/EventRequestPeople';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -25,6 +26,7 @@ export default function ReviewEventRequests() {
         <div className="event-list">{items.map(item => <Link className="panel event-link" key={item.event_request_id} to={'/review-event-requests/' + item.event_request_id}>
           <h2>{item.event_name}</h2>
           <p className="metadata">Status: {humanise(item.status)}</p>
+          <EventRequestPeople request={item} />
           <span>{item.status === 'submitted' ? 'Review request →' : 'View request →'}</span>
         </Link>)}</div>
       </section>)}

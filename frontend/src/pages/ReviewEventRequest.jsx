@@ -1,3 +1,4 @@
+import EventRequestPeople from '../components/EventRequestPeople';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -58,7 +59,7 @@ export default function ReviewEventRequest() {
       {location.state?.message && <p role="status" className="panel">{location.state.message}</p>}
       {state.loading && <p role="status">Loading event request…</p>}
       {!request && errorBox}
-      {request && <article className="panel"><dl>{[
+      {request && <article className="panel"><EventRequestPeople request={request} /><dl>{[
         ['Status', humanise(request.status)],
         ['Submitted', when(request.submitted_at)],
         ['Purpose', request.purpose],

@@ -1,3 +1,4 @@
+import EventRequestPeople from '../components/EventRequestPeople';
 import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -72,6 +73,7 @@ export default function EventRequest() {
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{isNew ? 'New event request' : request.event_name || 'Event request'}</h1></div></div>
       {request.status && <p className="metadata">Status: {humanise(request.status)}</p>}
       {request.event_request_id && <p>Request ID: {request.event_request_id}</p>}
+      {request.event_request_id && <EventRequestPeople request={request} />}
       {request.submitted_at && <p>Submitted: {new Date(request.submitted_at).toLocaleString()}</p>}
       {location.state?.message && <p role="status" className="panel">{location.state.message}</p>}
       {state.remarks && <div className="panel"><p className="eyebrow">COORDINATOR REMARKS</p><p>{state.remarks}</p></div>}

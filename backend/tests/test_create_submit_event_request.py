@@ -415,7 +415,10 @@ def test_service_returns_saved_details_for_review():
     with patch.object(service, '_execute', side_effect=lambda operation, **kwargs: operation(table).data):
         result = service.get_event_request(42)
     assert result == stored
-    table.select.assert_called_once_with('*')
+    table.select.assert_called_once_with(
+        '*,event_organiser:users!event_organiser_id(name),'
+        'event_coordinator:users!event_coordinator_id(name)'
+    )
     table.select.return_value.eq.assert_called_once_with('event_request_id', 42)
 
 

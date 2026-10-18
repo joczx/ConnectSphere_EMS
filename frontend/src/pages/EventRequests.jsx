@@ -1,3 +1,4 @@
+import EventRequestPeople from '../components/EventRequestPeople';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -28,7 +29,7 @@ export default function EventRequests() {
     if (!(await confirm(`Cancel "${item.event_name || 'Untitled request'}"? This cannot be undone.`, { title: 'Cancel event request', confirmLabel: 'Cancel request', destructive: true }))) return;
     try {
       const result = await eventRequestsApi(api, '/' + item.event_request_id + '/cancel', { method: 'POST', body: {} });
-      setState(current => ({ ...current, requests: current.requests.map(r => r.event_request_id === item.event_request_id ? result.event_request : r) }));
+      setState(current => ({ ...current, requests: current.requests.map(r => r.event_request_id === item.event_request_id ? { ...r, ...result.event_request } : r) }));
     } catch (err) { setState(current => ({ ...current, error: err.message })); }
   }
   const section = (title, items) => items.length > 0 && <section>
@@ -37,6 +38,7 @@ export default function EventRequests() {
       <Link className="panel event-link" to={'/event-requests/' + item.event_request_id}>
         <h2>{item.event_name || 'Untitled request'}</h2>
         <p className="metadata">Status: {humanise(item.status)}</p>
+          <EventRequestPeople request={item} />
         <span>{item.status === 'draft' ? 'Continue editing →' : item.status === 'rejected' ? 'Amend and resubmit →' : 'View request →'}</span>
       </Link>
       {['draft', 'submitted', 'rejected'].includes(item.status) && <button type="button" className="secondary" onClick={() => cancel(item)}>Cancel request</button>}

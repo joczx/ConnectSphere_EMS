@@ -88,3 +88,19 @@ def test_database_permission_error_is_preserved(client):
         response = client.post('/api/equipment/reservations', json={'event_id': '1', 'equipment_id': EQUIPMENT_ID, 'quantity': 2})
     assert response.status_code == 403
     assert response.json['error'] == message
+
+
+def test_permission_failure_is_not_reported_as_an_outage(client):
+    from app.services.event_store import StoreError
+    with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', side_effect=StoreError(403, code='42501')):
+        response = client.get('/api/equipment-request-reviews')
+    assert response.status_code == 403
+    assert 'permission' in response.json['error']
+
+
+def test_incompatible_database_function_identifies_repair(client):
+    from app.services.event_store import StoreError
+    with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', side_effect=StoreError(503, code='42883')):
+        response = client.get('/api/equipment/reservations')
+    assert response.status_code == 503
+    assert '033_equipment_list_event_ids.sql' in response.json['error']
