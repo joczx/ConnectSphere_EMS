@@ -329,32 +329,33 @@ export default function Events() {
 
   return <>
     <Navbar />
-    <main className="container">
+    <main className={eventId ? "container event-reference-detail" : "container event-reference-workspace"}>
       {eventId && <Link to="/events">← My events</Link>}
-      <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{eventId ? event?.event_name || 'Event information' : 'My events'}</h1></div>
-        <button className="secondary" onClick={() => { manualRefresh.current = true; setRefresh(value => value + 1); }} disabled={state.loading}>Refresh</button></div>
-      <p>All times are in Singapore time (SGT). Information refreshes every minute and when you return to this window.</p>
+      <div className="heading"><div><p className="eyebrow">EVENT WORKSPACE</p><h1>{eventId ? event?.event_name || 'Event information' : 'Events'}</h1></div>
+        <div className="event-reference-actions">
+          {event && editable && !isOrganiser && !edit.open && <button type="button" onClick={startEditing}>Edit event</button>}
+          {event && canRequestChange && !edit.open && <Link className="button-link secondary" to={`/event-change-requests/new?event_id=${encodeURIComponent(event.event_id)}`}>Request changes</Link>}
+          {event && canCancel && <button type="button" className="secondary event-cancel-action" disabled={lifecycle.busy} onClick={() => updateLifecycle('cancel')}>Cancel event</button>}
+          {!eventId && canAccess('/event-requests/new') && <Link className="button-link" to="/event-requests/new">+ New event</Link>}
+          <button className="secondary" onClick={() => { manualRefresh.current = true; setRefresh(value => value + 1); }} disabled={state.loading}>Refresh</button></div></div>
+      {!eventId && <p className="event-page-description">Track schedules, arrangements and progress in one place.</p>}
+      <p className="metadata event-refresh-note">Singapore time (SGT) - Refreshes every minute and when you return to this window.</p>
       {state.loading && <p role="status">Loading latest information…</p>}
       {state.error && <div role="alert" className="panel error">{state.error} Use Refresh to try again.</div>}
       {state.statusWarning && <p role="status" className="panel">{state.statusWarning}</p>}
       {data?.events && <EventList events={data.events} />}
       {event && <>
-        <section className="event-detail-summary" aria-label="Event summary">
-          <span className={'event-stage event-stage-' + event.status}>{label(event.status)}</span>
-          <div className="event-summary-facts"><div><span>Starts</span><strong>{date(event.start_datetime)}</strong></div><div><span>Ends</span><strong>{date(event.end_datetime)}</strong></div><div><span>Expected attendance</span><strong>{event.capacity_needed ?? 'Not specified'}</strong></div></div>
-        </section>
-        <nav className="event-section-nav" aria-label="Event sections">
-          {[['event-overview', 'Overview'], ...(venue.allowed ? [['event-venue', 'Venue']] : []), ['event-equipment', 'Equipment requests'], ['event-registration', 'Registration'], ['event-history', 'Activity history']].map(([id, text]) => <button key={id} type="button" className="secondary" onClick={() => { const section = document.getElementById(id); section?.focus({ preventScroll: true }); section?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>{text}</button>)}
-        </nav>
+        <div className="event-reference-identity"><span className={'event-stage event-stage-' + event.status}>{label(event.status)}</span><span>Event #{event.event_id}</span></div>
+        <div className="event-reference-info-cards">
+          {[['Starts', date(event.start_datetime)], ['Ends', date(event.end_datetime)], ['Attendance', event.capacity_needed ?? '-'], ['Purpose', event.purpose || '-']].map(([name, value]) => <div key={name}><span>{name}</span><strong>{value}</strong></div>)}
+        </div>
       </>}
 
+      {event && <div className="event-reference-columns"><div className="event-reference-main">
       {event && <article className="panel event-detail-section" id="event-overview" tabIndex={-1}>
         <div className="heading" style={{ alignItems: 'center' }}>
-          <h2 style={{ margin: 0 }}>Event overview</h2>
-          <div>
-            {editable && !isOrganiser && !edit.open && <button type="button" onClick={startEditing}>Edit event information</button>}
-            {canRequestChange && !edit.open && <Link className="button-link" to={`/event-change-requests/new?event_id=${encodeURIComponent(event.event_id)}`}>Request changes</Link>}
-          </div>
+          <h2 style={{ margin: 0 }}>Event details</h2>
+
         </div>
         {edit.message && <div className="success" style={{ marginBottom: '12px' }} role="status">{edit.message}</div>}
         {lifecycle.error && <p role="alert" className="error">{lifecycle.error}</p>}
@@ -365,10 +366,6 @@ export default function Events() {
           <Detail label="Status" value={event.status ? event.status.charAt(0).toUpperCase() + event.status.slice(1) : null} />
           <Detail label="Purpose" value={event.purpose} />
           <Detail label="Description" value={event.description} />
-        </dl><h3>Schedule and attendance</h3><dl className="event-detail-grid">
-          <Detail label="Start date and time" value={date(event.start_datetime)} />
-          <Detail label="End date and time" value={date(event.end_datetime)} />
-          <Detail label="Expected attendance" value={event.capacity_needed} />
         </dl><h3>Venue and accessibility requirements</h3><dl className="event-detail-grid">
           <Detail label="Room layout" value={event.room_layout ? label(event.room_layout) : null} />
           <Detail label="Required facilities" value={display('required_facilities', event.required_facilities)} />
@@ -377,11 +374,6 @@ export default function Events() {
         </dl><h3>Equipment and registration requirements</h3><dl className="event-detail-grid">
           <Detail label="Equipment requirements" value={display('equipment_requirements', event.equipment_requirements)} />
           <Detail label="Registration needs" value={event.registration_needs} />
-        </dl><h3>People involved</h3><dl className="event-detail-grid">
-          <Detail label="Event organiser" value={userNames[event.event_organiser_id] || (event.event_organiser_id ? event.event_organiser_id.slice(0, 8) : 'Not specified')} />
-          <Detail label="Event coordinator" value={userNames[event.event_coordinator_id] || (event.event_coordinator_id ? event.event_coordinator_id.slice(0, 8) : 'Not specified')} />
-          <Detail label="Technical support" value={userNames[event.technical_support_id] || (event.technical_support_id ? event.technical_support_id.slice(0, 8) : 'Not specified')} />
-          <Detail label="Venue staff" value={userNames[event.venue_staff_id] || (event.venue_staff_id ? event.venue_staff_id.slice(0, 8) : 'Not specified')} />
         </dl></>}
 
         {edit.open && <form onSubmit={submitEdit} className="event-form">
@@ -423,46 +415,6 @@ export default function Events() {
         </form>}
       </article>}
 
-
-      {eventId && event && venue.allowed && <section className="panel event-detail-section" id="event-venue" tabIndex={-1}>
-        <h2>Venue</h2>
-        {venue.assigned && <p>Assigned venue: <Link to={`/venues/${venue.assigned.venue_id}`}>{venue.assigned.venue_name}</Link></p>}
-        {/* An approved request is what makes a venue available for the event,
-            and an event may need more than one, so each is named. */}
-        {approvedVenues.length > 0 && <p>Approved by Venue Staff: <strong>{approvedVenues.join(', ')}</strong></p>}
-        {!venue.assigned && approvedVenues.length === 0 && <p>No venue has been approved for this event yet.</p>}
-        <p>
-          Venue Search opens with this event&rsquo;s requirements already applied: expected
-          attendance, room layout, required facilities and accessibility needs. You can widen or
-          clear those filters, but a venue that cannot meet them cannot be requested for this
-          event.
-        </p>
-        {/* Only an Event Coordinator may request a venue; Venue Staff assigned
-            to the event read this section but decide requests elsewhere. */}
-        {editable && venue.canRequest && <Link className="button-link" to={`/venue-search?event_id=${encodeURIComponent(eventId)}`}>
-          Find venues for this event
-        </Link>}
-        {!editable && <p className="metadata">A venue can only be requested while the event is in planning.</p>}
-
-        <h3 style={{ marginTop: '20px' }}>Venue booking requests for this event</h3>
-        {venue.error && <div role="alert" className="error">{venue.error} Use Refresh to try again.</div>}
-        {!venue.error && venue.bookings.length === 0 && <p>No venue booking requests have been submitted for this event yet.</p>}
-        {venue.bookings.length > 0 && <dl>
-          {venue.bookings.map(booking => <div key={booking.booking_id}>
-            <dt>{booking.venue_name}</dt>
-            <dd>
-              <span className={`booking-status booking-status-${booking.status}`}>{statusLabel(booking.status)}</span>
-              {' · submitted '}{date(booking.submitted_at)}
-              {booking.status !== 'submitted' && <>
-                <br />Decided {date(booking.reviewed_at)}
-                {booking.reviewed_by_name ? ` by ${booking.reviewed_by_name}` : ''}
-                {booking.review_comments && <><br />Comments: <span style={{ whiteSpace: 'pre-wrap' }}>{booking.review_comments}</span></>}
-              </>}
-              <br />Reference: {booking.booking_id}
-            </dd>
-          </div>)}
-        </dl>}
-      </section>}
 
       {eventId && event && <section className="panel event-detail-section" id="event-equipment" tabIndex={-1}>
         <h2>Equipment requests</h2>
@@ -506,22 +458,6 @@ export default function Events() {
         </div>
       </section>}
 
-      {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
-        <h2>Registration arrangements</h2>
-        {event.registration_needs && <div style={{ marginBottom: '16px' }}>
-          <p>Registration arrangements: {event.registration_ready ? 'Ready' : 'Awaiting coordinator confirmation'}</p>
-          {isCoordinator && ['planning', 'confirmed'].includes(event.status) && <label>
-            <input type="checkbox" checked={!!event.registration_ready} disabled={lifecycle.busy}
-              onChange={e => updateLifecycle('registration-readiness', e.target.checked)} />
-            Registration arrangements are ready
-          </label>}
-        </div>}
-        {!event.registration_needs && <p>No registration requirements recorded.</p>}
-      </section>}
-      {event && canCancel && <section className="panel event-detail-section"><h2>Event management</h2><p>Cancel the event if it will no longer take place.</p>
-        {canCancel && <button type="button" className="secondary" disabled={lifecycle.busy}
-          onClick={() => updateLifecycle('cancel')}>Cancel event</button>}
-      </section>}
       {eventId && event && <section className="panel event-detail-section" id="event-history" tabIndex={-1}>
         <h2>Activity history</h2>
         {state.activityError && <div role="alert" className="error">{state.activityError} Use Refresh to try again.</div>}
@@ -538,6 +474,65 @@ export default function Events() {
           </div>)}
         </dl>}
       </section>}
+      </div><aside className="event-reference-sidebar" aria-label="People and arrangements">
+      {event && <section className="panel event-reference-side-card"><h2>People</h2><dl>
+          <Detail label="Event organiser" value={userNames[event.event_organiser_id] || (event.event_organiser_id ? event.event_organiser_id.slice(0, 8) : '-')} />
+          <Detail label="Event coordinator" value={userNames[event.event_coordinator_id] || (event.event_coordinator_id ? event.event_coordinator_id.slice(0, 8) : '-')} />
+          <Detail label="Technical support" value={userNames[event.technical_support_id] || (event.technical_support_id ? event.technical_support_id.slice(0, 8) : '-')} />
+          <Detail label="Venue staff" value={userNames[event.venue_staff_id] || (event.venue_staff_id ? event.venue_staff_id.slice(0, 8) : '-')} />
+</dl></section>}
+      {eventId && event && venue.allowed && <section className="panel event-detail-section" id="event-venue" tabIndex={-1}>
+        <h2>Venue</h2>
+        {venue.assigned && <p>Assigned venue: <Link to={`/venues/${venue.assigned.venue_id}`}>{venue.assigned.venue_name}</Link></p>}
+        {/* An approved request is what makes a venue available for the event,
+            and an event may need more than one, so each is named. */}
+        {approvedVenues.length > 0 && <p>Approved by Venue Staff: <strong>{approvedVenues.join(', ')}</strong></p>}
+        {!venue.assigned && approvedVenues.length === 0 && <p>No venue has been approved for this event yet.</p>}
+
+        {/* Only an Event Coordinator may request a venue; Venue Staff assigned
+            to the event read this section but decide requests elsewhere. */}
+        {editable && venue.canRequest && <Link className="button-link" to={`/venue-search?event_id=${encodeURIComponent(eventId)}`}>
+          Find venues for this event
+        </Link>}
+        {!editable && <p className="metadata">A venue can only be requested while the event is in planning.</p>}
+
+        <h3 style={{ marginTop: '20px' }}>Venue booking requests for this event</h3>
+        {venue.error && <div role="alert" className="error">{venue.error} Use Refresh to try again.</div>}
+        {!venue.error && venue.bookings.length === 0 && <p>No venue booking requests have been submitted for this event yet.</p>}
+        {venue.bookings.length > 0 && <dl>
+          {venue.bookings.map(booking => <div key={booking.booking_id}>
+            <dt>{booking.venue_name}</dt>
+            <dd>
+              <span className={`booking-status booking-status-${booking.status}`}>{statusLabel(booking.status)}</span>
+              {' · submitted '}{date(booking.submitted_at)}
+              {booking.status !== 'submitted' && <>
+                <br />Decided {date(booking.reviewed_at)}
+                {booking.reviewed_by_name ? ` by ${booking.reviewed_by_name}` : ''}
+                {booking.review_comments && <><br />Comments: <span style={{ whiteSpace: 'pre-wrap' }}>{booking.review_comments}</span></>}
+              </>}
+              <br />Reference: {booking.booking_id}
+            </dd>
+          </div>)}
+        </dl>}
+      </section>}
+
+      {event && <section className="panel event-reference-side-card"><h2>Equipment</h2>
+        {state.equipmentError ? <p role="alert" className="error">{state.equipmentError}</p> : equipmentRequests.length ? <ul className="event-sidebar-equipment">{equipmentRequests.map(item => <li key={item.equipment_request_id}><span>{item.quantity} &times; {item.equipment_type}</span><span className={'event-stage event-stage-' + item.status}>{label(item.status)}</span></li>)}</ul> : <p>No equipment requests yet.</p>}
+        <button type="button" className="event-text-action" onClick={() => document.getElementById('event-equipment')?.scrollIntoView({ behavior: 'smooth' })}>View equipment requests &rarr;</button>
+      </section>}
+      {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
+        <h2>Registration arrangements</h2>
+        {event.registration_needs && <div style={{ marginBottom: '16px' }}>
+          <p>Registration arrangements: {event.registration_ready ? 'Ready' : 'Awaiting coordinator confirmation'}</p>
+          {isCoordinator && ['planning', 'confirmed'].includes(event.status) && <label>
+            <input type="checkbox" checked={!!event.registration_ready} disabled={lifecycle.busy}
+              onChange={e => updateLifecycle('registration-readiness', e.target.checked)} />
+            Registration arrangements are ready
+          </label>}
+        </div>}
+        {!event.registration_needs && <p>No registration requirements recorded.</p>}
+      </section>}
+      </aside></div>}
     </main>
   </>;
 }
