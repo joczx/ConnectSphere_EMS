@@ -25,6 +25,21 @@ def review_queue():
     return jsonify(equipment_requests=rows, equipment=catalogue, events=event_rows)
 
 
+@equipment.post('/equipment-request-reviews/<int:request_id>/reservation')
+def reserve_for_request(request_id):
+    token = authenticated_token()
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or set(body) != {'equipment_id', 'quantity'}:
+        return jsonify(error='Provide equipment_id and quantity.'), 400
+    if any(type(body[key]) is not int or not 1 <= body[key] <= 2147483647
+           for key in ('equipment_id', 'quantity')):
+        return jsonify(error='Choose equipment and a positive whole quantity.'), 400
+    result = supabase_request('/rest/v1/rpc/reserve_equipment_for_request', token=token, payload={
+        'p_request_id': request_id, 'p_equipment_id': body['equipment_id'], 'p_quantity': body['quantity'],
+    })
+    return jsonify(result), result.get('status', 409) if result.get('error') else 201
+
+
 @equipment.post('/equipment-request-reviews/<int:request_id>')
 def review_request(request_id):
     token = authenticated_token()
@@ -39,6 +54,10 @@ def prevent_caching(response):
 
 @equipment.errorhandler(StoreError)
 def store_error(error):
+    if error.code == '23514':
+        return jsonify(error='Reserve matching equipment linked to this request before accepting it.'), 409
+    if error.code == 'PGRST202' and request.endpoint == 'equipment.reserve_for_request':
+        return jsonify(error='Apply supabase/036_reserve_before_equipment_acceptance.sql to enable request reservations.'), 503
     if error.status == 403:
         return jsonify(error='You do not have permission to access this equipment action.'), 403
     if error.code == '42883':

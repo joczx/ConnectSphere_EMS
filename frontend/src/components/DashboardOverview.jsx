@@ -50,7 +50,7 @@ export default function DashboardOverview() {
         {actions.length === 0 ? <p>No pending work in the loaded queues.</p> : <ul className="dashboard-action-list">{actions.map(section => <li key={section.id}><Link to={section.path}>
           <strong>{section.counts[pendingStatus[section.id]]}</strong> {section.id === 'own-requests' ? 'draft requests to finish' : section.id === 'assignments' ? 'requests to assign' : section.id === 'venues' && !roles.some(role => role.toLowerCase().replaceAll('_', ' ') === 'venue staff') ? 'venue requests awaiting a decision' : `${section.title.toLowerCase()} awaiting review`} ?
         </Link></li>)}</ul>}
-        <p className="metadata">Counts show current stages. Approved event requests enter Planning; equipment decisions use Accepted and Partially accepted.</p>
+        <p className="metadata">Counts show current stages. Approved event requests enter Planning; equipment requests are accepted in full or rejected.</p>
       </section>
       <section className="panel"><h2>Upcoming events</h2><p className="metadata">Your next five active events ? Singapore time</p>
         {!sections.some(section => section.id === 'events') ? <p>Upcoming events are unavailable. Refresh to retry.</p> : next.length === 0 ? <p>No upcoming events.</p> : <ul className="dashboard-upcoming">{next.map(event => <li key={event.event_id}><Link to={'/events/' + event.event_id}>{event.event_name || 'Untitled event'}</Link>

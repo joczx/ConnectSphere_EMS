@@ -20,7 +20,7 @@ def test_review_requires_auth(client):
     assert client.get('/api/equipment-request-reviews').status_code == 401
 
 
-@pytest.mark.parametrize('body', [None, {}, {'outcome': 'unknown'},
+@pytest.mark.parametrize('body', [None, {}, {'outcome': 'unknown'}, {'outcome': 'partially_accepted', 'equipment_id': 1, 'accepted_quantity': 1},
     {'outcome': 'accepted', 'equipment_id': True},
     {'outcome': 'partially_accepted', 'equipment_id': 1, 'accepted_quantity': 0},
     {'outcome': 'partially_accepted', 'equipment_id': 1, 'accepted_quantity': 1.5},
@@ -33,7 +33,7 @@ def test_invalid_decision_does_not_write(client, auth, body):
         query.assert_not_called()
 
 
-@pytest.mark.parametrize('outcome, amount', [('accepted', None), ('partially_accepted', 3), ('rejected', None)])
+@pytest.mark.parametrize('outcome, amount', [('accepted', None), ('rejected', None)])
 def test_review_uses_atomic_rpc(client, auth, outcome, amount):
     row = {'equipment_request_id': 1, 'status': outcome, 'quantity': 5, 'accepted_quantity': amount}
     with patch('app.services.equipment_review_service.supabase_request', return_value={'equipment_request': row}) as query:
@@ -64,3 +64,24 @@ def test_queue_uses_account_scoped_events_including_empty_events(client, auth):
         assert query.call_args_list[2].args[0] == '/rest/v1/rpc/my_equipment_request_events'
         assert query.call_args_list[0].args[0] == '/rest/v1/rpc/equipment_request_review_queue'
         assert query.call_args_list[0].kwargs['token'] == 'user-token'
+
+
+@pytest.mark.parametrize('body', [None, {}, {'equipment_id': True, 'quantity': 1}, {'equipment_id': 1, 'quantity': 0}, {'equipment_id': 1, 'quantity': 1, 'status': 'accepted'}])
+def test_request_reservation_validates_before_writing(client, auth, body):
+    with patch('app.routes.equipment.supabase_request') as query:
+        response = client.post('/api/equipment-request-reviews/8/reservation', json=body)
+    assert response.status_code == 400
+    query.assert_not_called()
+
+
+def test_request_reservation_is_separate_from_acceptance(client, auth):
+    result = {'equipment_request': {'status': 'pending'}, 'reservation': {'equipment_request_id': 8}}
+    with patch('app.routes.equipment.supabase_request', return_value=result) as query:
+        response = client.post('/api/equipment-request-reviews/8/reservation', json={'equipment_id': 1, 'quantity': 2})
+    assert response.status_code == 201
+    assert response.json['equipment_request']['status'] == 'pending'
+    query.assert_called_once_with('/rest/v1/rpc/reserve_equipment_for_request', token='user-token', payload={'p_request_id': 8, 'p_equipment_id': 1, 'p_quantity': 2})
+
+
+def test_request_reservation_requires_authentication(client):
+    assert client.post('/api/equipment-request-reviews/8/reservation', json={'equipment_id': 1, 'quantity': 2}).status_code == 401

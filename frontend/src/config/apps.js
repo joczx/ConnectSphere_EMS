@@ -12,6 +12,7 @@ import { rolesForPath } from '../auth/access';
  * }
  */
 const apps = [
+  { id: 'reserved-equipment', label: 'Reserved Equipment', description: 'Reserve equipment for event requests and manage reservations', path: '/reserved-equipment', icon: '???', roles: [] },
   {
     id: 'venue-bookings',
     label: 'Venue Bookings',
@@ -32,8 +33,8 @@ const apps = [
   },
   {
     id: 'equipment',
-    label: 'Reserve Equipment',
-    description: 'Review equipment requests and accept or reject reservations',
+    label: 'Equipment Requests',
+    description: 'Review equipment requests after reserving the full quantity',
     path: '/equipment',
     icon: '🛠️',
     roles: [],
