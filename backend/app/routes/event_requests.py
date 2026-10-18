@@ -49,6 +49,23 @@ MESSAGES = {
     review_schema.OUTCOME_CLARIFICATION: "Clarification requested. The Event Organiser has been notified.",
 }
 
+DECISION_MESSAGES = {
+    review_schema.OUTCOME_APPROVED: "Event request approved.",
+    review_schema.OUTCOME_REJECTED: "Event request rejected.",
+    review_schema.OUTCOME_CLARIFICATION: "Clarification requested.",
+}
+
+
+def _review_confirmation(outcome, event_request, notifications):
+    """Only claim notification when the Organiser's row was actually stored."""
+    organiser_id = event_request.get("event_organiser_id")
+    organiser_notified = organiser_id is not None and any(
+        item.get("recipient_id") == organiser_id for item in notifications
+    )
+    if organiser_notified:
+        return MESSAGES[outcome]
+    return DECISION_MESSAGES[outcome] + " The Event Organiser could not be notified."
+
 
 @event_requests_bp.errorhandler(EventRequestError)
 def handle_event_request_error(error):
@@ -280,7 +297,9 @@ def review(event_request_id):
 
     return jsonify(
         {
-            "message": MESSAGES[recorded["outcome"]],
+            "message": _review_confirmation(
+                recorded["outcome"], event_request, notifications
+            ),
             "event_request": event_request,
             "review": recorded,
             "notified": [n["recipient_id"] for n in notifications],

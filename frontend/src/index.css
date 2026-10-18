@@ -229,6 +229,27 @@ input:not([type="checkbox"]), select, textarea { display: block; width: 100%; bo
 .safety-arrangements input { width: auto; margin: 0; }
 .safety-decision-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
 
+/* Event change request review. */
+.change-request-list { margin-top: 24px; }
+.change-request-card { display: grid; gap: 8px; }
+.change-request-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.change-request-tag { display: inline-block; width: fit-content; padding: 4px 9px; border-radius: 999px; background: #eef2ff; color: #3730a3; font-size: 11px; font-weight: 700; }
+.change-request-important, .change-request-pending_review { background: #fffbeb; color: #92400e; }
+.change-request-non_important, .change-request-approved { background: #f0fdfa; color: var(--cs-color-primary); }
+.change-request-rejected { background: var(--cs-color-danger-soft); color: var(--cs-color-danger); }
+.change-request-summary, .change-request-comparison, .change-request-impacts, .change-request-decision { margin-top: 20px; }
+.change-request-summary h2, .change-request-comparison > h2, .change-request-impacts h2, .change-request-decision h2 { margin-top: 0; }
+.change-request-diffs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.change-request-diff { padding: 16px; border: 1px solid var(--cs-color-border); border-radius: var(--cs-radius-control); }
+.change-request-diff h3 { margin: 0 0 12px; font-size: 14px; }
+.change-request-diff dl { display: grid; grid-template-columns: 90px 1fr; margin: 0; }
+.change-request-diff dt, .change-request-diff dd { padding: 6px 0; overflow-wrap: anywhere; }
+.change-request-diff dt { font-weight: 700; }
+.change-request-diff dd { margin: 0; }
+.change-request-impacts { border-color: #fbbf24; background: #fffbeb; }
+.change-request-impacts ul { margin-bottom: 0; }
+.change-request-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+
 @media (max-width: 700px) {
   .operating-hours-row { grid-template-columns: 1fr 1fr; }
   .operating-hours-row strong { grid-column: 1 / -1; }
