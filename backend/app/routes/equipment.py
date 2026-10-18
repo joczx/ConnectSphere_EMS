@@ -42,9 +42,14 @@ def store_error(error):
     if error.status == 403:
         return jsonify(error='You do not have permission to access this equipment action.'), 403
     if error.code == '42883':
+        repair = ('035_reserve_equipment_event_ids.sql'
+                  if request.endpoint == 'equipment.reserve'
+                  else '034_equipment_availability_event_ids.sql'
+                  if request.endpoint == 'equipment.availability'
+                  else '033_equipment_list_event_ids.sql')
         return jsonify(error=(
             'Equipment database functions are incompatible with the current schema. '
-            'Apply supabase/033_equipment_list_event_ids.sql and reload the API schema cache. '
+            f'Apply supabase/{repair} and reload the API schema cache. '
             'If this persists, check the Supabase error in the backend log.'
         )), 503
     if error.code in {'PGRST202', 'PGRST205', '42P01', '42703'}:

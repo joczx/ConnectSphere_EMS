@@ -101,3 +101,19 @@ def test_equipment_types_require_bearer_token_and_return_sorted_unique_values(cl
     assert response.status_code == 200
     assert response.json == {'equipment_types': ['Microphone', 'Projector']}
     rpc.assert_called_once_with('/rest/v1/equipment?select=equipment_type', token='catalogue-token')
+
+
+def test_availability_schema_error_identifies_availability_repair(client):
+    from app.services.event_store import StoreError
+    with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', side_effect=StoreError(503, code='42883')):
+        response = client.get('/api/equipment/availability?event_id=7')
+    assert response.status_code == 503
+    assert '034_equipment_availability_event_ids.sql' in response.json['error']
+
+
+def test_reservation_schema_error_identifies_write_repair(client):
+    from app.services.event_store import StoreError
+    with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', side_effect=StoreError(503, code='42883')):
+        response = client.post('/api/equipment/reservations', json={'event_id': '7', 'equipment_id': '1', 'quantity': 1})
+    assert response.status_code == 503
+    assert '035_reserve_equipment_event_ids.sql' in response.json['error']

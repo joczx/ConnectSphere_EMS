@@ -10,13 +10,13 @@ for (const type of ['text', 'integer']) test(`equipment readers support ${type} 
     await db.exec(`
       create schema auth;
       create function auth.uid() returns uuid language sql as $$ select '${actor}'::uuid $$;
-      create table events(event_id integer primary key, event_name text, event_organiser_id uuid);
+      create table events(event_id integer primary key, event_name text, event_organiser_id uuid, start_datetime timestamptz, end_datetime timestamptz);
       create table equipment(equipment_id integer primary key, equipment_type text, equipment_model text, total_quantity integer);
       create table equipment_request(equipment_request_id integer, event_id integer, requested_by uuid, requested_at timestamptz);
       create table equipment_reservations(reservation_id integer, event_id ${type}, equipment_id integer, equipment_request_id integer,
         quantity integer, starts_at timestamptz, ends_at timestamptz, created_at timestamptz, created_by uuid);
       create function equipment_peak(integer, timestamptz, timestamptz) returns bigint language sql as $$ select 0::bigint $$;
-      insert into events values (1, 'Mine', '${actor}'), (2, 'Other', '${other}');
+      insert into events values (1, 'Mine', '${actor}', now(), now()+interval '1 hour'), (2, 'Other', '${other}', now(), now()+interval '1 hour');
       insert into equipment values (1, 'Projector', 'Model', 10);
       insert into equipment_request values (1, 1, '${actor}', now()), (2, 2, '${other}', now());
       insert into equipment_reservations values (1, '1', 1, 1, 2, now(), now()+interval '1 hour', now(), '${actor}'),
@@ -25,6 +25,12 @@ for (const type of ['text', 'integer']) test(`equipment readers support ${type} 
     if (type === 'integer') {
       await assert.rejects(db.query('select * from events e join equipment_reservations r on e.event_id::text = r.event_id'), /operator does not exist/);
     }
+    const availability = await readFile(new URL('../../supabase/034_equipment_availability_event_ids.sql', import.meta.url), 'utf8');
+    await db.exec(availability);
+    const available = (await db.query("select equipment_availability('1') as result")).rows[0].result;
+    assert.equal(available.equipment[0].reserved_quantity, 2);
+    assert.equal(available.equipment[0].standalone_reserved, false);
+    assert.equal(available.equipment[0].available_quantity, 10);
     const sql = await readFile(new URL('../../supabase/033_equipment_list_event_ids.sql', import.meta.url), 'utf8');
     await db.exec(sql);
     await db.exec(sql); // Safe to apply again.
