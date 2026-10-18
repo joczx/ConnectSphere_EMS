@@ -64,13 +64,14 @@ export default function VenueBookingDetails({ booking, linkFor }) {
         ['Expected attendance', booking.attendance],
         ['Venue requirements', booking.venue_requirements],
         ['Reference', booking.booking_id],
-      ].map(([label, value]) => <div key={label}>
+        booking.cancelled_at && ['Cancelled on', when(booking.cancelled_at)],
+      ].filter(Boolean).map(([label, value]) => <div key={label}>
         <dt>{label}</dt>
         <dd style={preserve}>{value ?? 'Not specified'}</dd>
       </div>)}</dl>
     </article>
 
-    {booking.status !== 'submitted' && <section className="panel">
+    {['approved', 'rejected'].includes(booking.status) && <section className="panel">
       <h2>Decision</h2>
       <dl>
         <div><dt>Outcome</dt><dd>{statusLabel(booking.status)}</dd></div>

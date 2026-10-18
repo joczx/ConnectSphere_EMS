@@ -11,6 +11,7 @@ const SECTIONS = [
   ['Received', 'submitted', 'No booking requests are waiting for review.'],
   ['Approved', 'approved', null],
   ['Rejected', 'rejected', null],
+  ['Cancelled', 'cancelled', null],
 ];
 
 // Enough to see from the queue which requests are already lost and which are

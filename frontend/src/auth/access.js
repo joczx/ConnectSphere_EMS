@@ -9,6 +9,7 @@ export const PAGE_ROLES = {
   '/event-requests': ['event organiser', 'event organizer'],
   '/event-change-requests': ['event organiser', 'event organizer'],
   '/review-event-requests': coordinator,
+  '/review-event-change-requests': coordinator,
   '/venue-bookings': coordinator,
   '/review-venue-bookings': venueStaff,
   '/equipment': technical,

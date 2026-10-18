@@ -4,11 +4,9 @@ from datetime import datetime
 
 from app.schemas import event as event_schema
 
-STATUS_PENDING_REVIEW = "pending_review"
-STATUS_APPROVED = "approved"
-STATUS_REJECTED = "rejected"
-
 PERMITTED_FIELDS = (
+    "event_name",
+    "description",
     "start_datetime",
     "end_datetime",
     "capacity_needed",
@@ -50,8 +48,9 @@ def parse_submission(payload):
         unexpected = sorted(set(proposed) - set(PERMITTED_FIELDS))
         if unexpected:
             errors["proposed_values"] = (
-                "Only date, time, expected attendance, venue requirements, "
-                "accessibility needs, and equipment requirements can be changed."
+                "Only the event name, description, date, time, expected attendance, "
+                "venue requirements, accessibility needs, and equipment requirements "
+                "can be changed."
             )
         permitted = {key: value for key, value in proposed.items()
                      if key in PERMITTED_FIELDS}
@@ -83,19 +82,4 @@ def parse_submission(payload):
         "expected_event_updated_at": expected.strip(),
         "confirm_critical": confirm,
     }, {}
-
-
-def calculate_changes(existing_event, proposed_values):
-    """Return only values that differ from the currently stored event."""
-    return event_schema.diff(existing_event, proposed_values)
-
-
-def validate_timing(existing_event, proposed_values):
-    """Validate proposed dates against the complete stored event."""
-    return event_schema.check_timing(existing_event, proposed_values)
-
-
-def critical_fields(changes):
-    """Return readable critical-field names for the confirmation modal."""
-    return event_schema.describe_critical(changes)
 

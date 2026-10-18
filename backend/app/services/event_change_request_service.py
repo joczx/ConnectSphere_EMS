@@ -27,7 +27,8 @@ class EventChangeRequestError(Exception):
         return result
 
 
-def _rpc(name, token, payload):
+def call_change_request_rpc(name, token, payload):
+    """Call an event-change RPC and translate its structured refusal."""
     result = supabase_request(
         f"/rest/v1/rpc/{name}", token=token, payload=payload, method="POST"
     )
@@ -43,12 +44,17 @@ def _rpc(name, token, payload):
 
 def list_eligible_events(token):
     """List non-terminal events submitted by the signed-in organiser."""
-    return _rpc("eligible_event_change_request_events", token, {}).get("events", [])
+    return call_change_request_rpc("eligible_event_change_request_events", token, {}).get("events", [])
+
+
+def list_my_change_requests(token):
+    """List the signed-in organiser's pending and decided requests."""
+    return call_change_request_rpc("event_change_requests_for_organiser", token, {}).get("change_requests", [])
 
 
 def list_change_requests(event_id, token):
     """List requests visible to the event's organiser or coordinator."""
-    return _rpc("event_change_requests_for_event", token, {
+    return call_change_request_rpc("event_change_requests_for_event", token, {
         "p_event_id": int(event_id),
     }).get("change_requests", [])
 
@@ -61,7 +67,7 @@ def submit_change_request(event_id, payload, token):
             "The change request could not be submitted because some details are invalid.",
             errors=errors,
         )
-    return _rpc("submit_event_change_request", token, {
+    return call_change_request_rpc("submit_event_change_request", token, {
         "p_event_id": int(event_id),
         "p_reason": submission["reason"],
         "p_proposed_values": submission["proposed_values"],

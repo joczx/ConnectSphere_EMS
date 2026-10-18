@@ -3,6 +3,8 @@
 import { toInput, toIso, toItems, toLines } from './eventFields.js';
 
 export const PERMITTED_CHANGE_FIELDS = [
+  'event_name',
+  'description',
   'start_datetime',
   'end_datetime',
   'capacity_needed',
@@ -15,6 +17,8 @@ export const PERMITTED_CHANGE_FIELDS = [
 
 export function formFromEvent(event) {
   return {
+    event_name: event.event_name ?? '',
+    description: event.description ?? '',
     start_datetime: toInput(event.start_datetime),
     end_datetime: toInput(event.end_datetime),
     capacity_needed: event.capacity_needed ?? '',
@@ -36,6 +40,8 @@ function saved(event, field) {
 
 export function changedValues(event, form) {
   const next = {
+    event_name: form.event_name.trim(),
+    description: form.description.trim(),
     start_datetime: toIso(form.start_datetime),
     end_datetime: toIso(form.end_datetime),
     capacity_needed: form.capacity_needed === '' ? null : Number(form.capacity_needed),
@@ -62,6 +68,16 @@ export function changedValues(event, form) {
     return JSON.stringify(value) !== JSON.stringify(saved(event, field));
   }));
 }
+
+export function reviewApi(api, path = '', options) {
+  return api('/api/event-change-requests' + path, options);
+}
+
+export const statusLabel = value => value
+  ? value.replaceAll('_', ' ').replace(/^./, character => character.toUpperCase())
+  : '';
+
+export const importanceLabel = value => value === 'important' ? 'Critical change' : 'Non-critical change';
 
 export function submissionBody(event, form, confirmCritical = false) {
   return {

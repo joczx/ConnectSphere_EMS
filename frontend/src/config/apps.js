@@ -71,6 +71,14 @@ const apps = [
     roles: [],
   },
   {
+    id: 'review-event-change-requests',
+    label: 'Review Event Changes',
+    description: 'Review requested changes for events assigned to you',
+    path: '/review-event-change-requests',
+    icon: '📋',
+    roles: [],
+  },
+  {
     id: 'assign-event-coordinators',
     label: 'Assign Event Coordinators',
     description: 'Assign unassigned event requests to Event Coordinators',

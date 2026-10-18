@@ -9,6 +9,7 @@ export const STATUS_LABELS = {
   submitted: 'Awaiting review',
   approved: 'Approved',
   rejected: 'Rejected',
+  cancelled: 'Cancelled',
 };
 
 export const statusLabel = (status) => STATUS_LABELS[status] || status || 'Unknown';
@@ -36,3 +37,8 @@ export const period = (start, end) => {
 
 // Requests grouped by where they are in review, newest first within each.
 export const byStatus = (bookings, status) => (bookings || []).filter(item => item.status === status);
+
+// Shown before a booking is changed or cancelled while its event is in safety review.
+export const SAFETY_REVIEW_WARNING = 'This event is currently under safety review. Changing or cancelling this venue '
+  + 'booking restarts its safety review, and the event returns to planning until its venue arrangements are complete again.';
+export const underSafetyReview = (status) => status === 'pending_safety_checks';

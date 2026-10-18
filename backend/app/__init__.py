@@ -10,6 +10,8 @@ from app.routes.venue_bookings import venue_bookings
 from app.routes.coordinator_lead import coordinator_lead
 from app.routes.operational_safety import operational_safety
 from app.routes.event_change_requests import event_change_requests
+# Import attaches Coordinator endpoints to the shared event-change blueprint.
+from app.routes import event_change_request_reviews  # noqa: F401, E402
 
 # Read backend/.env before anything asks for a credential.
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))

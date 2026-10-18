@@ -9,6 +9,8 @@ import EventRequest from './pages/EventRequest';
 import EventChangeRequest from './pages/EventChangeRequest';
 import ReviewEventRequests from './pages/ReviewEventRequests';
 import ReviewEventRequest from './pages/ReviewEventRequest';
+import ReviewEventChangeRequests from './pages/ReviewEventChangeRequests';
+import ReviewEventChangeRequest from './pages/ReviewEventChangeRequest';
 import AssignEventCoordinators from './pages/AssignEventCoordinators';
 import ReassignEventCoordinators from './pages/ReassignEventCoordinators';
 import VenueSearch from './pages/VenueSearch';
@@ -55,6 +57,8 @@ export default function App() {
     <Route path="/event-change-requests/new" element={protectedView(<EventChangeRequest />)} />
     <Route path="/review-event-requests" element={protectedView(<ReviewEventRequests />)} />
     <Route path="/review-event-requests/:requestId" element={protectedView(<ReviewEventRequest />)} />
+    <Route path="/review-event-change-requests" element={protectedView(<ReviewEventChangeRequests />)} />
+    <Route path="/review-event-change-requests/:requestId" element={protectedView(<ReviewEventChangeRequest />)} />
     <Route path="/assign-event-coordinators" element={protectedView(<AssignEventCoordinators />)} />
     <Route path="/reassign-event-coordinators" element={protectedView(<ReassignEventCoordinators />)} />
     <Route path="/assign-event-requests" element={<Navigate to="/assign-event-coordinators" replace />} />

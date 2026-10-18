@@ -6,6 +6,7 @@ from app.services.event_change_request_service import (
     EventChangeRequestError,
     list_change_requests,
     list_eligible_events,
+    list_my_change_requests,
     submit_change_request,
 )
 from app.services.event_store import StoreError, authenticated_token, supabase_request
@@ -37,6 +38,12 @@ def change_request_error(error):
 def eligible_events():
     token = authenticated_token(supabase_request)
     return jsonify(events=list_eligible_events(token))
+
+
+@event_change_requests.get("/event-change-requests/mine")
+def my_event_change_requests():
+    token = authenticated_token(supabase_request)
+    return jsonify(change_requests=list_my_change_requests(token))
 
 
 @event_change_requests.get("/events/<int:event_id>/change-requests")
