@@ -8,6 +8,12 @@ from app.schemas import event_request as schema
 from app.services import db
 
 
+REQUEST_FIELDS = (
+    "*,event_organiser:users!event_organiser_id(name),"
+    "event_coordinator:users!event_coordinator_id(name)"
+)
+
+
 class EventRequestError(Exception):
     """A problem worth reporting to the user rather than a 500."""
 
@@ -197,7 +203,7 @@ def list_event_requests(event_organiser_id=None, status=None):
         )
 
     def query(table):
-        builder = table.select("*")
+        builder = table.select(REQUEST_FIELDS)
         if event_organiser_id is not None:
             builder = builder.eq("event_organiser_id", event_organiser_id)
         if status is not None:
@@ -210,7 +216,7 @@ def list_event_requests(event_organiser_id=None, status=None):
 def get_event_request(event_request_id):
     """Return one event request, or None. Used to review details before submitting."""
     rows = _execute(
-        lambda table: table.select("*")
+        lambda table: table.select(REQUEST_FIELDS)
         .eq("event_request_id", event_request_id)
         .limit(1)
         .execute(),
