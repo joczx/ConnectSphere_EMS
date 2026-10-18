@@ -58,16 +58,18 @@ def attach_conflicts(venues, bookings, starts, ends):
     return marked
 
 
-def mark_for_event(venues, event, token):
+def mark_for_event(venues, event, token, ignore=None):
     """Search results for an event, marked with what is booked in its time.
 
     An event without a complete period cannot be checked, so nothing is marked
-    rather than everything.
+    rather than everything. `ignore` is a booking being modified, which must not
+    count as a conflict with itself.
     """
     starts, ends = event.get('start_datetime'), event.get('end_datetime')
     if not starts or not ends:
         return [{**venue, 'conflicts': []} for venue in venues]
-    return attach_conflicts(venues, approved_bookings(starts, ends, token), starts, ends)
+    bookings = [b for b in approved_bookings(starts, ends, token) if b.get('booking_id') != ignore]
+    return attach_conflicts(venues, bookings, starts, ends)
 
 
 def _moment(value):

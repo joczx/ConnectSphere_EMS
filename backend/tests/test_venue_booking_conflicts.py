@@ -177,3 +177,12 @@ def test_a_conflicting_approval_is_refused_with_the_conflict(query):
                                                json={'outcome': 'approved'}, headers=HEADERS)
     assert response.status_code == 409
     assert response.json['conflicts'] == CONFLICT['conflicts']
+
+
+@patch('app.services.venue_availability.supabase_request')
+def test_a_booking_being_modified_does_not_conflict_with_itself(query):
+    from app.services.venue_availability import mark_for_event
+    own = booking(*EVENING, booking_id='own')
+    query.return_value = [own]
+    marked = mark_for_event([{'venue_id': HALL, 'eligible': True}], EVENT, 'token', ignore='own')
+    assert marked[0]['eligible'] is True

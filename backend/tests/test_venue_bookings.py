@@ -111,3 +111,60 @@ def test_unsuitable_venue_is_refused_with_its_shortfalls(query):
     assert response.status_code == 409
     assert response.json['unmet_requirements'] == ['Holds 80, but 400 are expected.']
     assert 'booking' not in response.json
+
+
+MODIFY = {'venue_id': VALID['venue_id'], 'venue_requirements': 'Classroom layout'}
+BOOKING = '3cf6f106-e05a-45ce-a6e5-825afcbf23cd'
+
+
+@pytest.mark.parametrize('body', [{}, {**MODIFY, 'venue_id': 'bad'}, {**MODIFY, 'venue_requirements': ' '}])
+@patch('app.routes.venue_bookings.supabase_request', return_value={'id': 'coordinator'})
+def test_invalid_modification_never_writes(query, body):
+    response = create_app().test_client().patch(f'/api/venue-bookings/{BOOKING}', json=body, headers=HEADERS)
+    assert response.status_code == 400
+    assert query.call_count == 1
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_modification_changes_only_the_chosen_booking(query):
+    query.side_effect = [{'id': 'coordinator'}, {'booking': {'booking_id': BOOKING, 'status': 'submitted'}}]
+    response = create_app().test_client().patch(f'/api/venue-bookings/{BOOKING}', json=MODIFY, headers=HEADERS)
+    assert response.status_code == 200
+    assert response.json['booking']['status'] == 'submitted'
+    assert query.call_args.args[0] == '/rest/v1/rpc/modify_venue_booking'
+    assert query.call_args.kwargs['payload'] == {
+        'p_booking_id': BOOKING, 'p_venue_id': MODIFY['venue_id'], 'p_venue_requirements': 'Classroom layout'}
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_a_modification_failing_a_recheck_is_refused(query):
+    query.side_effect = [{'id': 'coordinator'}, {
+        'error': 'This venue is blocked for part of this event\'s time.', 'status': 409}]
+    response = create_app().test_client().patch(f'/api/venue-bookings/{BOOKING}', json=MODIFY, headers=HEADERS)
+    assert response.status_code == 409
+    assert 'booking' not in response.json
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_cancelling_affects_only_the_chosen_booking(query):
+    query.side_effect = [{'id': 'coordinator'}, {'booking': {'booking_id': BOOKING, 'status': 'cancelled'}}]
+    response = create_app().test_client().post(f'/api/venue-bookings/{BOOKING}/cancel', headers=HEADERS)
+    assert response.status_code == 200
+    assert response.json['booking']['status'] == 'cancelled'
+    assert query.call_args.args[0] == '/rest/v1/rpc/cancel_venue_booking'
+    assert query.call_args.kwargs['payload'] == {'p_booking_id': BOOKING}
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_a_refused_cancellation_is_passed_on(query):
+    query.side_effect = [{'id': 'coordinator'}, {'error': 'Only pending or approved bookings can be cancelled.', 'status': 409}]
+    response = create_app().test_client().post(f'/api/venue-bookings/{BOOKING}/cancel', headers=HEADERS)
+    assert response.status_code == 409
+    assert 'booking' not in response.json
+
+
+@patch('app.routes.venue_bookings.supabase_request', return_value={'id': 'coordinator'})
+def test_cancelling_a_malformed_id_is_not_found(query):
+    response = create_app().test_client().post('/api/venue-bookings/not-a-uuid/cancel', headers=HEADERS)
+    assert response.status_code == 404
+    assert query.call_count == 1

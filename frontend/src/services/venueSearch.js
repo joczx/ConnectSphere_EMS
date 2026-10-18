@@ -33,8 +33,7 @@ export function searchPath(params) {
   for (const key of LIST_FILTERS) {
     for (const value of params.getAll(key)) if (value) query.append(key, value);
   }
-  const eventId = params.get(EVENT_KEY);
-  if (eventId) query.set(EVENT_KEY, eventId);
+  for (const key of [EVENT_KEY, 'booking_id']) if (params.get(key)) query.set(key, params.get(key));
   const suffix = query.toString();
   return suffix ? `/api/venues/search?${suffix}` : '/api/venues/search';
 }
@@ -106,6 +105,7 @@ export function withoutFilters(params) {
 export function withEvent(params, eventId) {
   const next = withoutFilters(params);
   next.delete(APPLIED_KEY);
+  next.delete('booking_id'); // a booking being modified belongs to the old event
   if (eventId) next.set(EVENT_KEY, String(eventId));
   else next.delete(EVENT_KEY);
   return next;

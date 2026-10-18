@@ -205,7 +205,7 @@ def search_with_filters():
     criteria = criteria_from_event(event)
     # Requirements first, then availability: a venue can fail either, and the
     # page shows both reasons rather than just the first one found.
-    assessed = mark_for_event(annotate(rows, criteria), event, token)
+    assessed = mark_for_event(annotate(rows, criteria), event, token, request.args.get("booking_id"))
 
     return jsonify(
         count=len(assessed),
@@ -245,7 +245,7 @@ def get_venue(venue_id):
     event = load_event(event_id_value, token)
     criteria = criteria_from_event(event)
     return jsonify(
-        venue=mark_for_event(annotate(rows, criteria), event, token)[0],
+        venue=mark_for_event(annotate(rows, criteria), event, token, request.args.get("booking_id"))[0],
         event={field: event.get(field) for field in EVENT_SUMMARY_FIELDS},
         requirements=describe(criteria),
     )

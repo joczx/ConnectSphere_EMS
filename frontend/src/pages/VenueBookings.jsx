@@ -5,7 +5,7 @@ import Navbar from '../components/Navbar';
 import { Alert, AlertTitle, AlertDescription } from '../components/Alert';
 import BookingConflicts from '../components/BookingConflicts';
 import { useAuth } from '../auth/AuthContext';
-import { byStatus, period, venueBookingsApi } from '../services/venueBookings';
+import { SAFETY_REVIEW_WARNING, byStatus, period, underSafetyReview, venueBookingsApi } from '../services/venueBookings';
 
 const formatTime = (value) => value
   ? new Date(value).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })
@@ -23,6 +23,8 @@ export default function VenueBookings() {
   const [params] = useSearchParams();
   const eventId = params.get('event_id') || '';
   const venueId = params.get('venue_id') || '';
+  // Set when modifying an existing booking rather than requesting a new one.
+  const bookingId = params.get('booking_id') || '';
   // A request is always made for one event and one venue, both chosen in Venue
   // Search. Without them there is nothing to request here, only requests to
   // read, so the form is not offered.
@@ -84,41 +86,45 @@ export default function VenueBookings() {
     const controller = new AbortController();
     setChoice(null);
     (async () => {
-      const [criteria, venue] = await Promise.all([
+      const [criteria, venue, existing] = await Promise.all([
         api(`/api/events/${encodeURIComponent(eventId)}/venue-criteria`, {
           cache: 'no-store', signal: controller.signal,
         }),
-        api(`/api/venues/${encodeURIComponent(venueId)}?event_id=${encodeURIComponent(eventId)}`, {
+        api(`/api/venues/${encodeURIComponent(venueId)}?event_id=${encodeURIComponent(eventId)}&booking_id=${encodeURIComponent(bookingId)}`, {
           cache: 'no-store', signal: controller.signal,
         }),
+        bookingId && venueBookingsApi(api, '/' + encodeURIComponent(bookingId), { signal: controller.signal }),
       ]);
       if (controller.signal.aborted) return;
       setChoice({ ...criteria, venue: venue.venue });
-      setRequirements(requirementsText(criteria.requirements || []));
+      setRequirements(existing?.booking?.venue_requirements ?? requirementsText(criteria.requirements || []));
       setAttendance(criteria.event?.capacity_needed ?? '');
     })().catch(err => {
       if (!controller.signal.aborted) setError(err.message || 'Unable to load this request.');
     });
     return () => controller.abort();
-  }, [api, eventId, venueId, requesting]);
+  }, [api, eventId, venueId, bookingId, requesting]);
 
   const event = choice?.event;
   const venue = choice?.venue;
   const eligible = venue ? venue.eligible !== false : false;
-  const planning = choice ? choice.planning !== false : false;
+  // An existing booking may still be changed while its event is in safety review.
+  const reworking = !!bookingId && underSafetyReview(event?.status);
+  const planning = choice ? choice.planning !== false || reworking : false;
 
   async function submit(submitEvent) {
     submitEvent.preventDefault();
     if (submitting.current || !event || !venue) return;
+    if (reworking && !window.confirm(`${SAFETY_REVIEW_WARNING} Continue?`)) return;
     setError('');
     setUnmet([]);
     setConflicts([]);
     submitting.current = true;
     setBusy(true);
     try {
-      const result = await api('/api/venue-bookings', {
-        method: 'POST',
-        body: {
+      const result = await api('/api/venue-bookings' + (bookingId ? '/' + bookingId : ''), {
+        method: bookingId ? 'PATCH' : 'POST',
+        body: bookingId ? { venue_id: venue.venue_id, venue_requirements: requirements } : {
           event_id: Number(eventId),
           venue_id: venue.venue_id,
           event_name: event.event_name,
@@ -159,7 +165,7 @@ export default function VenueBookings() {
     {!data && !error && <p role="status">Loading booking requests…</p>}
 
     {confirmation && <section className="panel" role="status">
-      <h2>Booking request submitted</h2>
+      <h2>{bookingId ? 'Booking updated' : 'Booking request submitted'}</h2>
       <p>Venue Staff can now review your request for {confirmation.venue_name}. It is awaiting review.</p>
       <p>Reference: {confirmation.booking_id}</p>
       {eventId && <Link className="button-link" to={`/events/${encodeURIComponent(eventId)}`}>
@@ -182,13 +188,14 @@ export default function VenueBookings() {
     {requesting && !choice && !error && <p role="status">Loading the event and venue…</p>}
 
     {requesting && choice && !confirmation && <form className="panel" onSubmit={submit}>
-      <h2>Request {venue?.venue_name}</h2>
+      <h2>{bookingId ? 'Change booking to' : 'Request'} {venue?.venue_name}</h2>
       <p>
         For <strong>{event?.event_name}</strong> (#{event?.event_id}). The period and expected
         attendance come from the event, in Singapore time (UTC+8).
       </p>
 
-      {choice.planning_note && <Alert variant="destructive" className="page-alert">
+      {reworking && <p className="panel venue-warning" role="alert">{SAFETY_REVIEW_WARNING}</p>}
+      {choice.planning_note && !reworking && <Alert variant="destructive" className="page-alert">
         <AlertTitle>This event is no longer in planning</AlertTitle>
         <AlertDescription>{choice.planning_note}</AlertDescription>
       </Alert>}
@@ -215,24 +222,23 @@ export default function VenueBookings() {
         <div><dt>Venue</dt><dd>{venue?.venue_name}</dd></div>
         <div><dt>Start</dt><dd>{formatTime(event?.start_datetime)}</dd></div>
         <div><dt>End</dt><dd>{formatTime(event?.end_datetime)}</dd></div>
+        {event?.capacity_needed != null && <div><dt>Expected attendance</dt><dd>{event.capacity_needed}</dd></div>}
       </dl>
 
       <fieldset disabled={busy || !eligible || !planning}>
-        <label>
+        {/* Fixed by the event, and shown above, whenever the event records it. */}
+        {event?.capacity_needed == null && <label>
           Expected attendance
-          {/* Fixed by the event whenever the event records it, so a request can
-              never ask for a headcount the event does not have. */}
           <RequiredIndicator /><input
             type="number"
             min="1"
             max="2147483647"
             step="1"
             required
-            readOnly={event?.capacity_needed != null}
             value={attendance}
             onChange={(change) => setAttendance(change.target.value)}
           />
-        </label>
+        </label>}
         <label>
           Venue requirements
           <RequiredIndicator /><textarea
@@ -246,10 +252,10 @@ export default function VenueBookings() {
         <p className="metadata">
           Prefilled from the event. Add anything else Venue Staff need to know about the setup.
         </p>
-        <button type="submit">{busy ? 'Submitting…' : 'Submit booking request'}</button>
+        <button type="submit">{busy ? 'Submitting…' : bookingId ? 'Save changes' : 'Submit booking request'}</button>
       </fieldset>
       <p>
-        <Link to={`/venue-search?event_id=${encodeURIComponent(eventId)}`}>
+        <Link to={`/venue-search?event_id=${encodeURIComponent(eventId)}${bookingId ? `&booking_id=${bookingId}` : ''}`}>
           Choose a different venue
         </Link>
       </p>
@@ -289,7 +295,7 @@ export default function VenueBookings() {
       {!data.bookings.length && <p className="panel">You have not requested a venue yet.</p>}
       {/* Modelled on My Event Requests: one section per stage, so what is still
           waiting is never mixed in with what has been decided. */}
-      {[['Submitted', 'submitted'], ['Approved', 'approved'], ['Rejected', 'rejected']].map(([title, status]) => {
+      {[['Submitted', 'submitted'], ['Approved', 'approved'], ['Rejected', 'rejected'], ['Cancelled', 'cancelled']].map(([title, status]) => {
         const items = byStatus(data.bookings, status);
         return items.length > 0 && <section key={status}>
           <h2>{title} <span className="metadata">({items.length})</span></h2>
