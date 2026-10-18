@@ -443,12 +443,12 @@ export default function Events() {
           <button type="submit">Submit equipment request</button>
         </form>}
 
-        <div style={{ marginTop: '24px' }}>
+        <div className="event-equipment-request-list">
           {equipmentRequests.length === 0 ? (
             <p>No equipment requests for this event yet.</p>
           ) : (
             equipmentRequests.map((item) => (
-              <div key={item.equipment_request_id || item.id} className="panel" style={{ marginTop: '12px' }}>
+              <div key={item.equipment_request_id || item.id} className="panel event-equipment-request-card">
                 <h3>{item.equipment_type}</h3>
                 <EquipmentRequestStatus request={item} />
                 <p>Technical requirements: {item.technical_requirements || 'Not specified'}</p>

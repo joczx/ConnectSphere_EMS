@@ -505,3 +505,13 @@ button.event-stage-filter.selected { color: #1d4ed8; border-color: #2563eb; back
 @media (max-width: 1000px) { .events-reference-cards { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) { .event-reference-columns { grid-template-columns: minmax(0, 1fr); } .event-reference-info-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .events-stat-cards { grid-template-columns: minmax(0, 1fr); } .event-reference-actions { justify-content: flex-start; } .events-sort { white-space: normal; } }
 @media (max-width: 430px) { .event-reference-card-heading { flex-direction: column; } .events-reference-card { padding: 12px; gap: 10px; } .events-results-toolbar, .events-reference-cards { padding: 12px; } }
+
+/* Compact spacing only inside the event view's equipment request section. */
+#event-equipment > p { margin: 4px 0 12px; line-height: 1.45; }
+#event-equipment .event-equipment-form { gap: 10px 16px; margin-top: 14px; padding: 16px; }
+#event-equipment .event-equipment-form h3 { margin: 0 0 4px; }
+#event-equipment .event-equipment-form label { margin: 0; }
+.event-equipment-request-list { display: grid; gap: 10px; margin-top: 16px; }
+.event-reference-columns .event-equipment-request-card { padding: 14px 16px; }
+#event-equipment .event-equipment-request-card h3 { margin: 0 0 8px; }
+#event-equipment .event-equipment-request-card p { margin: 3px 0; line-height: 1.4; }
