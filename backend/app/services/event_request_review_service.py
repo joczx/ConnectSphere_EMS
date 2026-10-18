@@ -6,7 +6,7 @@ from app.schemas import event_request as request_schema
 from app.schemas import event_request_review as review_schema
 from app.services import db, notification_service
 from app.services.event_request_service import EventRequestError, get_event_request
-from app.services.supabase_client import get_supabase
+from app.services.supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +166,7 @@ def _notify(event_request, record):
             seen.add(coordinator_id)
 
     try:
-        return notification_service.deliver(get_supabase(), pending)
+        return notification_service.deliver(get_supabase_admin(), pending)
     except Exception:  # noqa: BLE001 - never undo a recorded decision
         logger.exception(
             "Could not notify users about event request %s", event_request_id
@@ -213,7 +213,13 @@ def latest_review(event_request_id):
 
 def execute_on(table_name, operation, action):
     """Run a Supabase call against a named table, mapping errors to messages."""
-    return db.run(table_name, operation, action, _translate_review_error)
+    return db.run(
+        table_name,
+        operation,
+        action,
+        _translate_review_error,
+        service_role=True,
+    )
 
 
 def _translate_review_error(exc, action):

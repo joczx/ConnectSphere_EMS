@@ -9,8 +9,19 @@ export default function ReviewEventRequests() {
   const [state, setState] = useState({ loading: true });
   useEffect(() => {
     (async () => {
-      // One call per status, so Organisers' drafts never reach a Coordinator's browser.
-      try { setState({ sections: await Promise.all([['Received', 'submitted'], ['In planning', 'planning'], ['Rejected', 'rejected']].map(async ([title, status]) => [title, (await eventRequestsApi(api, '?status=' + status)).event_requests])) }); }
+      try {
+        const requests = (await eventRequestsApi(api, '')).event_requests;
+        setState({
+          sections: [
+            ['Received', 'submitted'],
+            ['In planning', 'planning'],
+            ['Rejected', 'rejected'],
+          ].map(([title, status]) => [
+            title,
+            requests.filter(request => request.status === status),
+          ]),
+        });
+      }
       catch (err) { setState({ error: err.message || 'Unable to load event requests.' }); }
     })();
   }, [api]);

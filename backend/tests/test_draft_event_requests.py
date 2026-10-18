@@ -52,9 +52,58 @@ def test_list_drafts_filters_by_organiser_and_draft_status():
     table.execute.return_value.data = stored
     with patch.object(service, '_execute', side_effect=lambda operation, **kwargs: operation(table).data):
         assert service.list_event_requests(organiser, 'draft') == stored
+    table.select.assert_called_once_with('event_request_id,event_name,status')
     assert table.eq.call_args_list[0].args == ('event_organiser_id', organiser)
     assert table.eq.call_args_list[1].args == ('status', 'draft')
     table.order.assert_called_once_with('updated_at', desc=True)
+
+
+def test_list_event_requests_requires_an_ownership_scope():
+    with patch.object(service, '_execute') as query, \
+         pytest.raises(service.EventRequestError) as caught:
+        service.list_event_requests(status='submitted')
+
+    assert caught.value.status_code == 403
+    query.assert_not_called()
+
+
+def test_list_event_requests_can_be_scoped_to_an_assigned_coordinator():
+    coordinator = valid_payload()['event_organiser_id']
+    table = Mock()
+    table.select.return_value = table
+    table.eq.return_value = table
+    table.order.return_value.execute.return_value.data = []
+    with patch.object(service, '_execute', side_effect=lambda operation, **kwargs: operation(table).data):
+        assert service.list_event_requests(
+            status='planning',
+            event_coordinator_id=coordinator,
+        ) == []
+
+    table.select.assert_called_once_with('event_request_id,event_name,status')
+    assert table.eq.call_args_list == [
+        (('event_coordinator_id', coordinator), {}),
+        (('status', 'planning'), {}),
+    ]
+
+
+def test_list_event_requests_filters_multiple_statuses_in_the_query():
+    coordinator = valid_payload()['event_organiser_id']
+    table = Mock()
+    table.select.return_value = table
+    table.eq.return_value = table
+    table.in_.return_value = table
+    table.order.return_value.execute.return_value.data = []
+
+    with patch.object(service, '_execute', side_effect=lambda operation, **kwargs: operation(table).data):
+        assert service.list_event_requests(
+            status=('submitted', 'planning', 'rejected'),
+            event_coordinator_id=coordinator,
+        ) == []
+
+    table.eq.assert_called_once_with('event_coordinator_id', coordinator)
+    table.in_.assert_called_once_with(
+        'status', ['submitted', 'planning', 'rejected']
+    )
 
 
 def test_read_saved_draft_returns_all_existing_values():
@@ -274,5 +323,3 @@ def test_accessibility_flags_cannot_be_cleared():
     _, errors = schema.parse_payload({"need_wheelchair_accessibility": None})
 
     assert "need_wheelchair_accessibility" in errors
-
-

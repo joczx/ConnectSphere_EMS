@@ -72,7 +72,8 @@ Rejected, each showing the decision and the staff comments.
 
 The rules live in `review_venue_booking()`:
 
-- Only Venue Staff may decide, and a rejection needs a reason. Both are also checked in
+- The Venue Staff member assigned to the event may decide; authorization uses that assignment
+  rather than a separate global role check. A rejection needs a reason, also checked in
   `schemas/venue_booking_review.py`, so the reviewer is told field by field.
 - A decision is final and made once. The write only matches a request still awaiting review, so two
   reviewers deciding together cannot both succeed.

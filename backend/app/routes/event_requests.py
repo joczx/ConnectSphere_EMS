@@ -12,7 +12,6 @@ from app.services.event_request_service import (
     EventRequestError,
     create_event_request,
     delete_draft,
-    get_event_request,
     list_event_requests,
 )
 from app.services.event_request_workflow import (
@@ -23,12 +22,18 @@ from app.services.event_request_workflow import (
 from app.services.event_store import (
     StoreError,
     authenticated_token,
-    authenticated_user,
     supabase_request,
 )
 
 from app.services.event_status_service import lifecycle_call
 from app.services.event_service import EventError
+from app.services.authorization import (
+    current_user,
+    has_role,
+    require_event_request_access,
+    require_event_request_owner,
+    require_roles,
+)
 
 
 event_requests_bp = Blueprint(
@@ -99,10 +104,10 @@ def _assignment_result(result):
 
 @event_requests_bp.get("/unassigned")
 def unassigned():
-    token = authenticated_token(supabase_request)
+    identity = require_roles("Event Coordinator Lead")
     result = supabase_request(
         "/rest/v1/rpc/event_request_assignment_queue",
-        token=token,
+        token=identity.token,
         payload={},
         method="POST",
     )
@@ -111,7 +116,7 @@ def unassigned():
 
 @event_requests_bp.post("/<int:event_request_id>/assign-coordinator")
 def assign_coordinator(event_request_id):
-    token = authenticated_token(supabase_request)
+    identity = require_roles("Event Coordinator Lead")
     payload = request.get_json(silent=True)
     coordinator_id = (
         clean_user_id(payload.get("coordinator_id"))
@@ -123,7 +128,7 @@ def assign_coordinator(event_request_id):
 
     result = supabase_request(
         "/rest/v1/rpc/assign_event_request_coordinator",
-        token=token,
+        token=identity.token,
         payload={
             "p_event_request_id": event_request_id,
             "p_coordinator_id": coordinator_id,
@@ -140,8 +145,8 @@ def handle_lifecycle_error(error):
 
 @event_requests_bp.post('/<int:event_request_id>/cancel')
 def cancel(event_request_id):
-    token, _ = authenticated_user()
-    return jsonify(lifecycle_call('cancel_event_request', token, {'p_request_id': event_request_id}))
+    identity, _ = require_event_request_owner(event_request_id)
+    return jsonify(lifecycle_call('cancel_event_request', identity.token, {'p_request_id': event_request_id}))
 
 
 @event_requests_bp.post("")
@@ -156,6 +161,9 @@ def create():
     if not isinstance(payload, dict):
         raise EventRequestError("Send the event request details as JSON.")
 
+    identity = require_roles("Event Organiser")
+    payload = dict(payload)
+    payload["event_organiser_id"] = identity.user_id
     save_as_draft = payload.pop("save_as_draft", False)
     if not isinstance(save_as_draft, bool):
         raise EventRequestError("save_as_draft must be true or false.")
@@ -172,26 +180,26 @@ def create():
 
 @event_requests_bp.get("")
 def index():
-    """List an Organiser's requests so they can return to an unfinished draft.
+    """List requests owned by the Organiser or assigned to the Coordinator.
 
     Filter with ?status=draft to show only drafts, which is what keeps them
     distinguishable from requests already submitted for review.
     """
-    # TODO: take the organiser from the authenticated Supabase session rather
-    # than trusting a query parameter.
     raw_organiser_id = request.args.get("event_organiser_id")
-    organiser_id = None
-
-    if raw_organiser_id is not None:
-        organiser_id = clean_user_id(raw_organiser_id)
-        if organiser_id is None:
-            raise EventRequestError(
-                "event_organiser_id must be a user id (a UUID)."
-            )
-
+    identity = current_user()
     status = request.args.get("status")
 
-    rows = list_event_requests(organiser_id, status)
+    if has_role(identity, "Event Organiser"):
+        if raw_organiser_id and clean_user_id(raw_organiser_id) != identity.user_id:
+            return jsonify(error="You can only view your own event requests."), 403
+        rows = list_event_requests(identity.user_id, status)
+    elif has_role(identity, "Event Coordinator"):
+        rows = list_event_requests(
+            status=status or ("submitted", "planning", "rejected"),
+            event_coordinator_id=identity.user_id,
+        )
+    else:
+        require_roles("Event Organiser", "Event Coordinator")
 
     return jsonify({"count": len(rows), "event_requests": rows})
 
@@ -209,6 +217,7 @@ def edit(event_request_id):
     if payload is None:
         raise EventRequestError("Send the fields you want to change as JSON.")
 
+    require_event_request_owner(event_request_id)
     row, amendment = edit_event_request(event_request_id, payload)
 
     body = {
@@ -229,6 +238,7 @@ def edit(event_request_id):
 @event_requests_bp.delete("/<int:event_request_id>")
 def delete(event_request_id):
     """Delete an unsubmitted draft."""
+    require_event_request_owner(event_request_id)
     delete_draft(event_request_id)
 
     return jsonify({"message": "Draft event request deleted."})
@@ -237,11 +247,7 @@ def delete(event_request_id):
 @event_requests_bp.get("/<int:event_request_id>")
 def read(event_request_id):
     """Return one event request so the Organiser can review it before submitting."""
-    row = get_event_request(event_request_id)
-
-    if row is None:
-        return jsonify({"error": f"No event request found with id {event_request_id}."}), 404
-
+    _, row = require_event_request_access(event_request_id)
     return jsonify(row)
 
 
@@ -252,6 +258,7 @@ def submit(event_request_id):
     Submits a draft, or resubmits a request that has been amended in response
     to a request for clarification.
     """
+    require_event_request_owner(event_request_id)
     row, was_resubmission, notified = send_for_review(event_request_id)
 
     return jsonify(
@@ -271,6 +278,7 @@ def submit(event_request_id):
 @event_requests_bp.get("/<int:event_request_id>/amendments")
 def amendments(event_request_id):
     """Return what the Organiser changed after each clarification request."""
+    require_event_request_owner(event_request_id)
     rows = list_amendments(event_request_id)
 
     return jsonify({"count": len(rows), "amendments": rows})
@@ -289,10 +297,10 @@ def review(event_request_id):
         raise EventRequestError("Send the review outcome and comments as JSON.")
 
     # Who is reviewing comes from the verified session, never from the body.
-    _, reviewer_id = authenticated_user()
+    identity = require_roles("Event Coordinator")
 
     event_request, recorded, notifications = review_event_request(
-        event_request_id, payload, reviewer_id
+        event_request_id, payload, identity.user_id
     )
 
     return jsonify(
@@ -310,6 +318,7 @@ def review(event_request_id):
 @event_requests_bp.get("/<int:event_request_id>/reviews")
 def reviews(event_request_id):
     """Return the review history, so the outcome is visible to those involved."""
+    require_event_request_access(event_request_id)
     rows = list_reviews(event_request_id)
 
     return jsonify({"count": len(rows), "reviews": rows})

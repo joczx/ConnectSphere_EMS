@@ -19,7 +19,7 @@ from app.services import event_request_service as requests
 from app.services import event_request_review_service as reviews
 from app.services import notification_service
 from app.services.event_request_service import EventRequestError
-from app.services.supabase_client import get_supabase
+from app.services.supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,7 @@ def _notify_resubmission(event_request):
             )
 
     try:
-        return notification_service.deliver(get_supabase(), pending)
+        return notification_service.deliver(get_supabase_admin(), pending)
     except Exception:  # noqa: BLE001 - never undo a recorded resubmission
         logger.exception(
             "Could not notify coordinators about event request %s",

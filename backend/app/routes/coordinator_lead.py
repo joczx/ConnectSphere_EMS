@@ -3,7 +3,8 @@
 from flask import Blueprint, jsonify, request
 
 from app.schemas.event_request import clean_user_id
-from app.services.event_store import StoreError, authenticated_token, supabase_request
+from app.services.event_store import StoreError, supabase_request
+from app.services.authorization import require_roles
 
 coordinator_lead = Blueprint(
     "coordinator_lead", __name__, url_prefix="/api/coordinator-lead"
@@ -43,10 +44,10 @@ def _coordinator_id(payload):
 
 @coordinator_lead.get("/dashboard")
 def dashboard():
-    token = authenticated_token(supabase_request)
+    identity = require_roles("Event Coordinator Lead")
     result = supabase_request(
         "/rest/v1/rpc/event_coordinator_lead_dashboard",
-        token=token,
+        token=identity.token,
         payload={},
         method="POST",
     )
@@ -55,14 +56,14 @@ def dashboard():
 
 @coordinator_lead.patch("/event-requests/<int:event_request_id>/coordinator")
 def reassign_event_request(event_request_id):
-    token = authenticated_token(supabase_request)
+    identity = require_roles("Event Coordinator Lead")
     coordinator_id = _coordinator_id(request.get_json(silent=True))
     if coordinator_id is None:
         return jsonify(error="Choose a valid Event Coordinator."), 400
 
     result = supabase_request(
         "/rest/v1/rpc/reassign_submitted_request_coordinator",
-        token=token,
+        token=identity.token,
         payload={
             "p_event_request_id": event_request_id,
             "p_coordinator_id": coordinator_id,
@@ -74,7 +75,7 @@ def reassign_event_request(event_request_id):
 
 @coordinator_lead.patch("/events/<event_id>/coordinator")
 def reassign_event(event_id):
-    token = authenticated_token(supabase_request)
+    identity = require_roles("Event Coordinator Lead")
     try:
         event_id_value = int(event_id)
         if event_id_value <= 0:
@@ -88,7 +89,7 @@ def reassign_event(event_id):
 
     result = supabase_request(
         "/rest/v1/rpc/reassign_event_coordinator_for_lead",
-        token=token,
+        token=identity.token,
         payload={
             "p_event_id": event_id_value,
             "p_coordinator_id": coordinator_id,

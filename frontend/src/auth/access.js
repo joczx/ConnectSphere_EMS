@@ -3,6 +3,8 @@ const coordinator = ['event coordinator'];
 const technical = ['technical support staff', 'technical support'];
 const venueStaff = ['venue staff'];
 const safetyOfficer = ['safety officer'];
+const organiser = ['event organiser', 'event organizer'];
+const venueReaders = [...coordinator, ...venueStaff];
 export const PAGE_ROLES = {
   '/assign-event-coordinators': ['event coordinator lead'],
   '/reassign-event-coordinators': ['event coordinator lead'],
@@ -14,11 +16,13 @@ export const PAGE_ROLES = {
   '/review-venue-bookings': venueStaff,
   '/equipment': technical,
   '/equipment-availability': [...coordinator, ...technical],
-  '/venue-search': coordinator,
+  '/venue-search': venueReaders,
   '/venue-suitability': coordinator,
   '/operational-safety-reviews': safetyOfficer,
+  '/events': [...organiser, ...coordinator],
 };
 export function rolesForPath(path) {
+  if (path === '/venues') return venueReaders;
   if (/^\/venues\/(new|[^/]+\/(edit|delete))$/.test(path)) return venueStaff;
   return Object.entries(PAGE_ROLES).find(([prefix]) => path === prefix || path.startsWith(prefix + '/'))?.[1] || [];
 }

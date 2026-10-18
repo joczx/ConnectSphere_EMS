@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 
 from app.schemas import event as schema
-from app.services.event_store import StoreError, supabase_request
+from app.services.event_store import StoreError, supabase_admin_request, supabase_request
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +42,8 @@ class EventError(Exception):
 
 def load_event(event_id, token):
     """Return the full event row, or raise 404 if it is not visible."""
-    rows = supabase_request(
-        f"/rest/v1/{schema.TABLE_NAME}?select=*&event_id=eq.{event_id}",
-        token=token,
+    rows = supabase_admin_request(
+        f"/rest/v1/{schema.TABLE_NAME}?select=*&event_id=eq.{event_id}"
     )
     if not rows:
         raise EventError("Event not found or access unavailable.", status=404)
@@ -116,7 +115,7 @@ def update_event(event_id, payload, token, confirm_critical=False,
     if expected_updated_at:
         query += f"&updated_at=eq.{quote(str(expected_updated_at), safe='')}"
 
-    updated = supabase_request(query, token=token, payload=record, method="PATCH")
+    updated = supabase_admin_request(query, payload=record, method="PATCH")
 
     if not updated:
         raise _why_nothing_was_written(event_id, existing, expected_updated_at, token)
@@ -157,10 +156,9 @@ def _why_nothing_was_written(event_id, existing, expected_updated_at, token):
 
 def list_activity(event_id, token):
     """Return an event's Activity History, newest first."""
-    return supabase_request(
+    return supabase_admin_request(
         f"/rest/v1/{schema.ACTIVITY_TABLE}"
-        f"?select=*&event_id=eq.{event_id}&order=created_at.desc",
-        token=token,
+        f"?select=*&event_id=eq.{event_id}&order=created_at.desc"
     )
 
 
@@ -178,9 +176,8 @@ def _record_activity(event_id, change_type, changes, token):
     }
 
     try:
-        rows = supabase_request(
+        rows = supabase_admin_request(
             f"/rest/v1/{schema.ACTIVITY_TABLE}",
-            token=token,
             payload=record,
             method="POST",
         )

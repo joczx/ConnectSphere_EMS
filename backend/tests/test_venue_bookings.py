@@ -1,4 +1,5 @@
 from unittest.mock import patch
+from types import SimpleNamespace
 import pytest
 from app import create_app
 from app.schemas.venue_booking import parse_booking
@@ -80,6 +81,49 @@ def test_staff_receives_review_details(query):
     assert response.json['bookings'][0] == VALID
     assert query.call_args.args[0] == '/rest/v1/rpc/list_venue_bookings'
     assert query.call_args.kwargs['token'] == 'coordinator-token'
+
+
+@pytest.mark.parametrize(
+    'role,event_field',
+    [
+        ('Event Coordinator', 'event_coordinator_id'),
+        ('Venue Staff', 'venue_staff_id'),
+    ],
+)
+def test_booking_list_hides_events_not_assigned_to_caller(role, event_field):
+    from app.routes import venue_bookings as routes
+
+    caller = SimpleNamespace(
+        user_id='caller-id',
+        token='verified-token',
+        roles=frozenset({role.casefold()}),
+    )
+    bookings = [
+        {**VALID, 'event_id': 4, 'booking_id': 'assigned'},
+        {**VALID, 'event_id': 5, 'booking_id': 'unassigned'},
+    ]
+    event_rows = [
+        {'event_id': 4, event_field: 'caller-id'},
+        {'event_id': 5, event_field: 'another-user'},
+    ]
+
+    with patch.object(routes, 'require_roles', return_value=caller), \
+         patch.object(
+             routes,
+             'rpc',
+             return_value={'bookings': bookings, 'can_review': role == 'Venue Staff'},
+         ), \
+         patch.object(routes, 'supabase_admin_request', return_value=event_rows) as events:
+        response = create_app().test_client().get(
+            '/api/venue-bookings', headers=HEADERS
+        )
+
+    assert response.status_code == 200
+    assert [item['booking_id'] for item in response.json['bookings']] == ['assigned']
+    events.assert_called_once_with(
+        '/rest/v1/events?select=event_id,event_coordinator_id,venue_staff_id'
+        '&event_id=in.(4,5)'
+    )
 
 
 @patch('app.routes.venue_bookings.supabase_request')

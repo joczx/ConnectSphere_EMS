@@ -2,7 +2,7 @@
 
 from urllib.parse import quote
 
-from app.services.event_store import supabase_request
+from app.services.event_store import supabase_admin_request
 from app.services.event_venue_criteria import closed_days
 
 VENUE_FIELDS = (
@@ -14,7 +14,7 @@ VENUE_FIELDS = (
 
 def search_venues(filters, token):
     """Fetch candidates from Supabase, then check requested operating hours."""
-    rows = supabase_request(filter_search_path(filters), token=token)
+    rows = supabase_admin_request(filter_search_path(filters))
     return [venue for venue in rows if matches_operating_hours(venue, filters)]
 
 

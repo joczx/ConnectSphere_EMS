@@ -1,10 +1,16 @@
 from uuid import UUID
 from flask import Blueprint, jsonify, request
 from app.schemas import event as event_schema
-from app.services.event_store import StoreError, supabase_request, authenticated_token, authenticated_user
+from app.services.event_store import StoreError, supabase_admin_request, supabase_request, authenticated_token, authenticated_user
 from app.services.event_service import EventError, list_activity, load_event, update_event
 from app.services.event_venue_criteria import criteria_from_event, describe, search_filters
 from app.services.event_status_service import lifecycle_call
+from app.services.authorization import (
+    current_user,
+    has_role,
+    require_event_access,
+    require_roles,
+)
 
 events = Blueprint('events', __name__, url_prefix='/api')
 
@@ -40,31 +46,48 @@ def event_error(error):
 
 @events.get('/events')
 def list_events():
-    token = authenticated_token(supabase_request)
-    rows = supabase_request('/rest/v1/events?select=event_id,event_name,status,start_datetime,end_datetime&order=start_datetime.asc.nullslast', token=token)
+    identity = require_roles("Event Organiser", "Event Coordinator")
+    rows = supabase_admin_request(
+        "/rest/v1/events?select=event_id,event_name,status,start_datetime,end_datetime,event_organiser_id,event_coordinator_id&order=start_datetime.asc.nullslast"
+    )
+    rows = [
+        row for row in rows
+        if (
+            has_role(identity, "Event Organiser")
+            and str(row.get("event_organiser_id")) == identity.user_id
+        ) or (
+            has_role(identity, "Event Coordinator")
+            and str(row.get("event_coordinator_id")) == identity.user_id
+        )
+    ]
+    for row in rows:
+        row.pop("event_organiser_id", None)
+        row.pop("event_coordinator_id", None)
     return jsonify(events=rows)
 
 
 @events.post('/events/status-refresh')
 def refresh_statuses():
-    token = authenticated_token(supabase_request)
-    return jsonify(lifecycle_call('refresh_visible_event_statuses', token, {}))
+    identity = require_roles("Event Organiser", "Event Coordinator")
+    return jsonify(lifecycle_call('refresh_visible_event_statuses', identity.token, {}))
 
 
 @events.patch('/events/<int:event_id>/registration-readiness')
 def registration_readiness(event_id):
-    token = authenticated_token(supabase_request)
+    identity = require_roles("Event Coordinator")
+    require_event_access(event_id, identity)
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict) or set(payload) != {'ready'} or type(payload['ready']) is not bool:
         return jsonify(error='Send ready as true or false.'), 400
-    return jsonify(lifecycle_call('set_event_registration_ready', token,
+    return jsonify(lifecycle_call('set_event_registration_ready', identity.token,
                                  {'p_event_id': event_id, 'p_ready': payload['ready']}))
 
 
 @events.post('/events/<int:event_id>/cancel')
 def cancel_event(event_id):
-    token = authenticated_token(supabase_request)
-    return jsonify(lifecycle_call('cancel_planned_event', token, {'p_event_id': event_id}))
+    identity = current_user()
+    require_event_access(event_id, identity)
+    return jsonify(lifecycle_call('cancel_planned_event', identity.token, {'p_event_id': event_id}))
 
 
 def valid_event_id(event_id):
@@ -86,14 +109,12 @@ def valid_event_id(event_id):
 
 @events.get('/events/<event_id>')
 def view_event(event_id):
-    token = authenticated_token(supabase_request)
+    identity = current_user()
     event_id_value = valid_event_id(event_id)
     if event_id_value is None:
         return jsonify(error='Event not found or access unavailable.'), 404
-    rows = supabase_request(f'/rest/v1/events?select=*&event_id=eq.{event_id_value}', token=token)
-    if not rows:
-        return jsonify(error='Event not found or access unavailable.'), 404
-    return jsonify(event=rows[0])
+    event = require_event_access(event_id_value, identity)
+    return jsonify(event=event)
 
 
 @events.patch('/events/<event_id>')
@@ -108,10 +129,11 @@ def edit_event(event_id):
     began. If someone else has saved since, the write is refused with 409 and
     "stale": true rather than overwriting their work.
     """
-    token, actor_id = authenticated_user(supabase_request)
+    identity = require_roles("Event Coordinator")
     event_id_value = valid_event_id(event_id)
     if event_id_value is None:
         return jsonify(error='Event not found or access unavailable.'), 404
+    require_event_access(event_id_value, identity)
 
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
@@ -124,7 +146,7 @@ def edit_event(event_id):
     expected_updated_at = payload.pop('expected_updated_at', None)
 
     row, activity = update_event(
-        event_id_value, payload, token, confirm_critical, expected_updated_at,
+        event_id_value, payload, identity.token, confirm_critical, expected_updated_at,
         actor_id,
     )
 
@@ -144,12 +166,12 @@ def event_venue_criteria(event_id):
     the coordinator retypes. `filters` is what the search endpoint accepts;
     `requirements` is the same thing worded for the page.
     """
-    token = authenticated_token(supabase_request)
+    identity = current_user()
     event_id_value = valid_event_id(event_id)
     if event_id_value is None:
         return jsonify(error='Event not found or access unavailable.'), 404
 
-    event = load_event(event_id_value, token)
+    event = require_event_access(event_id_value, identity)
     criteria = criteria_from_event(event)
 
     return jsonify({
@@ -166,17 +188,18 @@ def event_venue_criteria(event_id):
 @events.get('/events/<event_id>/activity')
 def event_activity(event_id):
     """The event's Activity History, newest first."""
-    token = authenticated_token(supabase_request)
+    identity = current_user()
     event_id_value = valid_event_id(event_id)
     if event_id_value is None:
         return jsonify(error='Event not found or access unavailable.'), 404
+    require_event_access(event_id_value, identity)
 
-    return jsonify(activity=list_activity(event_id_value, token))
+    return jsonify(activity=list_activity(event_id_value, identity.token))
 
 
 @events.patch('/events/<event_id>/coordinator')
 def reassign_event_coordinator(event_id):
-    token = authenticated_token(supabase_request)
+    identity = require_roles("Event Coordinator Lead")
     event_id_value = valid_event_id(event_id)
     if event_id_value is None:
         return jsonify(error='Event not found or access unavailable.'), 404
@@ -187,13 +210,12 @@ def reassign_event_coordinator(event_id):
         return jsonify(error='Please choose a replacement Event Coordinator.'), 400
     coordinator_id = coordinator_id.strip()
 
-    event_rows = supabase_request(f'/rest/v1/events?select=event_id,event_coordinator_id&event_id=eq.{event_id_value}', token=token)
+    event_rows = supabase_admin_request(f'/rest/v1/events?select=event_id,event_coordinator_id&event_id=eq.{event_id_value}')
     if not event_rows:
         return jsonify(error='Event not found or access unavailable.'), 404
 
-    updated = supabase_request(
+    updated = supabase_admin_request(
         f'/rest/v1/events?event_id=eq.{event_id_value}',
-        token=token,
         payload={'event_coordinator_id': str(coordinator_id)},
         method='PATCH',
     )

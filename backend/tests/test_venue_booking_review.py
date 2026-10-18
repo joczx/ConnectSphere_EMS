@@ -6,6 +6,7 @@ are the database's, and are verified against a real database separately (see
 docs/venue-bookings.md).
 """
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import pytest
 
@@ -136,6 +137,70 @@ def test_reviewing_requires_sign_in(query):
     response = client().post(f'/api/venue-bookings/{BOOKING_ID}/review', json={'outcome': 'approved'})
     assert response.status_code == 401
     query.assert_not_called()
+
+
+def test_assigned_venue_staff_can_review_without_a_role_check():
+    from app.routes import venue_bookings as routes
+
+    identity = SimpleNamespace(user_id='assigned-staff', token='verified-token')
+    with patch.object(routes, 'current_user', return_value=identity), \
+         patch.object(
+             routes,
+             'authorize_booking',
+             return_value={'venue_staff_id': identity.user_id},
+         ) as authorize, \
+         patch.object(
+             routes,
+             'supabase_admin_request',
+             return_value={'booking': {**PENDING, 'status': 'approved'}},
+         ) as decide:
+        response = client().post(
+            f'/api/venue-bookings/{BOOKING_ID}/review',
+            json={'outcome': 'approved'},
+            headers=HEADERS,
+        )
+
+    assert response.status_code == 200
+    authorize.assert_called_once_with(BOOKING_ID, identity, staff_only=True)
+    assert decide.call_args.args[0] == '/rest/v1/rpc/review_venue_booking_for_backend'
+
+
+def test_booking_review_authorization_uses_assignment_not_role():
+    from app.routes import venue_bookings as routes
+
+    identity = SimpleNamespace(user_id='assigned-staff', roles=frozenset())
+    event = {'venue_staff_id': identity.user_id}
+    booking = {'event_id': 6}
+    with patch.object(routes, 'booking_event', return_value=booking), \
+         patch.object(routes, 'load_event', return_value=event):
+        assert routes.authorize_booking(BOOKING_ID, identity, staff_only=True) == event
+
+    with patch.object(routes, 'booking_event', return_value=booking), \
+         patch.object(routes, 'load_event', return_value={'venue_staff_id': 'other-staff'}):
+        with pytest.raises(routes.AuthorizationError) as denied:
+            routes.authorize_booking(BOOKING_ID, identity, staff_only=True)
+    assert denied.value.status == 404
+
+
+def test_individual_booking_review_capability_is_event_specific():
+    from app.routes import venue_bookings as routes
+
+    identity = SimpleNamespace(user_id='event-coordinator', token='verified-token')
+    event = {'venue_staff_id': 'different-staff'}
+    with patch.object(routes, 'require_roles', return_value=identity), \
+         patch.object(routes, 'authorize_booking', return_value=event), \
+         patch.object(
+             routes,
+             'rpc',
+             return_value={'booking': PENDING, 'can_review': True},
+         ):
+        response = client().get(
+            f'/api/venue-bookings/{BOOKING_ID}',
+            headers=HEADERS,
+        )
+
+    assert response.status_code == 200
+    assert response.json['can_review'] is False
 
 
 # --- "view pending requests" and "displays relevant booking details" --------

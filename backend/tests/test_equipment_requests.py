@@ -34,6 +34,25 @@ class EquipmentRequestRouteTests(unittest.TestCase):
         self.assertEqual(response.json['count'], 1)
         self.assertEqual(response.json['equipment_requests'][0]['equipment_type'], 'Projector')
 
+    def test_list_equipment_requests_uses_event_access_result_without_treating_it_as_identity(self):
+        event = {'event_id': 2, 'event_coordinator_id': 'coordinator-1'}
+        with patch(
+            'app.routes.equipment_requests.require_event_access',
+            return_value=event,
+        ) as authorize, patch(
+            'app.routes.equipment_requests.list_equipment_requests',
+            return_value=[],
+        ) as listing:
+            response = self.client.get(
+                '/api/events/2/equipment-requests',
+                headers=self.headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {'count': 0, 'equipment_requests': []})
+        authorize.assert_called_once_with(2)
+        listing.assert_called_once_with(2)
+
     @patch('app.services.equipment_request_service.supabase_request')
     def test_create_equipment_request_success(self, query):
         query.side_effect = [

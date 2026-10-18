@@ -1,6 +1,15 @@
 # app/routes/users.py
+from urllib.parse import quote
+from uuid import UUID
+
 from flask import Blueprint, jsonify, request
-from app.services.event_store import StoreError, supabase_request, authenticated_token
+from app.services.authorization import current_user, has_role, require_roles
+from app.services.event_store import (
+    StoreError,
+    supabase_admin_request,
+    supabase_request,
+    authenticated_token,
+)
 
 users = Blueprint('users', __name__, url_prefix='/api')
 
@@ -31,9 +40,9 @@ def get_current_user():
     auth_user = supabase_request('/auth/v1/user', token=token)
     user_id = auth_user.get('id')
 
-    profile_rows = supabase_request(
-        f'/rest/v1/users?select=name,email&user_id=eq.{user_id}',
-        token=token,
+    identity = current_user()
+    profile_rows = supabase_admin_request(
+        f'/rest/v1/users?select=name,email&user_id=eq.{quote(user_id, safe="")}'
     )
     profile = profile_rows[0] if profile_rows else {}
     name = (profile.get('name') or '').strip()
@@ -42,24 +51,9 @@ def get_current_user():
     if '@' in name:
         name = name.split('@', 1)[0]
 
-    memberships = supabase_request(
-        f'/rest/v1/user_roles?select=role_id&user_id=eq.{user_id}',
-        token=token,
-    )
-    role_ids = list(dict.fromkeys(
-        str(row['role_id'])
-        for row in memberships
-        if row.get('role_id') is not None
-    ))
-    roles = supabase_request(
-        '/rest/v1/roles?select=role_name&role_id=in.('
-        + ','.join(role_ids) + ')',
-        token=token,
-    ) if role_ids else []
     role_names = list(dict.fromkeys(
-        str(row['role_name']).strip().replace('_', ' ').title()
-        for row in roles
-        if row.get('role_name') and str(row['role_name']).strip()
+        " ".join(role.title() for role in role_name.split())
+        for role_name in sorted(identity.roles)
     ))
 
     return jsonify(user={'name': name, 'roles': role_names})
@@ -67,7 +61,7 @@ def get_current_user():
 
 @users.get('/users')
 def get_users_by_ids():
-    token = authenticated_token(supabase_request)
+    identity = current_user()
 
     ids_param = request.args.get('ids', '').strip()
     role_filter = request.args.get('role', '').strip().casefold()
@@ -75,9 +69,8 @@ def get_users_by_ids():
         return jsonify(error='Choose either a user ID filter or a role filter.'), 400
 
     if role_filter == 'event_coordinator':
-        role_rows = supabase_request(
-            '/rest/v1/roles?select=role_id,role_name', token=token,
-        )
+        require_roles("Event Coordinator Lead")
+        role_rows = supabase_admin_request('/rest/v1/roles?select=role_id,role_name')
         role_ids = [
             str(row['role_id'])
             for row in role_rows
@@ -86,37 +79,56 @@ def get_users_by_ids():
             and row.get('role_id') is not None
         ]
         if role_ids:
-            memberships = supabase_request(
+            memberships = supabase_admin_request(
                 '/rest/v1/user_roles?select=user_id&role_id=in.('
-                + ','.join(role_ids) + ')',
-                token=token,
+                + ','.join(quote(role_id, safe="") for role_id in role_ids) + ')'
             )
             user_ids = list(dict.fromkeys(
                 str(row['user_id'])
                 for row in memberships
                 if row.get('user_id')
             ))
-            rows = supabase_request(
+            rows = supabase_admin_request(
                 '/rest/v1/users?select=user_id,name,email&user_id=in.('
-                + ','.join(user_ids) + ')&order=name.asc',
-                token=token,
+                + ','.join(quote(user_id, safe="") for user_id in user_ids) + ')&order=name.asc'
             ) if user_ids else []
         else:
             rows = []
     elif role_filter:
         return jsonify(error='Unsupported user role filter.'), 400
     elif ids_param:
-        id_list = [uid.strip() for uid in ids_param.split(',') if uid.strip()]
-        ids_filter = ','.join(id_list)
-        rows = supabase_request(
-            f'/rest/v1/users?select=user_id,name,email&user_id=in.({ids_filter})',
-            token=token,
+        require_roles("Event Coordinator", "Event Organiser")
+        id_list = []
+        for raw_id in ids_param.split(','):
+            try:
+                id_list.append(str(UUID(raw_id.strip())))
+            except ValueError:
+                continue
+        if not id_list:
+            return jsonify(users={})
+        event_rows = supabase_admin_request(
+            "/rest/v1/events?select=event_organiser_id,event_coordinator_id"
+            f"&or=(event_organiser_id.eq.{quote(identity.user_id, safe='')},"
+            f"event_coordinator_id.eq.{quote(identity.user_id, safe='')})"
         )
+        associated_ids = {
+            str(event.get(field))
+            for event in event_rows
+            for field in (
+                "event_organiser_id",
+                "event_coordinator_id",
+                "technical_support_id",
+                "venue_staff_id",
+            )
+            if event.get(field)
+        }
+        allowed_ids = [user_id for user_id in id_list if user_id in associated_ids]
+        rows = supabase_admin_request(
+            '/rest/v1/users?select=user_id,name,email&user_id=in.('
+            + ','.join(quote(user_id, safe="") for user_id in allowed_ids) + ')'
+        ) if allowed_ids else []
     else:
-        rows = supabase_request(
-            '/rest/v1/users?select=user_id,name,email&order=name.asc',
-            token=token,
-        )
+        return jsonify(error='Choose a role or user ID filter.'), 400
 
     users_map = {}
     for row in rows:

@@ -87,28 +87,115 @@ export default function Events() {
     technical_requirements: '',
   });
   const [submitState, setSubmitState] = useState({ message: '', error: '' });
-  const [userNames, setUserNames] = useState({});
   const [edit, setEdit] = useState({ open: false, values: null, busy: false, error: '', details: null, message: '' });
   const [lifecycle, setLifecycle] = useState({ busy: false, error: '', message: '' });
-  // `allowed`: whether this viewer takes part in venue booking at all.
-  // `canRequest`: whether they may request one (coordinators, not staff).
-  const [venue, setVenue] = useState({ assigned: null, bookings: [], error: '', allowed: true, canRequest: false });
 
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
       const showFeedback = manualRefresh.current;
       manualRefresh.current = false;
-      setState((current) => ({ ...current, loading: true, error: null }));
-      try {
-        const path = '/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : '');
-        await api('/api/events/status-refresh', { method: 'POST', body: {}, signal: controller.signal });
-        const data = await api(path, { cache: 'no-store', signal: controller.signal,
-          feedback: showFeedback, successMessage: 'Event information refreshed.' });
-        if (!controller.signal.aborted) setState((current) => ({ ...current, data, key: eventId, loading: false, error: null }));
-      } catch (err) {
-        if (showFeedback && !controller.signal.aborted) notify(err.message || 'Unable to refresh event information.', 'error');
-        if (!controller.signal.aborted) setState((current) => ({ ...current, loading: false, error: err.message || 'Unable to load event information.' }));
+      setState((current) => ({ ...current, loading: true, error: null, refreshError: null }));
+      const path = '/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : '');
+      const [dataResult, refreshResult] = await Promise.allSettled([
+        api(path, { cache: 'no-store', signal: controller.signal,
+          feedback: showFeedback, successMessage: 'Event information refreshed.' }),
+        api('/api/events/status-refresh', {
+          method: 'POST',
+          body: {},
+          signal: controller.signal,
+          feedback: false,
+        }),
+      ]);
+      if (controller.signal.aborted) return;
+
+      if (dataResult.status === 'fulfilled') {
+        const data = dataResult.value;
+        const event = data.event;
+        let details = {
+          equipment: [],
+          equipmentError: null,
+          activity: [],
+          activityError: null,
+          venue: { assigned: null, bookings: [], error: '', allowed: true, canRequest: false },
+          equipmentTypes: [],
+          equipmentTypesError: '',
+          userNames: {},
+        };
+
+        if (eventId && event) {
+          const ids = [
+            event.event_organiser_id,
+            event.event_coordinator_id,
+            event.technical_support_id,
+            event.venue_staff_id,
+          ].filter(Boolean).join(',');
+          const detailResults = await Promise.allSettled([
+            api(`/api/events/${encodeURIComponent(eventId)}/equipment-requests`, { cache: 'no-store', signal: controller.signal }),
+            api(`/api/events/${encodeURIComponent(eventId)}/activity`, { cache: 'no-store', signal: controller.signal }),
+            api('/api/venue-bookings', { cache: 'no-store', signal: controller.signal }),
+            api('/api/equipment-types', { cache: 'no-store', signal: controller.signal }),
+            ids ? api(`/api/users?ids=${encodeURIComponent(ids)}`, { cache: 'no-store', signal: controller.signal }) : Promise.resolve({ users: {} }),
+            event.venue_id ? api(`/api/venues/${encodeURIComponent(event.venue_id)}`, { cache: 'no-store', signal: controller.signal }) : Promise.resolve({ venue: null }),
+          ]);
+          if (controller.signal.aborted) return;
+
+          const [equipmentResult, activityResult, bookingsResult, typesResult, namesResult, venueResult] = detailResults;
+          if (equipmentResult.status === 'fulfilled') {
+            details.equipment = equipmentResult.value.equipment_requests || [];
+          } else {
+            details.equipmentError = equipmentResult.reason.message || 'Unable to load equipment requests.';
+          }
+          if (activityResult.status === 'fulfilled') {
+            details.activity = activityResult.value.activity || [];
+          } else {
+            details.activity = null;
+            details.activityError = activityResult.reason.message || 'Unable to load the activity history.';
+          }
+          if (bookingsResult.status === 'fulfilled') {
+            details.venue.bookings = (bookingsResult.value.bookings || [])
+              .filter(booking => String(booking.event_id) === String(eventId));
+            details.venue.canRequest = !!bookingsResult.value.can_submit;
+          } else if (bookingsResult.reason.status === 403) {
+            details.venue.allowed = false;
+          } else {
+            details.venue.error = bookingsResult.reason.message || 'Unable to load venue booking requests.';
+          }
+          if (typesResult.status === 'fulfilled') {
+            details.equipmentTypes = typesResult.value.equipment_types || [];
+          } else {
+            details.equipmentTypesError = typesResult.reason.message || 'Unable to load equipment types.';
+          }
+          if (namesResult.status === 'fulfilled') {
+            details.userNames = namesResult.value.users || {};
+          }
+          if (venueResult.status === 'fulfilled') {
+            details.venue.assigned = venueResult.value.venue;
+          }
+        }
+
+        setState((current) => ({
+          ...current,
+          ...details,
+          data,
+          key: eventId,
+          loading: false,
+          error: null,
+          refreshError: refreshResult.status === 'rejected'
+            ? refreshResult.reason.message || 'Unable to refresh event statuses.'
+            : null,
+        }));
+      } else {
+        const message = dataResult.reason.message || 'Unable to load event information.';
+        if (showFeedback) notify(message, 'error');
+        setState((current) => ({
+          ...current,
+          loading: false,
+          error: message,
+          refreshError: refreshResult.status === 'rejected'
+            ? refreshResult.reason.message || 'Unable to refresh event statuses.'
+            : null,
+        }));
       }
     }
     load();
@@ -117,65 +204,6 @@ export default function Events() {
     window.addEventListener('focus', reload);
     return () => { controller.abort(); clearInterval(timer); window.removeEventListener('focus', reload); };
   }, [api, eventId, refresh, notify]);
-
-  useEffect(() => {
-    if (!eventId) return;
-    let ignore = false;
-    async function loadEquipment() {
-      try {
-        const data = await api(`/api/events/${encodeURIComponent(eventId)}/equipment-requests`, { cache: 'no-store' });
-        if (!ignore) setState((current) => ({ ...current, equipment: data.equipment_requests || [], equipmentError: null }));
-      } catch (err) {
-        if (!ignore) setState((current) => ({ ...current, equipmentError: err.message || 'Unable to load equipment requests.' }));
-      }
-    }
-    loadEquipment();
-    return () => { ignore = true; };
-  }, [api, eventId, refresh]);
-
-  useEffect(() => {
-    if (!eventId) return;
-    let ignore = false;
-    api(`/api/events/${encodeURIComponent(eventId)}/activity`, { cache: 'no-store' })
-      .then(data => { if (!ignore) setState(current => ({ ...current, activity: data.activity || [], activityError: null })); })
-      // Not an empty history: swallowing this would render "no changes have
-      // been recorded" over a Critical Edit the viewer simply could not read.
-      .catch(err => { if (!ignore) setState(current => ({ ...current, activity: null, activityError: err.message || 'Unable to load the activity history.' })); });
-    return () => { ignore = true; };
-  }, [api, eventId, refresh]);
-
-  // The venue side of planning this event: what has been requested for it so
-  // far, so the coordinator does not request a second venue without knowing.
-  useEffect(() => {
-    if (!eventId) return undefined;
-    let ignore = false;
-    api('/api/venue-bookings', { cache: 'no-store' })
-      .then(data => {
-        if (ignore) return;
-        const forThisEvent = (data.bookings || [])
-          .filter(booking => String(booking.event_id) === String(eventId));
-        setVenue(current => ({ ...current, bookings: forThisEvent, error: '', allowed: true, canRequest: !!data.can_submit }));
-      })
-      .catch(err => {
-        if (ignore) return;
-        // Organisers and technical support can read the event but take no part
-        // in venue booking. That is not a failure, so they see no section
-        // rather than an error they can do nothing about.
-        if (err.status === 403) setVenue(current => ({ ...current, allowed: false, error: '' }));
-        else setVenue(current => ({ ...current, error: err.message || 'Unable to load venue booking requests.' }));
-      });
-    return () => { ignore = true; };
-  }, [api, eventId, refresh]);
-
-  const [equipmentTypes, setEquipmentTypes] = useState([]);
-
-  useEffect(() => {
-    let ignore = false;
-    api('/api/equipment-types', { cache: 'no-store' })
-      .then(data => { if (!ignore) setEquipmentTypes(data.equipment_types || []); })
-      .catch(err => { if (!ignore) setSubmitState({ message: '', error: err.message }); });
-    return () => { ignore = true; };
-  }, [api]);
 
   async function submitEquipmentRequest(event) {
     event.preventDefault();
@@ -199,15 +227,18 @@ export default function Events() {
   }
 
   const data = state.key === eventId ? state.data : null;
-  const event = data?.event;
+  const event = state.loading || state.error ? null : data?.event;
   const equipmentRequests = state.equipment || [];
   const activity = state.activity || [];
-  const editable = event?.status === 'planning';
+  const venue = state.venue || { assigned: null, bookings: [], error: '', allowed: true, canRequest: false };
+  const equipmentTypes = state.equipmentTypes || [];
+  const userNames = state.userNames || {};
   const viewerId = token ? userId(token) : null;
   const isCoordinator = !!event && viewerId === event.event_coordinator_id;
   const isOrganiser = !!event && viewerId === event.event_organiser_id;
   const canRequestChange = isOrganiser && canAccess('/event-change-requests')
     && ['planning', 'pending_safety_checks', 'confirmed'].includes(event.status);
+  const editable = isCoordinator && event?.status === 'planning';
   const canCancel = !!event && ['planning', 'confirmed'].includes(event.status)
     && [event.event_coordinator_id, event.event_organiser_id].includes(viewerId);
 
@@ -230,39 +261,6 @@ export default function Events() {
   const approvedVenues = venue.bookings
     .filter(booking => booking.status === 'approved')
     .map(booking => booking.venue_name);
-
-  useEffect(() => {
-    if (!event) return;
-
-    const ids = [
-      event.event_organiser_id,
-      event.event_coordinator_id,
-      event.technical_support_id,
-      event.venue_staff_id,
-    ].filter(Boolean).join(',');
-
-    if (ids) {
-      api(`/api/users?ids=${encodeURIComponent(ids)}`, { cache: 'no-store' })
-        .then((data) => setUserNames(data.users || {}))
-        .catch(() => setUserNames({}));
-    } else {
-      setUserNames({});
-    }
-  }, [api, event]);
-
-  useEffect(() => {
-    if (!event?.venue_id) {
-      setVenue(current => ({ ...current, assigned: null }));
-      return undefined;
-    }
-    let ignore = false;
-    api(`/api/venues/${encodeURIComponent(event.venue_id)}`, { cache: 'no-store' })
-      .then(data => { if (!ignore) setVenue(current => ({ ...current, assigned: data.venue })); })
-      // The venue name is a convenience. Failing to read it must not make the
-      // rest of the planning page look broken.
-      .catch(() => { if (!ignore) setVenue(current => ({ ...current, assigned: null })); });
-    return () => { ignore = true; };
-  }, [api, event?.venue_id]);
 
   function startEditing() {
     // The version being edited. Sent back on save so the server can refuse
@@ -328,8 +326,9 @@ export default function Events() {
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{eventId ? 'Event information' : 'My events'}</h1></div>
         <button className="secondary" onClick={() => { manualRefresh.current = true; setRefresh(value => value + 1); }} disabled={state.loading}>Refresh</button></div>
       <p>All times are in Singapore time (SGT). Information refreshes every minute and when you return to this window.</p>
-      {state.loading && <p role="status">Loading latest information…</p>}
+      {state.loading && <p role="status">{eventId ? 'Loading event information…' : 'Loading latest information…'}</p>}
       {state.error && <div role="alert" className="panel error">{state.error} Use Refresh to try again.</div>}
+      {state.refreshError && <div role="alert" className="panel error">{state.refreshError}</div>}
       {data?.events && <section className="event-list" aria-label="Your events">
         {data.events.length === 0 && <div className="panel">No events are available to you yet. Contact your event organiser or coordinator to arrange access.</div>}
         {data.events.map(item => <Link className="panel event-link" key={item.event_id} to={'/events/' + item.event_id}><h2>{item.event_name}</h2><p>{date(item.start_datetime)}</p><p className="metadata">Status: {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : 'Not specified'}</p><span>View event information →</span></Link>)}
@@ -449,9 +448,10 @@ export default function Events() {
         </dl>}
       </section>}
 
-      {eventId && <section className="panel" style={{ marginTop: '24px' }}>
+      {eventId && event && <section className="panel" style={{ marginTop: '24px' }}>
         <h2>Equipment requests</h2>
         {state.equipmentError && <div className="error">{state.equipmentError}</div>}
+        {state.equipmentTypesError && <div className="error">{state.equipmentTypesError}</div>}
         {submitState.error && <div className="error">{submitState.error}</div>}
         {submitState.message && <div className="success">{submitState.message}</div>}
 
@@ -489,7 +489,7 @@ export default function Events() {
         </div>
       </section>}
 
-      {eventId && <section className="panel" style={{ marginTop: '24px' }}>
+      {eventId && event && <section className="panel" style={{ marginTop: '24px' }}>
         <h2>Activity history</h2>
         {state.activityError && <div role="alert" className="error">{state.activityError} Use Refresh to try again.</div>}
         {!state.activityError && activity.length === 0 ? <p>No changes have been recorded for this event yet.</p> : activity.length > 0 && <dl>

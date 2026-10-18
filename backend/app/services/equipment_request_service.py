@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from app.services.event_store import supabase_request
+from app.services.event_store import supabase_admin_request, supabase_request
 
 
 class EquipmentRequestError(Exception):
@@ -17,10 +17,9 @@ class EquipmentRequestError(Exception):
         return body
 
 
-def list_equipment_requests(event_id, token):
-    rows = supabase_request(
-        f'/rest/v1/equipment_request?select=*&event_id=eq.{event_id}',
-        token=token,
+def list_equipment_requests(event_id):
+    rows = supabase_admin_request(
+        f'/rest/v1/equipment_request?select=*&event_id=eq.{event_id}'
     )
     return rows
 
@@ -32,12 +31,11 @@ def create_equipment_request(event_id, payload, token):
     current_user = _current_user_id(token)
     event = _load_event(event_id, token)
 
-    # assigned_coordinator = event.get('event_coordinator_id')
-    # if not assigned_coordinator or current_user != assigned_coordinator:
-    #     raise EquipmentRequestError(
-    #         'Only the assigned Event Coordinator can create equipment requests for this event.',
-    #         403,
-    #     )
+    if event.get('event_coordinator_id') != current_user:
+        raise EquipmentRequestError(
+            'Only the assigned Event Coordinator can create equipment requests for this event.',
+            403,
+        )
 
     equipment_type = _clean_text(payload.get('equipment_type'), 'equipment_type', 'Equipment type is required.')
     quantity = payload.get('quantity')
@@ -60,7 +58,7 @@ def create_equipment_request(event_id, payload, token):
         'equipment_type': equipment_type,
     }
 
-    rows = supabase_request('/rest/v1/equipment_request', token=token, payload=record)
+    rows = supabase_admin_request('/rest/v1/equipment_request', payload=record)
     return rows[0] if isinstance(rows, list) and rows else record
 
 
@@ -73,9 +71,8 @@ def _current_user_id(token):
 
 
 def _load_event(event_id, token):
-    rows = supabase_request(
-        f'/rest/v1/events?select=event_id,event_coordinator_id&event_id=eq.{event_id}',
-        token=token,
+    rows = supabase_admin_request(
+        f'/rest/v1/events?select=event_id,event_coordinator_id&event_id=eq.{event_id}'
     )
     if not rows:
         raise EquipmentRequestError('Event not found or access unavailable.', 404)

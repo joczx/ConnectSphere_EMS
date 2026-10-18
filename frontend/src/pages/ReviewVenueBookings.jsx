@@ -52,13 +52,10 @@ export default function ReviewVenueBookings() {
       <p>All dates and times are in Singapore time (SGT).</p>
       {state.loading && <p role="status">Loading booking requests…</p>}
       {state.error && <div role="alert" className="panel error">{state.error}</div>}
-      {/* Coordinators can read their own requests through the same endpoint,
-          so the page says plainly that reviewing is not theirs to do. */}
       {state.data && !state.data.can_review && <div className="panel">
-        <p>Only Venue Staff can review venue booking requests.</p>
-        <Link to="/venue-bookings">See your own booking requests</Link>
+        <p>You can view booking requests for events assigned to you. Only Venue Staff can approve or reject them.</p>
       </div>}
-      {state.data?.can_review && SECTIONS.map(([title, status, empty]) => {
+      {state.data && SECTIONS.map(([title, status, empty]) => {
         const items = byStatus(bookings, status);
         if (!items.length && !empty) return null;
         return <section key={status}>
@@ -74,7 +71,7 @@ export default function ReviewVenueBookings() {
                 {item.status === 'submitted' ? ` · received ${when(item.submitted_at)}` : ` · ${when(item.reviewed_at)}`}
               </p>
               {status === 'submitted' && <ConflictHint conflicts={item.conflicts} />}
-              <span>{status === 'submitted' ? 'Review request →' : 'View request →'}</span>
+              <span>{status === 'submitted' && state.data.can_review ? 'Review request →' : 'View request →'}</span>
             </Link>
           ))}</div>
         </section>;

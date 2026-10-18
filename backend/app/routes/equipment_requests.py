@@ -6,6 +6,7 @@ from app.services.equipment_request_service import (
     create_equipment_request,
     list_equipment_requests,
 )
+from app.services.authorization import require_event_access, require_roles
 
 bp = Blueprint('equipment_requests', __name__, url_prefix='/api/events')
 
@@ -21,21 +22,18 @@ def handle_store_error(error):
 
 @bp.get('/<int:event_id>/equipment-requests')
 def list_requests(event_id):
-    token = request.headers.get('Authorization', '').replace('Bearer ', '', 1).strip()
-    if not token:
-        raise EquipmentRequestError('Authentication required.', 401)
-    rows = list_equipment_requests(event_id, token)
+    require_event_access(event_id)
+    rows = list_equipment_requests(event_id)
     return jsonify({'count': len(rows), 'equipment_requests': rows})
 
 
 @bp.post('/<int:event_id>/equipment-requests')
 def create_request(event_id):
-    token = request.headers.get('Authorization', '').replace('Bearer ', '', 1).strip()
-    if not token:
-        raise EquipmentRequestError('Authentication required.', 401)
+    identity = require_roles("Event Coordinator")
+    require_event_access(event_id, identity)
 
     payload = request.get_json(silent=True)
-    row = create_equipment_request(event_id, payload, token)
+    row = create_equipment_request(event_id, payload, identity.token)
     return jsonify({
         'message': 'Equipment request submitted successfully.',
         'equipment_request': row,

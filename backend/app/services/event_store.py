@@ -33,7 +33,14 @@ class StoreError(Exception):
         return {'error': self.message}
 
 
-def supabase_request(path, token=None, payload=None, method=None, return_representation=False):
+def supabase_request(
+    path,
+    token=None,
+    payload=None,
+    method=None,
+    return_representation=False,
+    service_role=False,
+):
     # Sending data means POST unless a method is named. A GET with a body is
     # not an error anywhere: PostgREST simply ignores the body, so an insert
     # quietly becomes a read and an RPC is called with no arguments. That is
@@ -42,13 +49,21 @@ def supabase_request(path, token=None, payload=None, method=None, return_represe
     if method is None:
         method = 'GET' if payload is None else 'POST'
     base = os.environ.get('SUPABASE_URL', '').rstrip('/')
-    key = os.environ.get('SUPABASE_ANON_KEY', '')
+    key = os.environ.get(
+        'SUPABASE_SERVICE_ROLE_KEY' if service_role else 'SUPABASE_ANON_KEY', ''
+    )
     if not base or not key:
-        raise StoreError(503, 'Supabase credentials are missing or incomplete. Set SUPABASE_URL and SUPABASE_ANON_KEY in backend/.env.')
+        setting = 'SUPABASE_SERVICE_ROLE_KEY' if service_role else 'SUPABASE_ANON_KEY'
+        raise StoreError(
+            503,
+            f'Supabase credentials are missing or incomplete. Set SUPABASE_URL and {setting} in backend/.env.',
+        )
     headers = {'apikey': key, 'Content-Type': 'application/json'}
     if payload is not None or return_representation:
         headers['Prefer'] = 'return=representation'
-    if token:
+    if service_role:
+        headers['Authorization'] = f'Bearer {key}'
+    elif token:
         headers['Authorization'] = f'Bearer {token}'
     req = Request(base + path, headers=headers, method=method,
                   data=json.dumps(payload).encode() if payload is not None else None)
@@ -79,6 +94,17 @@ def supabase_request(path, token=None, payload=None, method=None, return_represe
         raise StoreError(_application_status(path, exc.code), code=code) from exc
     except (URLError, TimeoutError) as exc:
         raise StoreError(503, 'Supabase is temporarily unavailable.') from exc
+
+
+def supabase_admin_request(path, payload=None, method=None, return_representation=False):
+    """Use the server-only service-role key for backend-authorized data access."""
+    return supabase_request(
+        path,
+        payload=payload,
+        method=method,
+        return_representation=return_representation,
+        service_role=True,
+    )
 
 
 def authenticated_user(query=None):

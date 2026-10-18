@@ -184,24 +184,41 @@ def delete_draft(event_request_id):
         raise not_a_draft
 
 
-def list_event_requests(event_organiser_id=None, status=None):
+def list_event_requests(event_organiser_id=None, status=None, event_coordinator_id=None):
     """List event requests, most recently changed first.
 
     Both filters are optional and combine. An Organiser passes their own id to
     find drafts they left unfinished; an Event Coordinator passes
-    status=submitted to see what is waiting for review.
+    status=submitted to see what is waiting for review. Because this service
+    uses the service-role client, callers must always provide an ownership
+    scope; an unscoped list would bypass the route-level access checks.
     """
-    if status is not None and status not in schema.ALL_STATUSES:
+    if event_organiser_id is None and event_coordinator_id is None:
+        raise EventRequestError(
+            "An organiser or coordinator must be specified to list event requests.",
+            status_code=403,
+        )
+
+    statuses = (status,) if isinstance(status, str) else status
+    if statuses is not None and (
+        not isinstance(statuses, (tuple, list))
+        or not statuses
+        or any(value not in schema.ALL_STATUSES for value in statuses)
+    ):
         raise EventRequestError(
             "Status must be one of: " + ", ".join(sorted(schema.ALL_STATUSES)) + "."
         )
 
     def query(table):
-        builder = table.select("*")
+        builder = table.select("event_request_id,event_name,status")
         if event_organiser_id is not None:
             builder = builder.eq("event_organiser_id", event_organiser_id)
-        if status is not None:
+        if event_coordinator_id is not None:
+            builder = builder.eq("event_coordinator_id", event_coordinator_id)
+        if isinstance(status, str):
             builder = builder.eq("status", status)
+        elif status is not None:
+            builder = builder.in_("status", list(status))
         return builder.order("updated_at", desc=True).execute()
 
     return _execute(query, action="list the event requests")
@@ -226,7 +243,13 @@ def _now():
 
 def _execute(operation, action):
     """Run a Supabase call and turn database errors into readable messages."""
-    return db.run(schema.TABLE_NAME, operation, action, _translate)
+    return db.run(
+        schema.TABLE_NAME,
+        operation,
+        action,
+        _translate,
+        service_role=True,
+    )
 
 
 def _translate(exc, action):

@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
+from app.services.authorization import AuthorizationError
 from app.routes.events import events
 from app.routes.equipment import equipment
 from app.routes.venues import venues
@@ -41,6 +42,10 @@ def create_app():
     app.register_blueprint(event_requests_bp)
     app.register_blueprint(notifications_bp)
     app.register_blueprint(users_bp)
+
+    @app.errorhandler(AuthorizationError)
+    def handle_authorization_error(error):
+        return {"error": error.message}, error.status
 
     @app.route("/")
     def home():

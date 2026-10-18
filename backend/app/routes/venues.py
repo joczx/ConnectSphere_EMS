@@ -6,14 +6,15 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
-from app.routes.events import EVENT_SUMMARY_FIELDS, authenticated_token, valid_event_id
+from app.routes.events import EVENT_SUMMARY_FIELDS, valid_event_id
 from app.schemas.venue_search import parse_filters
 from app.schemas.venue import parse_create, parse_update
-from app.services.event_service import EventError, load_event
-from app.services.event_store import StoreError, supabase_request
+from app.services.event_service import EventError
+from app.services.event_store import StoreError, supabase_admin_request, supabase_request
 from app.services.event_venue_criteria import annotate, criteria_from_event, describe
 from app.services.venue_availability import mark_for_event
 from app.services.venue_search_service import search_venues
+from app.services.authorization import require_event_access, require_roles
 
 venues = Blueprint("venues", __name__, url_prefix="/api/venues")
 
@@ -72,7 +73,7 @@ def upcoming_booking_path(venue_id):
 
 
 def upcoming_approved_bookings(venue_id, token):
-    return supabase_request(upcoming_booking_path(venue_id), token=token)
+    return supabase_admin_request(upcoming_booking_path(venue_id))
 
 
 def scheduled_upcoming_events(venue_id, token):
@@ -82,7 +83,7 @@ def scheduled_upcoming_events(venue_id, token):
     it, so both block deletion. Bookings are reported in the same shape as
     events, so the deletion page lists them without knowing the difference.
     """
-    rows = supabase_request(upcoming_event_path(venue_id), token=token)
+    rows = supabase_admin_request(upcoming_event_path(venue_id))
     inactive_statuses = {"cancelled", "completed", "rejected"}
     events = [row for row in rows if str(row.get("status", "")).lower() not in inactive_statuses]
 
@@ -139,7 +140,7 @@ def handle_event_error(error):
 @venues.get("")
 def search_by_name():
     """Find catalogue venues whose names contain the supplied text."""
-    token = authenticated_token()
+    require_roles("Event Coordinator", "Venue Staff")
     name = request.args.get("name", "").strip()
 
     if not name:
@@ -149,7 +150,7 @@ def search_by_name():
 
     # PostgREST's `ilike` makes the match case-insensitive. The * wildcard is
     # intentionally added around, not inside, the user's encoded search text.
-    rows = supabase_request(venue_name_search_path(name), token=token)
+    rows = supabase_admin_request(venue_name_search_path(name))
 
     return jsonify(count=len(rows), venues=rows)
 
@@ -157,8 +158,8 @@ def search_by_name():
 @venues.get("/catalogue")
 def list_catalogue():
     """Return every venue for the Venue Management catalogue."""
-    token = authenticated_token()
-    rows = supabase_request(venue_catalogue_path(), token=token)
+    require_roles("Event Coordinator", "Venue Staff")
+    rows = supabase_admin_request(venue_catalogue_path())
     return jsonify(count=len(rows), venues=rows)
 
 
@@ -173,7 +174,7 @@ def search_with_filters():
     requirements must not be offered for a booking request even when the
     coordinator has cleared the filter that would have hidden it.
     """
-    token = authenticated_token()
+    identity = require_roles("Event Coordinator", "Venue Staff")
     payload = {
         "name": request.args.get("name"),
         "start_date": request.args.get("start_date"),
@@ -189,7 +190,7 @@ def search_with_filters():
     if errors:
         return jsonify(error="Some filter conditions are invalid.", errors=errors), 400
 
-    rows = search_venues(filters, token)
+    rows = search_venues(filters, identity.token)
 
     event_id = (request.args.get("event_id") or "").strip()
     if not event_id:
@@ -199,13 +200,13 @@ def search_with_filters():
     if event_id_value is None:
         return jsonify(error="Event not found or access unavailable."), 404
 
-    # Read with the caller's own token, so an event they are not assigned to is
-    # not found rather than searchable.
-    event = load_event(event_id_value, token)
+    if "event coordinator" not in identity.roles:
+        return jsonify(error="Event not found or access unavailable."), 404
+    event = require_event_access(event_id_value, identity)
     criteria = criteria_from_event(event)
     # Requirements first, then availability: a venue can fail either, and the
     # page shows both reasons rather than just the first one found.
-    assessed = mark_for_event(annotate(rows, criteria), event, token, request.args.get("booking_id"))
+    assessed = mark_for_event(annotate(rows, criteria), event, identity.token, request.args.get("booking_id"))
 
     return jsonify(
         count=len(assessed),
@@ -224,13 +225,13 @@ def get_venue(venue_id):
     the page that is about to request a booking shows the same requirements the
     database will check rather than discovering them in a refusal.
     """
-    token = authenticated_token()
+    identity = require_roles("Event Coordinator", "Venue Staff")
     try:
         venue_id = str(UUID(venue_id))
     except ValueError:
         return jsonify(error="Venue not found or access unavailable."), 404
 
-    rows = supabase_request(venue_detail_path(venue_id), token=token)
+    rows = supabase_admin_request(venue_detail_path(venue_id))
     if not rows:
         return jsonify(error="Venue not found or access unavailable."), 404
 
@@ -242,10 +243,12 @@ def get_venue(venue_id):
     if event_id_value is None:
         return jsonify(error="Event not found or access unavailable."), 404
 
-    event = load_event(event_id_value, token)
+    if "event coordinator" not in identity.roles:
+        return jsonify(error="Event not found or access unavailable."), 404
+    event = require_event_access(event_id_value, identity)
     criteria = criteria_from_event(event)
     return jsonify(
-        venue=mark_for_event(annotate(rows, criteria), event, token, request.args.get("booking_id"))[0],
+        venue=mark_for_event(annotate(rows, criteria), event, identity.token, request.args.get("booking_id"))[0],
         event={field: event.get(field) for field in EVENT_SUMMARY_FIELDS},
         requirements=describe(criteria),
     )
@@ -255,14 +258,14 @@ def get_venue(venue_id):
 def venue_availability(venue_id):
     """One venue's bookings, holds and blocks for the calendar. The database
     function limits this to Event Coordinators and Venue Staff."""
-    token = authenticated_token()
+    identity = require_roles("Event Coordinator", "Venue Staff")
     try:
         payload = {"p_venue_id": str(UUID(venue_id))}
         for key in ("start", "end"):
             payload[f"p_{key}s"] = datetime.fromisoformat(request.args[key]).isoformat()
     except (KeyError, ValueError):
         return jsonify(error="Provide a valid venue, start and end."), 400
-    result = supabase_request("/rest/v1/rpc/venue_availability", token=token, payload=payload)
+    result = supabase_request("/rest/v1/rpc/venue_availability", token=identity.token, payload=payload)
     if result.get("error"):
         return jsonify(error=result["error"]), result.get("status", 400)
     return jsonify(result)
@@ -271,22 +274,22 @@ def venue_availability(venue_id):
 @venues.get("/<venue_id>/deletion-check")
 def check_venue_deletion(venue_id):
     """Load the confirmation information and any upcoming-event conflicts."""
-    token = authenticated_token()
+    identity = require_roles("Venue Staff")
     try:
         venue_id = str(UUID(venue_id))
     except ValueError:
         return jsonify(error="This venue has already been deleted or is unavailable."), 404
 
-    rows = supabase_request(venue_detail_path(venue_id), token=token)
+    rows = supabase_admin_request(venue_detail_path(venue_id))
     if not rows:
         return jsonify(error="This venue has already been deleted or is unavailable."), 404
-    return jsonify(venue=rows[0], events=scheduled_upcoming_events(venue_id, token))
+    return jsonify(venue=rows[0], events=scheduled_upcoming_events(venue_id, identity.token))
 
 
 @venues.post("")
 def create_venue():
     """Validate and add one complete venue to the catalogue."""
-    token = authenticated_token()
+    require_roles("Venue Staff")
     record, errors = parse_create(request.get_json(silent=True))
     if errors:
         return jsonify(
@@ -294,8 +297,8 @@ def create_venue():
             errors=errors,
         ), 400
 
-    rows = supabase_request(
-        f"/rest/v1/venues?select={_VENUE_FIELDS}", token=token, payload=record
+    rows = supabase_admin_request(
+        f"/rest/v1/venues?select={_VENUE_FIELDS}", payload=record
     )
     if not rows:
         raise StoreError(503, "The venue could not be created. Please try again.")
@@ -305,7 +308,7 @@ def create_venue():
 @venues.patch("/<venue_id>")
 def update_venue(venue_id):
     """Apply only supplied venue fields, refusing a stale edit."""
-    token = authenticated_token()
+    require_roles("Venue Staff")
     try:
         venue_id = str(UUID(venue_id))
     except ValueError:
@@ -318,8 +321,8 @@ def update_venue(venue_id):
             errors=errors,
         ), 400
 
-    rows = supabase_request(
-        venue_update_path(venue_id, version), token=token, payload=changes, method="PATCH"
+    rows = supabase_admin_request(
+        venue_update_path(venue_id, version), payload=changes, method="PATCH"
     )
     if rows:
         return jsonify(message="Venue information updated successfully.", venue=rows[0])
@@ -327,7 +330,7 @@ def update_venue(venue_id):
     # A zero-row PATCH is either a stale version or a venue that is no longer
     # accessible.  Returning the current row makes the conflict actionable:
     # the UI resets the form so staff redo the update using fresh information.
-    current = supabase_request(venue_detail_path(venue_id), token=token)
+    current = supabase_admin_request(venue_detail_path(venue_id))
     if not current:
         return jsonify(error="Venue not found or access unavailable."), 404
     return jsonify(
@@ -342,23 +345,22 @@ def update_venue(venue_id):
 @venues.delete("/<venue_id>")
 def delete_venue(venue_id):
     """Delete a venue only after rechecking for future scheduled events."""
-    token = authenticated_token()
+    identity = require_roles("Venue Staff")
     try:
         venue_id = str(UUID(venue_id))
     except ValueError:
         return jsonify(error="This venue has already been deleted or is unavailable."), 404
 
-    rows = supabase_request(venue_detail_path(venue_id), token=token)
+    rows = supabase_admin_request(venue_detail_path(venue_id))
     if not rows:
         return jsonify(error="This venue has already been deleted or is unavailable."), 404
 
-    conflicts = scheduled_upcoming_events(venue_id, token)
+    conflicts = scheduled_upcoming_events(venue_id, identity.token)
     if conflicts:
         return deletion_conflict_response(conflicts)
 
-    deleted = supabase_request(
+    deleted = supabase_admin_request(
         venue_delete_path(venue_id),
-        token=token,
         payload={"deleted_at": datetime.now(timezone.utc).isoformat()},
         method="PATCH",
         return_representation=True,

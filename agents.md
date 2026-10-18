@@ -105,8 +105,11 @@ python -m venv .venv
 .venv\Scripts\python run.py               # http://localhost:5000
 ```
 
-Requires `backend/.env` with `SUPABASE_URL` and `SUPABASE_ANON_KEY`. See
-[backend/.env.example](backend/.env.example).
+Requires `backend/.env` with `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and
+`SUPABASE_SERVICE_ROLE_KEY`. The service-role key is server-only: backend
+routes verify the bearer token, role membership, and record assignment before
+using privileged data access. Never put it in frontend environment variables.
+See [backend/.env.example](backend/.env.example).
 
 ---
 
