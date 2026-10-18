@@ -6,6 +6,7 @@ import EventVenueContext from '../components/EventVenueContext';
 import VenueResults from '../components/VenueResults';
 import VenueFilterForm from '../components/VenueFilterForm';
 import { useAuth } from '../auth/AuthContext';
+import { SAFETY_REVIEW_WARNING, underSafetyReview } from '../services/venueBookings';
 import {
   APPLIED_KEY, EVENT_KEY, activeFilters, hasFilters, matchesEventFilters, pageUrl,
   searchPath, withEvent, withEventFilters, withoutChip, withoutFilters,
@@ -19,6 +20,8 @@ export default function VenueSearch() {
 
   const [events, setEvents] = useState([]);
   const [context, setContext] = useState(null);
+  // Replacing the venue of a booking whose event is in safety review: allowed, with a warning.
+  const reworking = !!params.get('booking_id') && underSafetyReview(context?.event?.status);
   const [results, setResults] = useState({ venues: [], loading: true, error: '' });
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -131,7 +134,7 @@ export default function VenueSearch() {
           eventId={eventId}
           event={context?.event}
           requirements={context?.requirements || []}
-          planningNote={context?.planning_note}
+          planningNote={reworking ? SAFETY_REVIEW_WARNING : context?.planning_note}
           filtersMatchEvent={filtersMatchEvent}
           onSelectEvent={(nextEventId) => go(withEvent(params, nextEventId))}
           onApplyRequirements={() => go(withEventFilters(params, context.filters))}
@@ -191,7 +194,7 @@ export default function VenueSearch() {
         <VenueResults
           venues={results.venues}
           eventId={eventId}
-          canRequest={context ? context.planning !== false : true}
+          canRequest={context ? context.planning !== false || reworking : true}
           eligibleCount={results.eligibleCount}
           loading={results.loading}
           error={results.error}
