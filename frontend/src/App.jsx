@@ -1,3 +1,4 @@
+import ReservedEquipment from './pages/ReservedEquipment';
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import Login from './pages/Login';
@@ -51,6 +52,7 @@ export default function App() {
     <Route path="/home" element={protectedView(<Home />)} />
     <Route path="/events" element={protectedView(<Events />)} />
     <Route path="/events/:eventId" element={protectedView(<Events />)} />
+    <Route path="/reserved-equipment" element={protectedView(<ReservedEquipment />)} />
     <Route path="/equipment" element={protectedView(<Equipment />)} />
     <Route path="/event-requests" element={protectedView(<EventRequests />)} />
     <Route path="/event-requests/:requestId" element={protectedView(<EventRequest />)} />

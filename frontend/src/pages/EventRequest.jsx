@@ -1,3 +1,5 @@
+import EventFormSection from '../components/EventFormSection';
+import EventRequestPeople from '../components/EventRequestPeople';
 import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -72,6 +74,7 @@ export default function EventRequest() {
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{isNew ? 'New event request' : request.event_name || 'Event request'}</h1></div></div>
       {request.status && <p className="metadata">Status: {humanise(request.status)}</p>}
       {request.event_request_id && <p>Request ID: {request.event_request_id}</p>}
+      {request.event_request_id && <EventRequestPeople request={request} />}
       {request.submitted_at && <p>Submitted: {new Date(request.submitted_at).toLocaleString()}</p>}
       {location.state?.message && <p role="status" className="panel">{location.state.message}</p>}
       {state.remarks && <div className="panel"><p className="eyebrow">COORDINATOR REMARKS</p><p>{state.remarks}</p></div>}
@@ -94,14 +97,20 @@ export default function EventRequest() {
         <button type="button" className="secondary" disabled={state.busy} onClick={() => setState(current => ({ ...current, preview: null }))}>Back to edit</button>{' '}
         <button type="button" disabled={state.busy} onClick={() => persist(state.preview, true)}>{state.busy ? 'Submitting…' : 'Confirm and submit'}</button>
       </section>}
-      {(isNew || state.request) && <form className="panel" hidden={!!state.preview} key={request.updated_at} onSubmit={save}>
+      {(isNew || state.request) && <form className="panel event-form" hidden={!!state.preview} key={request.updated_at} onSubmit={save}>
         <fieldset disabled={!editable || state.busy || !!state.preview}>
+          <p className="metadata">Complete the sections below, then review your request. {editable ? "You can save an incomplete draft at any time." : "This request is shown for reference."}</p>
+          <EventFormSection title="1. Event details" description="Give your event a clear name and explain its purpose.">
           <label>Event name<RequiredIndicator /><input name="event_name" required defaultValue={value('event_name')} /></label>
           <label>Purpose<RequiredIndicator /><input name="purpose" required defaultValue={value('purpose')} /></label>
           <label>Description<RequiredIndicator /><textarea name="description" rows="4" required defaultValue={value('description')} /></label>
+          </EventFormSection>
+          <EventFormSection title="2. Schedule and attendance" description="Enter the event dates and the number of people expected.">
           <label>Start date and time<RequiredIndicator /><input name="start_datetime" type="datetime-local" required defaultValue={toInput(request.start_datetime)} /></label>
           <label>End date and time<RequiredIndicator /><input name="end_datetime" type="datetime-local" required defaultValue={toInput(request.end_datetime)} /></label>
           <label>Expected attendance<RequiredIndicator /><input name="capacity_needed" type="number" min="1" required defaultValue={value('capacity_needed')} /></label>
+          </EventFormSection>
+          <EventFormSection title="3. Venue and accessibility" description="Tell us what the space needs to provide.">
           <label>Room layout<RequiredIndicator /><select name="room_layout" required defaultValue={value('room_layout')}>
             <option value="">Select a layout</option>{LAYOUTS.map(layout => <option key={layout} value={layout}>{humanise(layout)}</option>)}
           </select></label>
@@ -110,9 +119,12 @@ export default function EventRequest() {
           </select></label>
           {[['need_wheelchair_accessibility', 'Wheelchair accessibility needed'], ['need_blind_accessibility', 'Accessibility for blind attendees needed']].map(([name, text]) =>
             <label key={name}>{text}<select name={name} defaultValue={request[name] ? 'yes' : 'no'}><option value="no">No</option><option value="yes">Yes</option></select></label>)}
+          </EventFormSection>
+          <EventFormSection title="4. Equipment and registration" description="Record your initial requirements. The coordinator can submit equipment requests during planning.">
           <label>Equipment requirements (one per line: type, quantity, notes — or write "none")<RequiredIndicator /><textarea name="equipment_requirements" rows="3" required placeholder="projector, 2, HDMI input" defaultValue={toLines(request.equipment_requirements)} /></label>
           <label>Registration needs (write "none" if not needed)<RequiredIndicator /><textarea name="registration_needs" rows="3" required defaultValue={value('registration_needs')} /></label>
-          {editable && <div className="heading">
+          </EventFormSection>
+          {editable && <div className="heading event-form-actions">
             <button type="submit" value="draft" className="secondary" formNoValidate>{state.busy ? 'Saving…' : rejected ? 'Save changes' : 'Save draft'}</button>
             <button type="submit" value="submit">Review before submitting</button>
           </div>}

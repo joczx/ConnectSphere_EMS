@@ -1,122 +1,81 @@
-import RequiredIndicator from './RequiredIndicator';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { useFeedback } from './FeedbackProvider';
 
-export default function ReserveEquipment({ onReserved }) {
-  const { notify } = useFeedback();
+export default function ReserveEquipment({ onReserved, refresh = 0 }) {
   const { api } = useAuth();
   const [events, setEvents] = useState([]);
+  const [catalogue, setCatalogue] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [eventId, setEventId] = useState('');
+  const [requestId, setRequestId] = useState('');
   const [equipmentId, setEquipmentId] = useState('');
-  const [quantity, setQuantity] = useState('1');
-  const [state, setState] = useState({ loadingEvents: true, equipment: [] });
-  const [refresh, setRefresh] = useState(0);
-  const [access, setAccess] = useState({ loading: true, allowed: false });
-  const saving = useRef(false);
-  const generation = useRef(0);
-
+  const [quantity, setQuantity] = useState('');
+  const [state, setState] = useState({ loading: true, equipment: [] });
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    api('/api/users/me', { signal: controller.signal, cache: 'no-store' })
-      .then(data => {
-        if (controller.signal.aborted) return;
-        const allowed = (data.user?.roles || []).some(role =>
-          ['technical support staff', 'technical support'].includes(role.trim().replaceAll('_', ' ').toLowerCase()));
-        setAccess({ loading: false, allowed });
-      })
-      .catch(err => { if (!controller.signal.aborted) setAccess({ loading: false, allowed: false, error: err.message }); });
+    Promise.all([
+      api('/api/equipment/reservable-events', { signal: controller.signal, cache: 'no-store' }),
+      api('/api/equipment-request-reviews', { signal: controller.signal, cache: 'no-store' }),
+    ]).then(([eventData, requestData]) => {
+      if (!controller.signal.aborted) { setEvents(eventData.events); setRequests(requestData.equipment_requests); setCatalogue(requestData.equipment); setState(s => ({ ...s, loading: false, error: '' })); }
+    }).catch(error => { if (!controller.signal.aborted) setState(s => ({ ...s, loading: false, error: error.message })); });
     return () => controller.abort();
-  }, [api]);
-
-  useEffect(() => {
-    if (!access.allowed) return;
-    const controller = new AbortController();
-    api('/api/equipment/reservable-events', { signal: controller.signal, cache: 'no-store' })
-      .then(data => { if (!controller.signal.aborted) { setEvents(data.events); setState(s => ({ ...s, loadingEvents: false })); } })
-      .catch(err => {
-        if (controller.signal.aborted) return;
-        if (err.status === 403) setAccess({ loading: false, allowed: false });
-        else setState(s => ({ ...s, loadingEvents: false, error: err.message }));
-      });
-    return () => controller.abort();
-  }, [api, access.allowed]);
-
+  }, [api, refresh, reload]);
   useEffect(() => {
     if (!eventId) return;
     const controller = new AbortController();
-    const current = ++generation.current;
-    setState(s => ({ ...s, loading: true, equipment: [] }));
+    setState(s => ({ ...s, checking: true, equipment: [], error: '' }));
     api('/api/equipment/availability?event_id=' + encodeURIComponent(eventId), { signal: controller.signal, cache: 'no-store' })
-      .then(data => { if (!controller.signal.aborted && generation.current === current) setState(s => ({ ...s, ...data, loading: false })); })
-      .catch(err => { if (!controller.signal.aborted && generation.current === current) setState(s => ({ ...s, loading: false, error: err.message })); });
+      .then(data => { if (!controller.signal.aborted) setState(s => ({ ...s, ...data, checking: false })); })
+      .catch(error => { if (!controller.signal.aborted) setState(s => ({ ...s, checking: false, error: error.message })); });
     return () => controller.abort();
-  }, [api, eventId, refresh]);
-
-  const item = state.equipment.find(row => String(row.equipment_id) === equipmentId);
+  }, [api, eventId, refresh, reload]);
+  const pending = requests.filter(row => String(row.event_id) === eventId && row.status === 'pending' && !row.linked_reservation);
+  const request = pending.find(row => String(row.equipment_request_id) === requestId);
+  const matching = state.equipment.filter(row => {
+    if (!request) return false;
+    // Availability rows include the catalogue display name, while the review
+    // queue's catalogue gives an exact type match without parsing model names.
+    return catalogue.find(item => String(item.equipment_id) === String(row.equipment_id))?.equipment_type?.trim().toLowerCase() === request.equipment_type.trim().toLowerCase();
+  });
   async function reserve(e) {
     e.preventDefault();
-    if (saving.current) return;
-    const amount = Number(quantity);
-    if (!item || !Number.isInteger(amount) || amount < 1) {
-      notify('Select equipment and enter a positive whole quantity.', 'error', 'Check reservation details');
-      setState(s => ({ ...s, error: 'Select equipment and enter a positive whole quantity.' }));
-      return;
-    }
-    if (amount > item.available_quantity) {
-      notify(`Only ${item.available_quantity} available for this event. Reduce the quantity and try again.`, 'error', 'Insufficient equipment');
-      setState(s => ({ ...s, error: `Only ${item.available_quantity} available for this event.` }));
-      return;
-    }
-    saving.current = true;
-    setState(s => ({ ...s, busy: true, error: '', message: '' }));
+    if (busy || !request) return;
+    if (Number(quantity) !== request.quantity) { setState(s => ({ ...s, error: 'Reserve the full requested quantity. Partial acceptance is not supported.' })); return; }
+    setBusy(true); setMessage('');
     try {
-      const data = await api('/api/equipment/reservations', { method: 'POST', body: {
-        event_id: eventId, equipment_id: equipmentId, quantity: amount,
-      } });
-      setState(s => ({ ...s, message: data.message || 'Equipment reserved successfully.' }));
-      onReserved?.(data);
-    } catch (err) {
-      setState(s => ({ ...s, error: err.message || 'Unable to reserve equipment.' }));
-    } finally {
-      saving.current = false;
-      setState(s => ({ ...s, busy: false }));
-      setRefresh(value => value + 1);
-    }
+      const result = await api(`/api/equipment-request-reviews/${requestId}/reservation`, { method: 'POST', body: { equipment_id: Number(equipmentId), quantity: Number(quantity) } });
+      setMessage('Equipment reserved. The request is still pending. Return to Equipment Requests to accept it.');
+      setRequestId(''); setEquipmentId(''); setQuantity(''); onReserved?.(result);
+    } catch (error) { setState(s => ({ ...s, error: error.message })); }
+    finally { setBusy(false); }
   }
-
-  if (access.loading) return <p role="status">Checking reservation access...</p>;
-  if (access.error) return <p role="alert" className="error">{access.error}</p>;
-  if (!access.allowed) return null;
-
-  return <section className="panel" aria-labelledby="reserve-heading">
-    <h2 id="reserve-heading">Reserve available equipment</h2>
-    <p>Technical Support Staff can reserve equipment for events assigned to them. Availability uses the event dates and existing overlapping reservations.</p>
-    <Link to="/equipment-availability">Check equipment availability for other dates</Link>
-    {state.loadingEvents && <p role="status">Loading assigned events...</p>}
-    {!state.loadingEvents && !events.length && !state.error && <p>No events are assigned to you for technical support.</p>}
-    <form onSubmit={reserve}>
-      <fieldset disabled={state.busy || state.loadingEvents}>
-        <label>Event to reserve for<RequiredIndicator /><select required value={eventId} onChange={e => {
-          ++generation.current;
-          setEventId(e.target.value); setEquipmentId('');
-          setState(s => ({ ...s, equipment: [], starts_at: null, ends_at: null, error: '', message: '', loading: !!e.target.value }));
-        }}><option value="">Select an event</option>{events.map(event => <option key={event.event_id} value={event.event_id}>{event.event_name}</option>)}</select></label>
-        {state.loading && <p role="status">Checking availability...</p>}
-        {state.starts_at && eventId && <p>Event period: {new Date(state.starts_at).toLocaleString()} to {new Date(state.ends_at).toLocaleString()}</p>}
-        <label>Equipment model<RequiredIndicator /><select required disabled={!eventId || state.loading} value={equipmentId} onChange={e => setEquipmentId(e.target.value)}>
-          <option value="">Select equipment</option>{state.equipment.map(row => <option key={row.equipment_id} value={row.equipment_id} disabled={row.available_quantity < 1 || row.standalone_reserved}>
-            {row.name} — {row.available_quantity} available{row.standalone_reserved ? ' (already reserved)' : ''}
-          </option>)}
-        </select></label>
-        {item && <p>Available quantity: {item.available_quantity}. Reserved for this event: {item.reserved_quantity}.</p>}
-        <label>Quantity to reserve<RequiredIndicator /><input type="number" required min="1" step="1" max={item?.available_quantity || undefined} value={quantity} onChange={e => setQuantity(e.target.value)} /></label>
-        <button disabled={!item || state.loading || item.available_quantity < 1 || item.standalone_reserved}>{state.busy ? 'Reserving...' : 'Confirm reservation'}</button>
-        <button type="button" className="secondary" disabled={!eventId || state.loading} onClick={() => { setState(s => ({ ...s, error: '', message: '' })); setRefresh(v => v + 1); }}>Refresh availability</button>
-      </fieldset>
-    </form>
+  return <section className="panel">
+    <h2>Reserve equipment</h2>
+    <p>Select an event and its request, then reserve the full quantity. This holds equipment without accepting the request.</p>
+    <button type="button" className="secondary" disabled={busy} onClick={() => setReload(value => value + 1)}>Refresh availability and requests</button>
+    {state.loading && <p role="status">Loading assigned events and requests?</p>}
+    <form onSubmit={reserve}><fieldset disabled={busy || state.loading}>
+      <label>Event<select required value={eventId} onChange={e => { setEventId(e.target.value); setRequestId(''); setEquipmentId(''); setQuantity(''); setState(s => ({ ...s, equipment: [] })); }}>
+        <option value="">Select an event</option>{events.map(row => <option key={row.event_id} value={row.event_id}>{row.event_name}</option>)}
+      </select></label>
+      <label>Equipment request<select required value={requestId} disabled={!eventId} onChange={e => {
+        setRequestId(e.target.value); setEquipmentId('');
+        setQuantity(String(pending.find(row => String(row.equipment_request_id) === e.target.value)?.quantity || ''));
+      }}><option value="">Select a request</option>{pending.map(row => <option key={row.equipment_request_id} value={row.equipment_request_id}>#{row.equipment_request_id} ? {row.equipment_type} ? {row.quantity} units</option>)}</select></label>
+      {eventId && !pending.length && <p>No pending requests without reservations for this event.</p>}
+      {state.checking && <p role="status">Checking availability?</p>}
+      <label>Equipment model<select required value={equipmentId} disabled={!request || state.checking} onChange={e => setEquipmentId(e.target.value)}>
+        <option value="">Select equipment</option>{matching.map(row => <option key={row.equipment_id} value={row.equipment_id} disabled={row.available_quantity < request.quantity}>{row.name} ? {row.available_quantity} available</option>)}
+      </select></label>
+      <label>Quantity<input type="number" required min="1" step="1" value={quantity} onChange={e => setQuantity(e.target.value)} /></label>
+      <button disabled={!request || !equipmentId || state.checking}>Reserve equipment</button>
+    </fieldset></form>
     {state.error && <p role="alert" className="error">{state.error}</p>}
-    {state.message && <p role="status">{state.message}</p>}
+    {message && <p role="status">{message} <Link to="/equipment">Open Equipment Requests ?</Link></p>}
   </section>;
 }

@@ -2,6 +2,33 @@
 -- status. An approved request and its operational event both enter Planning.
 begin;
 
+-- Repair the equipment trigger before this migration updates any event rows.
+-- This database uses integer event IDs throughout.
+create or replace function public.guard_equipment_event() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+    if TG_OP = 'DELETE' then
+        delete from public.equipment_reservations
+        where event_id = old.event_id;
+        return old;
+    end if;
+    if exists (
+        select 1 from public.equipment_reservations
+        where event_id = old.event_id
+    ) and (
+        new.event_id is distinct from old.event_id
+        or coalesce(to_jsonb(new)->>'start_datetime', to_jsonb(new)->>'starts_at')
+            is distinct from coalesce(to_jsonb(old)->>'start_datetime', to_jsonb(old)->>'starts_at')
+        or coalesce(to_jsonb(new)->>'end_datetime', to_jsonb(new)->>'ends_at')
+            is distinct from coalesce(to_jsonb(old)->>'end_datetime', to_jsonb(old)->>'ends_at')
+    ) then
+        raise check_violation using message =
+            'Cancel equipment reservations before changing event dates or deleting the event.';
+    end if;
+    return new;
+end;
+$$;
+
 drop trigger if exists create_event_after_request_approval on public.event_request;
 create trigger create_event_after_request_approval
     after update of status on public.event_request for each row
@@ -146,6 +173,7 @@ begin
     return new;
 end;
 $$;
+drop trigger if exists guard_event_lifecycle on public.events;
 create trigger guard_event_lifecycle before insert or update on public.events
     for each row execute function public.guard_event_lifecycle();
 
@@ -182,6 +210,7 @@ begin
     return new;
 end;
 $$;
+drop trigger if exists guard_request_lifecycle on public.event_request;
 create trigger guard_request_lifecycle before insert or update of status on public.event_request
     for each row execute function public.guard_request_lifecycle();
 
@@ -190,19 +219,22 @@ create trigger guard_request_lifecycle before insert or update of status on publ
 -- VOLATILE so its reads see commits that arrived while that row lock waited.
 create or replace function public.refresh_arranged_event()
 returns trigger language plpgsql security definer set search_path = public as $$
-declare previous_id text; next_id text;
+declare previous_id integer; next_id integer;
 begin
-    if TG_OP <> 'INSERT' then previous_id := old.event_id::text; end if;
-    if TG_OP <> 'DELETE' then next_id := new.event_id::text; end if;
+    if TG_OP <> 'INSERT' then previous_id := old.event_id; end if;
+    if TG_OP <> 'DELETE' then next_id := new.event_id; end if;
     update public.events set updated_at = clock_timestamp()
-    where event_id::text in (previous_id, next_id) and status in ('planning', 'confirmed');
+    where event_id in (previous_id, next_id) and status in ('planning', 'confirmed');
     return null;
 end;
 $$;
+drop trigger if exists venue_updates_event_status on public.venue_booking_requests;
 create trigger venue_updates_event_status after insert or update or delete on public.venue_booking_requests
     for each row execute function public.refresh_arranged_event();
+drop trigger if exists reservations_update_event_status on public.equipment_reservations;
 create trigger reservations_update_event_status after insert or update or delete on public.equipment_reservations
     for each row execute function public.refresh_arranged_event();
+drop trigger if exists requests_update_event_status on public.equipment_request;
 create trigger requests_update_event_status after insert or update or delete on public.equipment_request
     for each row execute function public.refresh_arranged_event();
 
@@ -217,6 +249,7 @@ begin
     return null;
 end;
 $$;
+drop trigger if exists venue_changes_update_event_status on public.venues;
 create trigger venue_changes_update_event_status after update on public.venues
     for each row execute function public.refresh_venue_event_statuses();
 
@@ -232,6 +265,7 @@ begin
     return null;
 end;
 $$;
+drop trigger if exists record_event_status_change on public.events;
 create trigger record_event_status_change after update on public.events
     for each row when (old.status is distinct from new.status)
     execute function public.record_event_status_change();

@@ -48,7 +48,7 @@ def event_error(error):
 def list_events():
     identity = require_roles("Event Organiser", "Event Coordinator")
     rows = supabase_admin_request(
-        "/rest/v1/events?select=event_id,event_name,status,start_datetime,end_datetime,event_organiser_id,event_coordinator_id&order=start_datetime.asc.nullslast"
+        "/rest/v1/events?select=event_id,event_name,status,start_datetime,end_datetime,event_organiser_id,event_coordinator_id,purpose,capacity_needed&order=start_datetime.asc.nullslast"
     )
     rows = [
         row for row in rows
