@@ -257,20 +257,6 @@ export default function Events() {
     return () => { ignore = true; };
   }, [api, eventId, refresh]);
 
-  const [equipmentTypes, setEquipmentTypes] = useState([]);
-  const canRequestEquipment = !!eventId && state.key === eventId
-    && state.data?.event?.status === 'planning'
-    && state.data.event.event_coordinator_id === (token ? userId(token) : null);
-
-  useEffect(() => {
-    if (!canRequestEquipment) return;
-    let ignore = false;
-    api('/api/equipment-types', { cache: 'no-store' })
-      .then(data => { if (!ignore) setEquipmentTypes(data.equipment_types || []); })
-      .catch(err => { if (!ignore) setSubmitState({ message: '', error: err.message }); });
-    return () => { ignore = true; };
-  }, [api, canRequestEquipment]);
-
   async function submitEquipmentRequest(event) {
     event.preventDefault();
     setSubmitState({ message: '', error: '' });
