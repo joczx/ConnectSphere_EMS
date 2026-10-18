@@ -712,3 +712,48 @@ class VenueCreateSchemaTests(unittest.TestCase):
                 "800": invalid_time_type,
             },
         )
+
+
+class VenueAvailabilityTests(unittest.TestCase):
+    """The venue availability calendar's data endpoint."""
+
+    PATH = f"/api/venues/{VENUE_ID}/availability?start=2026-10-26T00:00:00%2B08:00&end=2026-11-02T00:00:00%2B08:00"
+
+    def setUp(self):
+        self.client = create_app().test_client()
+
+    def get(self, path, result=None):
+        with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
+            "app.routes.venues.supabase_request", return_value=result or {}
+        ) as query:
+            return self.client.get(path), query
+
+    def test_returns_the_venue_bookings_and_blocks_for_the_range(self):
+        result = {"bookings": [{"status": "approved"}], "blocks": [{"reason": "Maintenance"}]}
+        response, query = self.get(self.PATH, result)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, result)
+        self.assertEqual(query.call_args.args[0], "/rest/v1/rpc/venue_availability")
+        self.assertEqual(query.call_args.kwargs["payload"], {
+            "p_venue_id": VENUE_ID,
+            "p_starts": "2026-10-26T00:00:00+08:00",
+            "p_ends": "2026-11-02T00:00:00+08:00",
+        })
+        self.assertEqual(query.call_args.kwargs["token"], "user-token")
+
+    def test_unauthorised_users_are_refused(self):
+        refusal = {"error": "Only Event Coordinators and Venue Staff can view venue availability.", "status": 403}
+        response, _ = self.get(self.PATH, refusal)
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("bookings", response.json)
+
+    def test_invalid_requests_never_reach_the_database(self):
+        for path in (f"/api/venues/{VENUE_ID}/availability",
+                     f"/api/venues/{VENUE_ID}/availability?start=soon&end=later",
+                     "/api/venues/not-a-uuid/availability?start=2026-10-26&end=2026-11-02"):
+            response, query = self.get(path)
+            self.assertEqual(response.status_code, 400, path)
+            query.assert_not_called()
+
+    def test_sign_in_is_required(self):
+        self.assertEqual(self.client.get(self.PATH).status_code, 401)

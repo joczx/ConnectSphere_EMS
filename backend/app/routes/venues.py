@@ -251,6 +251,23 @@ def get_venue(venue_id):
     )
 
 
+@venues.get("/<venue_id>/availability")
+def venue_availability(venue_id):
+    """One venue's bookings, holds and blocks for the calendar. The database
+    function limits this to Event Coordinators and Venue Staff."""
+    token = authenticated_token()
+    try:
+        payload = {"p_venue_id": str(UUID(venue_id))}
+        for key in ("start", "end"):
+            payload[f"p_{key}s"] = datetime.fromisoformat(request.args[key]).isoformat()
+    except (KeyError, ValueError):
+        return jsonify(error="Provide a valid venue, start and end."), 400
+    result = supabase_request("/rest/v1/rpc/venue_availability", token=token, payload=payload)
+    if result.get("error"):
+        return jsonify(error=result["error"]), result.get("status", 400)
+    return jsonify(result)
+
+
 @venues.get("/<venue_id>/deletion-check")
 def check_venue_deletion(venue_id):
     """Load the confirmation information and any upcoming-event conflicts."""
