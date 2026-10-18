@@ -1,7 +1,7 @@
 from uuid import UUID
 from flask import Blueprint, jsonify, request
 from app.schemas import event as event_schema
-from app.services.event_store import StoreError, supabase_request, authenticated_token
+from app.services.event_store import StoreError, supabase_request, authenticated_token, authenticated_user
 from app.services.event_service import EventError, list_activity, load_event, update_event
 from app.services.event_venue_criteria import criteria_from_event, describe, search_filters
 from app.services.event_status_service import lifecycle_call
@@ -108,7 +108,7 @@ def edit_event(event_id):
     began. If someone else has saved since, the write is refused with 409 and
     "stale": true rather than overwriting their work.
     """
-    token = authenticated_token(supabase_request)
+    token, actor_id = authenticated_user(supabase_request)
     event_id_value = valid_event_id(event_id)
     if event_id_value is None:
         return jsonify(error='Event not found or access unavailable.'), 404
@@ -124,7 +124,8 @@ def edit_event(event_id):
     expected_updated_at = payload.pop('expected_updated_at', None)
 
     row, activity = update_event(
-        event_id_value, payload, token, confirm_critical, expected_updated_at
+        event_id_value, payload, token, confirm_critical, expected_updated_at,
+        actor_id,
     )
 
     return jsonify({

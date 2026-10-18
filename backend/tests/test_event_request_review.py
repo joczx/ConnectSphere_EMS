@@ -271,7 +271,6 @@ def test_ac5_empty_status_update_must_not_confirm_success(review_http):
     assert 'message' not in response.json
 
 
-@pytest.mark.xfail(strict=True, reason='AC6 gap: confirmation claims delivery when notification storage fails.')
 def test_ac6_failed_notification_must_not_claim_organiser_was_notified(review_http):
     http, table = review_http
     table.execute.side_effect = [Mock(data=[{'status': 'submitted', 'event_coordinator_id': COORDINATOR}]), Mock(data=[{'outcome': 'approved'}]),

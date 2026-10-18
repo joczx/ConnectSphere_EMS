@@ -76,7 +76,7 @@ function saved(event, field) {
 
 export default function Events() {
   const { confirm, notify } = useFeedback();
-  const { api, token } = useAuth();
+  const { api, token, canAccess } = useAuth();
   const { eventId } = useParams();
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
@@ -205,6 +205,9 @@ export default function Events() {
   const editable = event?.status === 'planning';
   const viewerId = token ? userId(token) : null;
   const isCoordinator = !!event && viewerId === event.event_coordinator_id;
+  const isOrganiser = !!event && viewerId === event.event_organiser_id;
+  const canRequestChange = isOrganiser && canAccess('/event-change-requests')
+    && ['planning', 'pending_safety_checks', 'confirmed'].includes(event.status);
   const canCancel = !!event && ['planning', 'confirmed'].includes(event.status)
     && [event.event_coordinator_id, event.event_organiser_id].includes(viewerId);
 
@@ -336,7 +339,8 @@ export default function Events() {
         <div className="heading" style={{ alignItems: 'center' }}>
           <h2 style={{ margin: 0 }}>{event.event_name}</h2>
           <div>
-            {editable && !edit.open && <button type="button" onClick={startEditing}>Edit event information</button>}
+            {editable && !isOrganiser && !edit.open && <button type="button" onClick={startEditing}>Edit event information</button>}
+            {canRequestChange && !edit.open && <Link className="button-link" to={`/event-change-requests/new?event_id=${encodeURIComponent(event.event_id)}`}>Request changes</Link>}
           </div>
         </div>
         {edit.message && <div className="success" style={{ marginBottom: '12px' }} role="status">{edit.message}</div>}
@@ -352,7 +356,7 @@ export default function Events() {
         </div>}
         {canCancel && <button type="button" className="secondary" disabled={lifecycle.busy}
           onClick={() => updateLifecycle('cancel')}>Cancel event</button>}
-        {!editable && <p className="metadata">This event is {event.status}. Details can only be changed during planning.</p>}
+        {!editable && !canRequestChange && <p className="metadata">This event is {event.status}. Details can only be changed during planning.</p>}
 
         {!edit.open && <dl>
           <Detail label="Status" value={event.status ? event.status.charAt(0).toUpperCase() + event.status.slice(1) : null} />
@@ -490,9 +494,10 @@ export default function Events() {
         {state.activityError && <div role="alert" className="error">{state.activityError} Use Refresh to try again.</div>}
         {!state.activityError && activity.length === 0 ? <p>No changes have been recorded for this event yet.</p> : activity.length > 0 && <dl>
           {activity.map(entry => <div key={entry.activity_id}>
-            <dt>{entry.change_type === 'status_change' ? 'Status Change' : entry.change_type === 'critical_edit' ? 'Critical Edit' : 'Edit'} — {date(entry.created_at)}</dt>
+            <dt>{entry.change_type === 'status_change' ? 'Status Change' : entry.change_type === 'critical_edit' ? `Critical Edit${entry.event_change_request_id ? ' — Change request Pending Review' : ''}` : 'Edit'} — {date(entry.created_at)}</dt>
             <dd>
               {userNames[entry.changed_by] || (entry.changed_by ? entry.changed_by.slice(0, 8) : 'System')}
+              {entry.event_change_request_id && <p className="metadata">These are proposed values; the current event is unchanged while the request is reviewed.</p>}
               <ul>{Object.entries(entry.changes || {}).map(([field, change]) => <li key={field}>
                 {label(field)}: {display(field, change.from)} → {display(field, change.to)}
               </li>)}</ul>
