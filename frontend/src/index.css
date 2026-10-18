@@ -211,6 +211,24 @@ input:not([type="checkbox"]), select, textarea { display: block; width: 100%; bo
 .venue-unmet p { margin: 0; color: var(--cs-color-heading); }
 .venue-unmet ul { margin: 6px 0 0; padding-left: 20px; }
 
+/* Operational safety review queue and read-only arrangements. */
+.safety-review-list { margin-top: 24px; }
+.safety-review-card { position: relative; display: grid; gap: 4px; }
+.safety-review-card .safety-status { justify-self: start; }
+.safety-status { display: inline-block; padding: 4px 9px; border-radius: 999px; background: #fffbeb; color: #92400e; font-size: 11px; font-weight: 700; }
+.safety-review-details { grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 24px; margin-top: 24px; }
+.safety-review-item { min-width: 0; }
+.safety-review-item dt { color: var(--cs-color-heading); font-weight: 700; }
+.safety-review-item dd { line-height: 1.5; }
+.safety-review-item ul { margin: 0; padding-left: 20px; }
+.safety-decision { margin-top: 20px; }
+.safety-decision h2 { margin-top: 0; }
+.safety-arrangements { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: 20px 0; }
+.safety-arrangements legend { width: 100%; color: var(--cs-color-heading); font-weight: 600; }
+.safety-arrangements label { display: flex; align-items: center; gap: 8px; margin: 0; }
+.safety-arrangements input { width: auto; margin: 0; }
+.safety-decision-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+
 @media (max-width: 700px) {
   .operating-hours-row { grid-template-columns: 1fr 1fr; }
   .operating-hours-row strong { grid-column: 1 / -1; }

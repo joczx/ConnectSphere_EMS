@@ -3,7 +3,7 @@
 // Shared by the venue search catalogue and the name-search results so both
 // surfaces offer, and refuse, a booking request on the same terms.
 
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import BookingConflicts from './BookingConflicts';
 
 const readable = (value) => value.replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase());
@@ -18,6 +18,8 @@ function address(venue) {
 }
 
 function VenueResult({ venue, eventId, canRequest }) {
+  // Set when this search is replacing the venue of an existing booking.
+  const bookingId = useSearchParams()[0].get('booking_id');
   const characteristics = [...(venue.facilities || []), ...(venue.supported_room_layouts || [])];
   // Absent without an event: no event, no requirements, nothing to fail.
   const unmet = venue.unmet_requirements || [];
@@ -64,9 +66,9 @@ function VenueResult({ venue, eventId, canRequest }) {
         {eventId && eligible && canRequest && (
           <Link
             className="button-link"
-            to={`/venue-bookings?event_id=${encodeURIComponent(eventId)}&venue_id=${encodeURIComponent(venue.venue_id)}`}
+            to={`/venue-bookings?event_id=${encodeURIComponent(eventId)}&venue_id=${encodeURIComponent(venue.venue_id)}${bookingId ? `&booking_id=${encodeURIComponent(bookingId)}` : ''}`}
           >
-            Request this venue
+            {bookingId ? 'Choose this venue' : 'Request this venue'}
           </Link>
         )}
         {eventId && eligible && !canRequest && (

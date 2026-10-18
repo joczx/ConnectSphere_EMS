@@ -107,6 +107,34 @@ def view(booking_id):
     return jsonify(result)
 
 
+@venue_bookings.patch('/<booking_id>')
+def modify(booking_id):
+    """Change the venue or notes of one booking; the database rechecks it and
+    sends it back to Venue Staff."""
+    token = authenticated_token(supabase_request)
+    body = request.get_json(silent=True) or {}
+    venue_id, notes = valid_booking_id(str(body.get('venue_id'))), body.get('venue_requirements')
+    if valid_booking_id(booking_id) is None or venue_id is None or not isinstance(notes, str) or not notes.strip():
+        return jsonify(error='Choose a venue and enter the venue requirements.'), 400
+    result = rpc('modify_venue_booking', token, {
+        'p_booking_id': booking_id, 'p_venue_id': venue_id, 'p_venue_requirements': notes})
+    if result.get('error'):
+        return refused(result)
+    return jsonify(message='Booking updated. Venue Staff will review it again.', booking=result['booking'])
+
+
+@venue_bookings.post('/<booking_id>/cancel')
+def cancel(booking_id):
+    """Cancel one booking; the event and its other bookings are untouched."""
+    token = authenticated_token(supabase_request)
+    if valid_booking_id(booking_id) is None:
+        return jsonify(error=NOT_FOUND), 404
+    result = rpc('cancel_venue_booking', token, {'p_booking_id': booking_id})
+    if result.get('error'):
+        return refused(result)
+    return jsonify(message='Venue booking cancelled.', booking=result['booking'])
+
+
 @venue_bookings.post('/<booking_id>/review')
 def review(booking_id):
     """Approve or reject a request. The reviewer is the signed-in user, never

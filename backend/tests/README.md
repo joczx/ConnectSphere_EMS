@@ -17,6 +17,14 @@ No extra test packages, database writes, network access, or real credentials are
 
 ## Coverage
 
+To verify the Operational Safety Review route on its own, including its
+coverage threshold, run:
+
+```bash
+coverage run --source=app.routes.operational_safety -m pytest tests/test_operational_safety.py
+coverage report --fail-under=100
+```
+
 - 01-16: authentication for list and direct detail requests.
 - 17-24: write methods rejected by viewing endpoints.
 - 25-34: authorised responses, empty/unavailable events, fresh reads, removal of access, null values, Unicode/markup JSON, malformed IDs and service errors.

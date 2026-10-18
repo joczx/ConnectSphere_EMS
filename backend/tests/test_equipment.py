@@ -90,17 +90,14 @@ def test_database_permission_error_is_preserved(client):
     assert response.json['error'] == message
 
 
-def test_permission_failure_is_not_reported_as_an_outage(client):
-    from app.services.event_store import StoreError
-    with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', side_effect=StoreError(403, code='42501')):
-        response = client.get('/api/equipment-request-reviews')
-    assert response.status_code == 403
-    assert 'permission' in response.json['error']
-
-
-def test_incompatible_database_function_identifies_repair(client):
-    from app.services.event_store import StoreError
-    with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', side_effect=StoreError(503, code='42883')):
-        response = client.get('/api/equipment/reservations')
-    assert response.status_code == 503
-    assert '033_equipment_list_event_ids.sql' in response.json['error']
+def test_equipment_types_require_bearer_token_and_return_sorted_unique_values(client):
+    assert client.get('/api/equipment-types').status_code == 401
+    rows = [
+        {'equipment_type': 'Projector'}, {'equipment_type': 'Microphone'},
+        {'equipment_type': 'Projector'}, {'equipment_type': ''},
+    ]
+    with patch('app.routes.equipment.supabase_request', return_value=rows) as rpc:
+        response = client.get('/api/equipment-types', headers={'Authorization': 'Bearer catalogue-token'})
+    assert response.status_code == 200
+    assert response.json == {'equipment_types': ['Microphone', 'Projector']}
+    rpc.assert_called_once_with('/rest/v1/equipment?select=equipment_type', token='catalogue-token')

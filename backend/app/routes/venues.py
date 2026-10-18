@@ -205,7 +205,7 @@ def search_with_filters():
     criteria = criteria_from_event(event)
     # Requirements first, then availability: a venue can fail either, and the
     # page shows both reasons rather than just the first one found.
-    assessed = mark_for_event(annotate(rows, criteria), event, token)
+    assessed = mark_for_event(annotate(rows, criteria), event, token, request.args.get("booking_id"))
 
     return jsonify(
         count=len(assessed),
@@ -245,10 +245,27 @@ def get_venue(venue_id):
     event = load_event(event_id_value, token)
     criteria = criteria_from_event(event)
     return jsonify(
-        venue=mark_for_event(annotate(rows, criteria), event, token)[0],
+        venue=mark_for_event(annotate(rows, criteria), event, token, request.args.get("booking_id"))[0],
         event={field: event.get(field) for field in EVENT_SUMMARY_FIELDS},
         requirements=describe(criteria),
     )
+
+
+@venues.get("/<venue_id>/availability")
+def venue_availability(venue_id):
+    """One venue's bookings, holds and blocks for the calendar. The database
+    function limits this to Event Coordinators and Venue Staff."""
+    token = authenticated_token()
+    try:
+        payload = {"p_venue_id": str(UUID(venue_id))}
+        for key in ("start", "end"):
+            payload[f"p_{key}s"] = datetime.fromisoformat(request.args[key]).isoformat()
+    except (KeyError, ValueError):
+        return jsonify(error="Provide a valid venue, start and end."), 400
+    result = supabase_request("/rest/v1/rpc/venue_availability", token=token, payload=payload)
+    if result.get("error"):
+        return jsonify(error=result["error"]), result.get("status", 400)
+    return jsonify(result)
 
 
 @venues.get("/<venue_id>/deletion-check")

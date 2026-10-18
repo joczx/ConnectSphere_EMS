@@ -24,7 +24,8 @@ def test_review_requires_auth(client):
     {'outcome': 'accepted', 'equipment_id': True},
     {'outcome': 'partially_accepted', 'equipment_id': 1, 'accepted_quantity': 0},
     {'outcome': 'partially_accepted', 'equipment_id': 1, 'accepted_quantity': 1.5},
-    {'outcome': 'rejected', 'reason': '   '}])
+    {'outcome': 'rejected', 'reason': '   '},
+    {'outcome': 'rejected', 'reason': 1}])
 def test_invalid_decision_does_not_write(client, auth, body):
     with patch('app.services.equipment_review_service.supabase_request') as query:
         response = client.post('/api/equipment-request-reviews/1', json=body)
