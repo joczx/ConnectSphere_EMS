@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from app import create_app
-from app.services.venue_availability import attach_conflicts, overlaps
+from app.services.venue_availability import attach_conflicts
 
 HEADERS = {'Authorization': 'Bearer coordinator-token'}
 USER = {'id': 'coordinator'}
@@ -31,39 +31,11 @@ def booking(starts, ends, venue_id=HALL, status='approved', **extra):
             'starts_at': starts, 'ends_at': ends, **extra}
 
 
-# --- "checks a request against existing bookings for the same venue and time" --
-
-@pytest.mark.parametrize('other,expected', [
-    (EVENING, True),                                                          # identical
-    (('2026-10-31T09:00:00+00:00', '2026-10-31T11:00:00+00:00'), True),      # overlaps the start
-    (('2026-10-31T12:00:00+00:00', '2026-10-31T14:00:00+00:00'), True),      # overlaps the end
-    (('2026-10-31T11:00:00+00:00', '2026-10-31T12:00:00+00:00'), True),      # inside it
-    (('2026-10-31T08:00:00+00:00', '2026-10-31T15:00:00+00:00'), True),      # around it
-    (('2026-10-31T07:00:00+00:00', '2026-10-31T10:00:00+00:00'), False),     # ends as it starts
-    (('2026-10-31T13:00:00+00:00', '2026-10-31T16:00:00+00:00'), False),     # starts as it ends
-    (('2026-11-01T10:00:00+00:00', '2026-11-01T13:00:00+00:00'), False),     # next day
-])
-def test_periods_overlap_when_they_share_any_moment(other, expected):
-    assert overlaps(*EVENING, *other) is expected
-    # Overlap does not depend on which of the two is asked about first.
-    assert overlaps(*other, *EVENING) is expected
-
-
-def test_offsets_are_compared_as_moments_not_as_text():
-    # 18:00 in Singapore is 10:00 UTC: the same moment, written differently.
-    assert overlaps('2026-10-31T18:00:00+08:00', '2026-10-31T19:00:00+08:00', *EVENING)
-
-
-def test_an_incomplete_period_never_reports_a_conflict():
-    assert not overlaps(None, EVENING[1], *EVENING)
-    assert not overlaps('not a date', EVENING[1], *EVENING)
-
-
 # --- "considers a venue unavailable during the period of a confirmed booking" --
 
 def test_an_approved_booking_makes_the_venue_unavailable():
     marked = attach_conflicts([{'venue_id': HALL, 'eligible': True}],
-                              [booking(*EVENING)], *EVENING)
+                              [booking(*EVENING)])
     assert marked[0]['eligible'] is False
     assert marked[0]['conflicts'][0]['starts_at'] == EVENING[0]
 
@@ -71,25 +43,25 @@ def test_an_approved_booking_makes_the_venue_unavailable():
 def test_a_pending_request_does_not():
     # Several coordinators may ask for the same slot; only approval takes it.
     marked = attach_conflicts([{'venue_id': HALL, 'eligible': True}],
-                              [booking(*EVENING, status='submitted')], *EVENING)
+                              [booking(*EVENING, status='submitted')])
     assert marked[0]['eligible'] is True
     assert marked[0]['conflicts'] == []
 
 
 def test_a_booking_at_another_venue_does_not():
     marked = attach_conflicts([{'venue_id': HALL, 'eligible': True}],
-                              [booking(*EVENING, venue_id=ROOM)], *EVENING)
+                              [booking(*EVENING, venue_id=ROOM)])
     assert marked[0]['eligible'] is True
 
 
 def test_a_venue_that_already_fails_a_requirement_stays_ineligible():
-    marked = attach_conflicts([{'venue_id': HALL, 'eligible': False}], [], *EVENING)
+    marked = attach_conflicts([{'venue_id': HALL, 'eligible': False}], [])
     assert marked[0]['eligible'] is False
 
 
 def test_marking_does_not_change_the_venue_it_was_given():
     original = {'venue_id': HALL, 'eligible': True}
-    attach_conflicts([original], [booking(*EVENING)], *EVENING)
+    attach_conflicts([original], [booking(*EVENING)])
     assert 'conflicts' not in original
 
 

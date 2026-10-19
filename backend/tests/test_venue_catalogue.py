@@ -757,3 +757,23 @@ class VenueAvailabilityTests(unittest.TestCase):
 
     def test_sign_in_is_required(self):
         self.assertEqual(self.client.get(self.PATH).status_code, 401)
+
+
+class SetupTurnaroundValidationTests(unittest.TestCase):
+    """Setup and turnaround time: whole minutes from 0 to 1440, with a message naming the field."""
+
+    def test_invalid_minutes_are_refused_by_name(self):
+        for field, label in (("default_setup_minutes", "Setup time"), ("default_turnaround_minutes", "Turnaround time")):
+            for value in (-1, 1441, 2.5, "30", None, True):
+                with self.subTest(field=field, value=value):
+                    _, _, errors = parse_update({"version": 1, field: value})
+                    self.assertEqual(errors[field], f"{label} must be a whole number of minutes from 0 to 1440.")
+
+    def test_boundaries_are_accepted_on_create_and_update(self):
+        for value in (0, 1440):
+            with self.subTest(value=value):
+                _, errors = parse_create(valid_venue(default_setup_minutes=value, default_turnaround_minutes=value))
+                self.assertNotIn("default_setup_minutes", errors)
+                self.assertNotIn("default_turnaround_minutes", errors)
+                changes, _, errors = parse_update({"version": 1, "default_setup_minutes": value})
+                self.assertEqual(changes["default_setup_minutes"], value)
