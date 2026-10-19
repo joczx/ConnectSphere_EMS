@@ -295,7 +295,7 @@ export default function VenueBookings() {
       {!data.bookings.length && <p className="panel">You have not requested a venue yet.</p>}
       {/* Modelled on My Event Requests: one section per stage, so what is still
           waiting is never mixed in with what has been decided. */}
-      {[['Submitted', 'submitted'], ['Approved', 'approved'], ['Rejected', 'rejected'], ['Cancelled', 'cancelled']].map(([title, status]) => {
+      {[['Submitted', 'submitted'], ['Approved', 'approved'], ['Rejected', 'rejected'], ['Cancelled', 'cancelled'], ['Expired', 'expired']].map(([title, status]) => {
         const items = byStatus(data.bookings, status);
         return items.length > 0 && <section key={status}>
           <h2>{title} <span className="metadata">({items.length})</span></h2>

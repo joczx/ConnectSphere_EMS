@@ -77,6 +77,12 @@ input:not([type="checkbox"]), select, textarea { display: block; width: 100%; bo
 .account-menu-content span { color: var(--cs-color-text); font-size: 14px; }
 .account-notifications { max-width: 300px; color: var(--cs-color-text); font-size: 14px; }
 .account-notifications ul { display: grid; gap: 8px; padding-left: 20px; margin: 8px 0 0; }
+.account-actions { display: flex; align-items: center; gap: 32px; }
+.notification-menu { position: relative; }
+.notification-menu summary { display: flex; align-items: center; color: #475569; cursor: pointer; list-style: none; }
+.notification-menu summary::-webkit-details-marker { display: none; }
+.notification-menu .account-menu-content { z-index: 50; width: 320px; max-width: 80vw; max-height: 60vh; overflow-y: auto; }
+.notification-count { margin-left: 2px; padding: 1px 6px; border-radius: 999px; background: var(--cs-color-danger); color: white; font-size: 11px; font-weight: 700; vertical-align: top; }
 .assignment-list { text-align: left; }
 .assignment-card h2 { margin-top: 0; }
 .assignment-card dl { margin: 20px 0; }

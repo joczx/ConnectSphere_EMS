@@ -38,7 +38,7 @@ def attach_conflicts(venues, bookings):
         conflicts = [
             booking for booking in bookings
             if booking.get('venue_id') == venue.get('venue_id')
-            and booking.get('status', 'approved') == 'approved'
+            and booking.get('status', 'approved') != 'submitted'  # approved, held or blocked
         ]
         eligible = venue.get('eligible', True) and not conflicts
         marked.append({**venue, 'conflicts': conflicts, 'eligible': eligible})
@@ -55,6 +55,6 @@ def mark_for_event(venues, event, token, ignore=None):
     starts, ends = event.get('start_datetime'), event.get('end_datetime')
     if not starts or not ends:
         return [{**venue, 'conflicts': []} for venue in venues]
-    bookings = [b for b in approved_bookings(starts, ends, token) if b.get('booking_id') != ignore]
+    bookings = [b for b in approved_bookings(starts, ends, token) if ignore is None or b.get('booking_id') != ignore]
     return attach_conflicts(venues, bookings)
 
