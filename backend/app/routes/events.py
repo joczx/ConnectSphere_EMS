@@ -147,7 +147,7 @@ def edit_event(event_id):
 
     row, activity = update_event(
         event_id_value, payload, identity.token, confirm_critical, expected_updated_at,
-        actor_id,
+        identity.user_id,
     )
 
     return jsonify({

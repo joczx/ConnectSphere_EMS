@@ -98,22 +98,16 @@ export default function Events() {
     async function load() {
       const showFeedback = manualRefresh.current;
       manualRefresh.current = false;
-      setState((current) => ({ ...current, loading: true, error: null, refreshError: null }));
+      setState((current) => ({ ...current, loading: true, error: null, statusWarning: null }));
       const path = '/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : '');
-      const [dataResult, refreshResult] = await Promise.allSettled([
-        api(path, { cache: 'no-store', signal: controller.signal,
+      const [dataResult] = await Promise.allSettled([
+        loadEvents(api, path, { cache: 'no-store', signal: controller.signal,
           feedback: showFeedback, successMessage: 'Event information refreshed.' }),
-        api('/api/events/status-refresh', {
-          method: 'POST',
-          body: {},
-          signal: controller.signal,
-          feedback: false,
-        }),
       ]);
       if (controller.signal.aborted) return;
 
       if (dataResult.status === 'fulfilled') {
-        const data = dataResult.value;
+        const { data, statusWarning } = dataResult.value;
         const event = data.event;
         let details = {
           equipment: [],
@@ -184,9 +178,7 @@ export default function Events() {
           key: eventId,
           loading: false,
           error: null,
-          refreshError: refreshResult.status === 'rejected'
-            ? refreshResult.reason.message || 'Unable to refresh event statuses.'
-            : null,
+          statusWarning,
         }));
       } else {
         const message = dataResult.reason.message || 'Unable to load event information.';
@@ -195,9 +187,7 @@ export default function Events() {
           ...current,
           loading: false,
           error: message,
-          refreshError: refreshResult.status === 'rejected'
-            ? refreshResult.reason.message || 'Unable to refresh event statuses.'
-            : null,
+          statusWarning: '',
         }));
       }
     }
@@ -207,55 +197,6 @@ export default function Events() {
     window.addEventListener('focus', reload);
     return () => { controller.abort(); clearInterval(timer); window.removeEventListener('focus', reload); };
   }, [api, eventId, refresh, notify]);
-
-  useEffect(() => {
-    if (!eventId) return;
-    let ignore = false;
-    async function loadEquipment() {
-      try {
-        const data = await api(`/api/events/${encodeURIComponent(eventId)}/equipment-requests`, { cache: 'no-store' });
-        if (!ignore) setState((current) => ({ ...current, equipment: data.equipment_requests || [], equipmentError: null }));
-      } catch (err) {
-        if (!ignore) setState((current) => ({ ...current, equipmentError: err.message || 'Unable to load equipment requests.' }));
-      }
-    }
-    loadEquipment();
-    return () => { ignore = true; };
-  }, [api, eventId, refresh]);
-
-  useEffect(() => {
-    if (!eventId) return;
-    let ignore = false;
-    api(`/api/events/${encodeURIComponent(eventId)}/activity`, { cache: 'no-store' })
-      .then(data => { if (!ignore) setState(current => ({ ...current, activity: data.activity || [], activityError: null })); })
-      // Not an empty history: swallowing this would render "no changes have
-      // been recorded" over a Critical Edit the viewer simply could not read.
-      .catch(err => { if (!ignore) setState(current => ({ ...current, activity: null, activityError: err.message || 'Unable to load the activity history.' })); });
-    return () => { ignore = true; };
-  }, [api, eventId, refresh]);
-
-  // The venue side of planning this event: what has been requested for it so
-  // far, so the coordinator does not request a second venue without knowing.
-  useEffect(() => {
-    if (!eventId) return undefined;
-    let ignore = false;
-    api('/api/venue-bookings', { cache: 'no-store' })
-      .then(data => {
-        if (ignore) return;
-        const forThisEvent = (data.bookings || [])
-          .filter(booking => String(booking.event_id) === String(eventId));
-        setVenue(current => ({ ...current, bookings: forThisEvent, error: '', allowed: true, canRequest: !!data.can_submit }));
-      })
-      .catch(err => {
-        if (ignore) return;
-        // Organisers and technical support can read the event but take no part
-        // in venue booking. That is not a failure, so they see no section
-        // rather than an error they can do nothing about.
-        if (err.status === 403) setVenue(current => ({ ...current, allowed: false, error: '' }));
-        else setVenue(current => ({ ...current, error: err.message || 'Unable to load venue booking requests.' }));
-      });
-    return () => { ignore = true; };
-  }, [api, eventId, refresh]);
 
   async function submitEquipmentRequest(event) {
     event.preventDefault();
@@ -374,7 +315,7 @@ export default function Events() {
   return <>
     <Navbar />
     <main className={eventId ? "container event-reference-detail" : "container event-reference-workspace"}>
-      {eventId && <Link to="/events">← My events</Link>}
+      {eventId && <Link to="/events">â† My events</Link>}
       <div className="heading"><div><p className="eyebrow">EVENT WORKSPACE</p><h1>{eventId ? event?.event_name || 'Event information' : 'Events'}</h1></div>
         <div className="event-reference-actions">
           {event && editable && !isOrganiser && !edit.open && <button type="button" onClick={startEditing}>Edit event</button>}
@@ -384,7 +325,7 @@ export default function Events() {
           <button className="secondary" onClick={() => { manualRefresh.current = true; setRefresh(value => value + 1); }} disabled={state.loading}>Refresh</button></div></div>
       {!eventId && <p className="event-page-description">Track schedules, arrangements and progress in one place.</p>}
       <p className="metadata event-refresh-note">Singapore time (SGT) - Refreshes every minute and when you return to this window.</p>
-      {state.loading && <p role="status">Loading latest information…</p>}
+      {state.loading && <p role="status">Loading latest informationâ€¦</p>}
       {state.error && <div role="alert" className="panel error">{state.error} Use Refresh to try again.</div>}
       {state.statusWarning && <p role="status" className="panel">{state.statusWarning}</p>}
       {data?.events && <EventList events={data.events} />}
@@ -439,7 +380,7 @@ export default function Events() {
             <label>Room layout<RequiredIndicator /><select value={edit.values.room_layout} onChange={e => setField('room_layout', e.target.value)} required>
               <option value="">Select a layout</option>{LAYOUTS.map(layout => <option key={layout} value={layout}>{label(layout)}</option>)}
             </select></label>
-            <label>Required facilities (hold Ctrl or ⌘ to select several)
+            <label>Required facilities (hold Ctrl or âŒ˜ to select several)
               <select multiple value={edit.values.required_facilities} onChange={e => setField('required_facilities', Array.from(e.target.selectedOptions, option => option.value))}>
                 {FACILITIES.map(facility => <option key={facility} value={facility}>{label(facility)}</option>)}
               </select></label>
@@ -447,14 +388,14 @@ export default function Events() {
               <label key={name}>{text}<select value={edit.values[name] ? 'yes' : 'no'} onChange={e => setField(name, e.target.value === 'yes')}><option value="no">No</option><option value="yes">Yes</option></select></label>)}
             </EventFormSection>
             <EventFormSection title="4. Equipment and registration">
-            <label>Equipment requirements (one per line: type, quantity, notes — or write "none")
+            <label>Equipment requirements (one per line: type, quantity, notes â€” or write "none")
               <textarea rows="3" placeholder="projector, 2, HDMI input" value={edit.values.equipment_requirements} onChange={e => setField('equipment_requirements', e.target.value)} /></label>
             <label>Registration needs<textarea rows="3" value={edit.values.registration_needs} onChange={e => setField('registration_needs', e.target.value)} /></label>
             </EventFormSection>
           </fieldset>
           <div className="heading">
             <button type="button" className="secondary" onClick={discardEdits} disabled={edit.busy}>Cancel</button>
-            <button type="submit" disabled={edit.busy}>{edit.busy ? 'Saving…' : 'Save changes'}</button>
+            <button type="submit" disabled={edit.busy}>{edit.busy ? 'Savingâ€¦' : 'Save changes'}</button>
           </div>
         </form>}
       </article>}
@@ -508,12 +449,12 @@ export default function Events() {
         {state.activityError && <div role="alert" className="error">{state.activityError} Use Refresh to try again.</div>}
         {!state.activityError && activity.length === 0 ? <p>No changes have been recorded for this event yet.</p> : activity.length > 0 && <dl>
           {activity.map(entry => <div key={entry.activity_id}>
-            <dt>{entry.change_type === 'status_change' ? 'Status Change' : entry.change_type === 'critical_edit' ? `Critical Edit${entry.event_change_request_id ? ' — Change request Pending Review' : ''}` : 'Edit'} — {date(entry.created_at)}</dt>
+            <dt>{entry.change_type === 'status_change' ? 'Status Change' : entry.change_type === 'critical_edit' ? `Critical Edit${entry.event_change_request_id ? ' â€” Change request Pending Review' : ''}` : 'Edit'} â€” {date(entry.created_at)}</dt>
             <dd>
               {userNames[entry.changed_by] || (entry.changed_by ? entry.changed_by.slice(0, 8) : 'System')}
               {entry.event_change_request_id && <p className="metadata">These are proposed values; the current event is unchanged while the request is reviewed.</p>}
               <ul>{Object.entries(entry.changes || {}).map(([field, change]) => <li key={field}>
-                {label(field)}: {display(field, change.from)} → {display(field, change.to)}
+                {label(field)}: {display(field, change.from)} â†’ {display(field, change.to)}
               </li>)}</ul>
             </dd>
           </div>)}
@@ -549,7 +490,7 @@ export default function Events() {
             <dt>{booking.venue_name}</dt>
             <dd>
               <span className={`booking-status booking-status-${booking.status}`}>{statusLabel(booking.status)}</span>
-              {' · submitted '}{date(booking.submitted_at)}
+              {' Â· submitted '}{date(booking.submitted_at)}
               {booking.status !== 'submitted' && <>
                 <br />Decided {date(booking.reviewed_at)}
                 {booking.reviewed_by_name ? ` by ${booking.reviewed_by_name}` : ''}
