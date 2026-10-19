@@ -30,6 +30,7 @@ function hours(operatingHours) {
 
 // Calendar statuses and their colours. Unavailable time (outside operating
 // hours) is FullCalendar's shaded non-business time; anything unmarked is available.
+const SETUP_COLOR = '#a5b4fc';
 const STATUSES = {
   approved: ['Confirmed', '#0f766e'],
   submitted: ['Tentatively held', '#d97706'],
@@ -51,7 +52,11 @@ function AvailabilityCalendar({ venue }) {
         success([
           ...data.bookings.map(item => ({ ...item, title: item.visible ? item.event_name : 'Another event' })),
           ...data.blocks.map(item => ({ ...item, status: 'blocked', title: item.reason || 'Blocked' })),
-        ].map(item => ({ title: item.title, start: item.starts_at, end: item.ends_at, color: STATUSES[item.status][1], extendedProps: item })));
+        ].map(item => ({ title: item.title, start: item.starts_at, end: item.ends_at, color: STATUSES[item.status][1], extendedProps: item }))
+          // Setup before and turnaround after each booking, when the venue needs them.
+          .concat(data.bookings.flatMap(item => [[item.occupied_from, item.starts_at], [item.ends_at, item.occupied_until]])
+            .filter(([start, end]) => start && end && start !== end)
+            .map(([start, end]) => ({ start, end, display: 'background', color: SETUP_COLOR }))));
       })
       .catch(err => { setError(err.message); failure(err); });
   }, [api, venue.venue_id]);
@@ -66,7 +71,7 @@ function AvailabilityCalendar({ venue }) {
   return <section className="panel" style={{ '--fc-today-bg-color': '#e0f2fe' }}>
     <h2>Availability</h2>
     <p className="metadata">
-      {[...Object.values(STATUSES), ['Unavailable (closed)', '#e2e8f0']].map(([label, color]) => <span key={label} style={{ marginRight: 16 }}>
+      {[...Object.values(STATUSES), ['Setup / turnaround', SETUP_COLOR], ['Unavailable (closed)', '#e2e8f0']].map(([label, color]) => <span key={label} style={{ marginRight: 16 }}>
         <span style={{ display: 'inline-block', width: 12, height: 12, marginRight: 6, background: color }} />{label}
       </span>)}
       Unmarked times are available. All times are Singapore time (SGT).

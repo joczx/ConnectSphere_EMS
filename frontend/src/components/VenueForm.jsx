@@ -82,11 +82,11 @@ export default function VenueForm({ mode, venueId, initialVenue = {}, onSubmit, 
         <div className="venue-form-grid">
           <label>
             Default setup time (minutes)
-            <RequiredIndicator /><input name="default_setup_minutes" type="number" min="0" required placeholder="0" defaultValue={initialVenue.default_setup_minutes ?? ''} />
+            <RequiredIndicator /><input name="default_setup_minutes" type="number" min="0" max="1440" required placeholder="0" defaultValue={initialVenue.default_setup_minutes ?? ''} />
           </label>
           <label>
             Default turnaround time (minutes)
-            <RequiredIndicator /><input name="default_turnaround_minutes" type="number" min="0" required placeholder="0" defaultValue={initialVenue.default_turnaround_minutes ?? ''} />
+            <RequiredIndicator /><input name="default_turnaround_minutes" type="number" min="0" max="1440" required placeholder="0" defaultValue={initialVenue.default_turnaround_minutes ?? ''} />
           </label>
         </div>
         <div className="layout-options">
