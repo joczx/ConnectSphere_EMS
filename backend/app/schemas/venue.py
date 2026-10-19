@@ -133,7 +133,14 @@ def _text(value, field, errors, *, required=False, maximum=100):
     return cleaned
 
 
+MINUTE_FIELDS = {"default_setup_minutes": "Setup time", "default_turnaround_minutes": "Turnaround time"}
+MAX_MINUTES = 1440  # 24 hours; the database enforces the same limit
+
+
 def _integer(value, field, errors, *, minimum):
+    if field in MINUTE_FIELDS and (type(value) is not int or not minimum <= value <= MAX_MINUTES):
+        errors[field] = f"{MINUTE_FIELDS[field]} must be a whole number of minutes from {minimum} to {MAX_MINUTES}."
+        return None
     if type(value) is not int or value < minimum:
         qualifier = "positive" if minimum == 1 else "zero or greater"
         errors[field] = f"This field must be a whole number that is {qualifier}."

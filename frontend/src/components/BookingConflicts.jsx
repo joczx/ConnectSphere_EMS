@@ -22,6 +22,9 @@ export default function BookingConflicts({ conflicts, linkFor }) {
         <strong>{period(conflict.starts_at, conflict.ends_at)}</strong>
         {' · '}{to ? <Link to={to}>{describe(conflict)}</Link> : describe(conflict)}
         {' · '}<span className="metadata">{statusLabel(conflict.status)}</span>
+        {/* The venue is held longer than the event itself when it has setup or turnaround time. */}
+        {conflict.occupied_from && (conflict.occupied_from !== conflict.starts_at || conflict.occupied_until !== conflict.ends_at)
+          && <span className="metadata">{' · '}held {period(conflict.occupied_from, conflict.occupied_until)} incl. setup and turnaround</span>}
       </li>;
     })}
   </ul>;
