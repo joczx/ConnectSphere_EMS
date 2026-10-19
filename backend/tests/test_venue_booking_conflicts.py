@@ -158,3 +158,16 @@ def test_a_booking_being_modified_does_not_conflict_with_itself(query):
     query.return_value = [own]
     marked = mark_for_event([{'venue_id': HALL, 'eligible': True}], EVENT, 'token', ignore='own')
     assert marked[0]['eligible'] is True
+
+
+def test_a_blocked_period_makes_the_venue_unavailable():
+    block = {'block_id': 'k1', 'venue_id': HALL, 'status': 'blocked', 'starts_at': EVENING[0], 'ends_at': EVENING[1]}
+    marked = attach_conflicts([{'venue_id': HALL, 'eligible': True}], [block])
+    assert marked[0]['eligible'] is False
+
+
+@patch('app.services.venue_availability.supabase_request')
+def test_a_block_is_kept_when_no_booking_is_being_modified(query):
+    from app.services.venue_availability import mark_for_event
+    query.return_value = [{'block_id': 'k1', 'venue_id': HALL, 'status': 'blocked'}]
+    assert mark_for_event([{'venue_id': HALL, 'eligible': True}], EVENT, 'token')[0]['eligible'] is False

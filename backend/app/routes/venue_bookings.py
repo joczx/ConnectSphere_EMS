@@ -5,6 +5,7 @@ roles: Event Coordinators submit, Venue Staff review, and each caller sees only
 what they are allowed to. This module validates and shapes; it never decides
 who may do what.
 """
+from datetime import datetime
 from uuid import UUID
 from urllib.parse import quote
 
@@ -39,6 +40,9 @@ def no_cache(response):
 
 @venue_bookings.errorhandler(StoreError)
 def store_error(error):
+    if error.code == '23505':  # venue_booking_one_active_per_event_venue (042)
+        return jsonify(error='This event already has a pending or approved booking for this venue. '
+                             'It must be rejected, cancelled or expire before the venue can be requested again.'), 409
     message = 'Please sign in again.' if error.status == 401 else 'Venue bookings are temporarily unavailable.'
     return jsonify(error=message), error.status
 
@@ -244,6 +248,36 @@ def cancel(booking_id):
     if result.get('error'):
         return refused(result)
     return jsonify(message='Venue booking cancelled.', booking=result['booking'])
+
+
+@venue_bookings.post('/<booking_id>/hold')
+def hold(booking_id):
+    """Venue Staff hold a pending request until an expiry; it is confirmed by approving it."""
+    token = authenticated_token(supabase_request)
+    if valid_booking_id(booking_id) is None:
+        return jsonify(error=NOT_FOUND), 404
+    try:
+        expires = datetime.fromisoformat((request.get_json(silent=True) or {})['expires_at'])
+        if expires.tzinfo is None:
+            raise ValueError
+    except (KeyError, TypeError, ValueError):
+        return jsonify(error='An expiry date and time is required.', errors={'expires_at': 'A valid expiry is required.'}), 400
+    result = rpc('hold_venue_booking', token, {'p_booking_id': booking_id, 'p_expires_at': expires.isoformat()})
+    if result.get('error'):
+        return refused(result)
+    return jsonify(message='Tentative hold placed. The Event Coordinator has been told when it expires.', booking=result['booking'])
+
+
+@venue_bookings.delete('/<booking_id>/hold')
+def release_hold(booking_id):
+    """Venue Staff release a hold early; the request stays pending."""
+    token = authenticated_token(supabase_request)
+    if valid_booking_id(booking_id) is None:
+        return jsonify(error=NOT_FOUND), 404
+    result = rpc('release_venue_hold', token, {'p_booking_id': booking_id})
+    if result.get('error'):
+        return refused(result)
+    return jsonify(message='Tentative hold released. The Event Coordinator has been told.', booking=result['booking'])
 
 
 @venue_bookings.post('/<booking_id>/review')
