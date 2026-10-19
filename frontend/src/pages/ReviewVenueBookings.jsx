@@ -12,6 +12,7 @@ const SECTIONS = [
   ['Approved', 'approved', null],
   ['Rejected', 'rejected', null],
   ['Cancelled', 'cancelled', null],
+  ['Expired', 'expired', null],
 ];
 
 // Enough to see from the queue which requests are already lost and which are
@@ -73,6 +74,7 @@ export default function ReviewVenueBookings() {
                 Status: {statusLabel(item.status)}
                 {item.status === 'submitted' ? ` · received ${when(item.submitted_at)}` : ` · ${when(item.reviewed_at)}`}
               </p>
+              {status === 'submitted' && item.hold_expires_at && <p className="booking-status booking-status-submitted">Held until {when(item.hold_expires_at)}</p>}
               {status === 'submitted' && <ConflictHint conflicts={item.conflicts} />}
               <span>{status === 'submitted' ? 'Review request →' : 'View request →'}</span>
             </Link>

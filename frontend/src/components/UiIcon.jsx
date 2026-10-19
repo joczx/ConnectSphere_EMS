@@ -8,6 +8,7 @@ const paths = {
   check: 'm5 12 4 4L19 6',
   plus: 'M12 4v16M4 12h16',
   menu: 'M4 6h16M4 12h16M4 18h16',
+  bell: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0',
 };
 
 export default function UiIcon({ name = 'requests', ...props }) {

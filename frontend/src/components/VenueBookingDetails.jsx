@@ -65,6 +65,9 @@ export default function VenueBookingDetails({ booking, linkFor }) {
         ['Venue requirements', booking.venue_requirements],
         ['Reference', booking.booking_id],
         booking.cancelled_at && ['Cancelled on', when(booking.cancelled_at)],
+        booking.cancellation_reason && ['Reason cancelled', booking.cancellation_reason],
+        booking.status === 'submitted' && booking.hold_expires_at && ['Tentatively held until', when(booking.hold_expires_at)],
+        booking.expired_at && ['Hold expired on', when(booking.expired_at)],
       ].filter(Boolean).map(([label, value]) => <div key={label}>
         <dt>{label}</dt>
         <dd style={preserve}>{value ?? 'Not specified'}</dd>
