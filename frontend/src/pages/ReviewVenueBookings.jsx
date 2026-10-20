@@ -30,18 +30,27 @@ function ConflictHint({ conflicts }) {
 }
 
 export default function ReviewVenueBookings() {
-  const { api } = useAuth();
+  const { api, can } = useAuth();
   const [state, setState] = useState({ loading: true });
 
   useEffect(() => {
     const controller = new AbortController();
-    venueBookingsApi(api, '', { signal: controller.signal })
-      .then(data => { if (!controller.signal.aborted) setState({ data }); })
+    Promise.all([
+      venueBookingsApi(api, '', { signal: controller.signal }),
+      api('/api/events', { cache: 'no-store', signal: controller.signal, feedback: false }),
+    ])
+      .then(([data, eventData]) => {
+        if (controller.signal.aborted) return;
+        // Only bookings for events this Venue Staff member is assigned to.
+        const assigned = new Set((eventData.events || [])
+          .filter(event => can('booking.review', event)).map(event => String(event.event_id)));
+        setState({ data: { ...data, bookings: (data.bookings || []).filter(booking => assigned.has(String(booking.event_id))) } });
+      })
       .catch(err => {
         if (!controller.signal.aborted) setState({ error: err.message || 'Unable to load booking requests.' });
       });
     return () => controller.abort();
-  }, [api]);
+  }, [api, can]);
 
   const bookings = state.data?.bookings || [];
 

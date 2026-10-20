@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import { useAuth } from '../auth/AuthContext';
@@ -23,19 +23,21 @@ function ReviewForm({ request, onReviewed }) {
   }
   return <div>
     {reservation ? <p>Linked reservation: {reservation.quantity} units.</p> : <p>Reserve the full requested quantity on the <Link to="/reserved-equipment">Reserved Equipment page</Link>, then return here to accept.</p>}
-    <button type="button" disabled={busy || !reservation || reservation.quantity !== request.quantity} onClick={() => decide('accepted')}>Accept request</button>
     <label>Reason for rejection<textarea value={reason} disabled={busy} onChange={e => setReason(e.target.value)} /></label>
     {reservation && <p>Cancel the linked reservation on the Reserved Equipment page before rejecting.</p>}
+    <button type="button" disabled={busy || !reservation || reservation.quantity !== request.quantity} onClick={() => decide('accepted')}>Accept request</button>
     <button type="button" className="secondary" disabled={busy || !!reservation || !reason.trim()} onClick={() => decide('rejected')}>Reject request</button>
     {error && <p role="alert" className="error">{error}</p>}
   </div>;
 }
 
 export default function Equipment() {
-  const { api } = useAuth();
+  const { api, can } = useAuth();
+  const [searchParams] = useSearchParams();
   const [requests, setRequests] = useState([]);
   const [events, setEvents] = useState([]);
-  const [eventId, setEventId] = useState('');
+  // Opened from an event's "View equipment requests", start on that event.
+  const [eventId, setEventId] = useState(() => searchParams.get('event_id') || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -45,10 +47,22 @@ export default function Equipment() {
     const controller = new AbortController();
     setLoading(true);
     setError('');
-    api('/api/equipment-request-reviews', { cache: 'no-store', signal: controller.signal }).then(result => {
+    Promise.all([
+      api('/api/equipment-request-reviews', { cache: 'no-store', signal: controller.signal }),
+      // The events this Technical Support Staff member is assigned to, from the
+      // same source as the Reserved Equipment page's event options.
+      api('/api/equipment/reservable-events', { cache: 'no-store', signal: controller.signal }),
+    ]).then(async ([result, eventData]) => {
+      const assigned = eventData.events || [];
+      // Each assigned event's requests, read the same way as the coordinator's
+      // Request Equipment page. The review queue's row is kept where it has
+      // one, because it carries the linked reservation that acceptance needs.
+      const lists = await Promise.all(assigned.map(async event =>
+        (await api(`/api/events/${encodeURIComponent(event.event_id)}/equipment-requests`, { cache: 'no-store', signal: controller.signal })).equipment_requests || []));
       if (controller.signal.aborted) return;
-      setRequests(result.equipment_requests);
-      setEvents(result.events);
+      const queued = new Map((result.equipment_requests || []).map(row => [String(row.equipment_request_id), row]));
+      setRequests(lists.flat().map(row => ({ ...row, ...queued.get(String(row.equipment_request_id)) })));
+      setEvents(assigned);
     }).catch(err => {
       if (!controller.signal.aborted) { setError(err.message); setRequests([]); }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -84,7 +98,7 @@ export default function Equipment() {
             <h3>{row.equipment_type}</h3>
             <EquipmentRequestStatus request={row} />
             {row.technical_requirements && <p>Technical requirements: {row.technical_requirements}</p>}
-            {row.status === 'pending' && <ReviewForm request={row} onReviewed={reviewed} />}
+            {row.status === 'pending' && can('equipment.review') && <ReviewForm request={row} onReviewed={reviewed} />}
           </article>)}
         </section>)}
       </>}

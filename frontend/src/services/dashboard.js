@@ -1,4 +1,5 @@
 import { loadEvents } from './eventLoading.js';
+import { can, canViewEvent } from '../auth/access.js';
 
 const normalize = role => role.trim().replaceAll('_', ' ').toLowerCase();
 export const countStatuses = rows => rows.reduce((counts, row) => {
@@ -27,6 +28,18 @@ export async function loadDashboard(api, roles, organiserId, signal) {
       return null;
     }
   };
+  // Loaded once. Every section shows only the events the viewer is assigned
+  // to (all of them for a Coordinator Lead), and the bookings and equipment
+  // requests belonging to those events.
+  const loadedEvents = loadEvents(api, '/api/events', { cache: 'no-store', signal, feedback: false })
+    .then(({ data, statusWarning }) => {
+      if (statusWarning) warnings.push(statusWarning);
+      return data.events || [];
+    });
+  loadedEvents.catch(() => {}); // each section reports the failure itself
+  const visibleEvents = async () => (await loadedEvents).filter(event => canViewEvent(roles, organiserId, event));
+  const assignedEventIds = async action => new Set((await loadedEvents)
+    .filter(event => can(roles, organiserId, action, event)).map(event => String(event.event_id)));
   const requestStatuses = [['draft', 'Draft'], ['submitted', 'Submitted'], ['planning', 'Approved / planning'], ['rejected', 'Rejected'], ['cancelled', 'Cancelled']];
   const tasks = [];
   if (organiser) tasks.push(section('own-requests', 'My event requests', 'Requests you created', '/event-requests', requestStatuses,
@@ -37,19 +50,24 @@ export async function loadDashboard(api, roles, organiserId, signal) {
     async () => (await get('/api/event-requests/unassigned')).event_requests.map(row => ({ ...row, status: 'submitted' }))));
   if (coordinator || staff) tasks.push(section('venues', 'Venue booking requests', staff ? 'Bookings available for your review' : 'Your venue booking requests', staff ? '/review-venue-bookings' : '/venue-bookings',
     [['submitted', 'Submitted'], ['approved', 'Approved'], ['rejected', 'Rejected'], ['cancelled', 'Cancelled']],
-    async () => (await get('/api/venue-bookings')).bookings));
+    async () => {
+      const bookings = (await get('/api/venue-bookings')).bookings;
+      if (!staff) return bookings;
+      const assigned = await assignedEventIds('booking.review');
+      return bookings.filter(booking => assigned.has(String(booking.event_id)));
+    }));
   const eventsPromise = section('events', 'Events', 'Events visible to your account', '/events',
     [['planning', 'Planning'], ['confirmed', 'Confirmed'], ['completed', 'Completed'], ['cancelled', 'Cancelled']],
-    async () => {
-      const { data, statusWarning } = await loadEvents(api, '/api/events', { cache: 'no-store', signal, feedback: false });
-      if (statusWarning) warnings.push(statusWarning);
-      return data.events;
-    });
+    visibleEvents);
   tasks.push(eventsPromise);
   if (technical || coordinator) tasks.push(section('equipment', 'Equipment requests', technical ? 'Requests available for your review' : 'Requests for your assigned events', technical ? '/equipment' : '/events',
     [['pending', 'Pending review'], ['accepted', 'Accepted'], ['partially_accepted', 'Partially accepted'], ['rejected', 'Rejected'], ['in_progress', 'In progress'], ['completed', 'Completed'], ['cancelled', 'Cancelled']],
     async () => {
-      if (technical) return (await get('/api/equipment-request-reviews')).equipment_requests;
+      if (technical) {
+        const requests = (await get('/api/equipment-request-reviews')).equipment_requests;
+        const assigned = await assignedEventIds('equipment.review');
+        return requests.filter(request => assigned.has(String(request.event_id)));
+      }
       const events = await eventsPromise;
       if (!events) throw new Error('Event information is unavailable.');
       const requests = await Promise.all(events.filter(event => event.event_coordinator_id === organiserId).map(async event => (await get(`/api/events/${event.event_id}/equipment-requests`)).equipment_requests));

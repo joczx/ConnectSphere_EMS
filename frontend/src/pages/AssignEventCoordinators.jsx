@@ -14,7 +14,7 @@ function date(value) {
 }
 
 export default function AssignEventCoordinators() {
-  const { api } = useAuth();
+  const { api, can } = useAuth();
   const [state, setState] = useState({ loading: true, requests: [], coordinators: [] });
   const [selected, setSelected] = useState({});
   const [busyId, setBusyId] = useState(null);
@@ -118,7 +118,7 @@ export default function AssignEventCoordinators() {
             </label>
             <button
               type="button"
-              disabled={!selected[item.event_request_id] || busyId === item.event_request_id}
+              disabled={!can('eventRequest.assign') || !selected[item.event_request_id] || busyId === item.event_request_id}
               onClick={() => assign(item.event_request_id)}
             >
               {busyId === item.event_request_id ? 'Assigning…' : 'Assign coordinator'}

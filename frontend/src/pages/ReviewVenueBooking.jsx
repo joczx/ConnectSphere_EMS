@@ -11,7 +11,7 @@ import { venueBookingsApi } from '../services/venueBookings';
 
 export default function ReviewVenueBooking() {
   const { confirm, notify } = useFeedback();
-  const { api } = useAuth();
+  const { api, can } = useAuth();
   const { bookingId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -123,7 +123,7 @@ export default function ReviewVenueBooking() {
         </AlertDescription>
       </Alert>}
 
-      {pending && state.data?.can_review && <form className="panel" onSubmit={(e) => e.preventDefault()}>
+      {pending && state.data?.can_review && can('booking.review') && <form className="panel" onSubmit={(e) => e.preventDefault()}>
         <h2>Decide</h2>
         <fieldset disabled={attempt.busy}>
           {attempt.error && <div role="alert" className="error" style={{ marginBottom: '12px' }}>
@@ -153,13 +153,13 @@ export default function ReviewVenueBooking() {
         </fieldset>
       </form>}
 
-      {pending && state.data?.can_review && booking.hold_expires_at && <section className="panel">
+      {pending && state.data?.can_review && can('booking.releaseHold') && booking.hold_expires_at && <section className="panel">
         <h2>Tentative hold</h2>
         <p>Approve the request to confirm the hold, or release it to free the venue now.</p>
         <button type="button" className="secondary" disabled={attempt.busy} onClick={releaseHold}>Release hold</button>
       </section>}
 
-      {pending && state.data?.can_review && !booking.hold_expires_at && !booked && <form className="panel" onSubmit={placeHold}>
+      {pending && state.data?.can_review && can('booking.hold') && !booking.hold_expires_at && !booked && <form className="panel" onSubmit={placeHold}>
         <h2>Place a tentative hold</h2>
         <p className="metadata">Reserves the venue until the expiry. Approve the request before then to confirm it, or the hold expires and the venue is released. Singapore time (SGT).</p>
         <label>Hold expires<RequiredIndicator /><input type="datetime-local" name="expires_at" required /></label>

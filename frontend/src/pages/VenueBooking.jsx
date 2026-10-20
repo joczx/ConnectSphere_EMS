@@ -10,7 +10,7 @@ import { SAFETY_REVIEW_WARNING, underSafetyReview, venueBookingsApi } from '../s
 // Read through the same endpoint as the review page; the database decides
 // that a coordinator may only open their own.
 export default function VenueBooking() {
-  const { api } = useAuth();
+  const { api, can } = useAuth();
   const { bookingId } = useParams();
   const [state, setState] = useState({ loading: true });
 
@@ -54,7 +54,7 @@ export default function VenueBooking() {
       {/* Modifying or cancelling touches only this booking; the event and its other bookings are untouched. */}
       {['submitted', 'approved'].includes(booking?.status) && underSafetyReview(booking.event_status)
         && <p className="panel venue-warning" role="alert">{SAFETY_REVIEW_WARNING}</p>}
-      {['submitted', 'approved'].includes(booking?.status) && ['planning', 'pending_safety_checks'].includes(booking.event_status) && <p className="venue-page-actions">
+      {['submitted', 'approved'].includes(booking?.status) && ['planning', 'pending_safety_checks'].includes(booking.event_status) && can('booking.cancel') && <p className="venue-page-actions">
         <Link className="button-link" to={`/venue-search?event_id=${booking.event_id}&booking_id=${booking.booking_id}`}>Change venue</Link>
         <Link className="button-link" to={`/venue-bookings?event_id=${booking.event_id}&venue_id=${booking.venue_id}&booking_id=${booking.booking_id}`}>Edit notes</Link>
         <button type="button" className="danger-button" onClick={cancel}>Cancel booking</button>
