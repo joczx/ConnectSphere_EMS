@@ -33,7 +33,7 @@ const apps = [
   },
   {
     id: 'equipment',
-    label: 'Equipment Requests',
+    label: 'Review Equipment Requests',
     description: 'Review equipment requests after reserving the full quantity',
     path: '/equipment',
     icon: '🛠️',

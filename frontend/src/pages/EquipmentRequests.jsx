@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useFeedback } from '../components/FeedbackProvider';
 import EquipmentRequestForm from '../components/EquipmentRequestForm';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import { useAuth } from '../auth/AuthContext';
@@ -17,6 +18,9 @@ export default function EquipmentRequests() {
   const eventId = searchParams.get('event_id') || '';
   const [state, setState] = useState({ loading: true, events: [], requests: [], error: '', warning: '' });
   const [refresh, setRefresh] = useState(0);
+  const [editingId, setEditingId] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const { confirm } = useFeedback();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -35,6 +39,23 @@ export default function EquipmentRequests() {
     })();
     return () => controller.abort();
   }, [api, token, refresh]);
+
+  async function remove(id, row) {
+    const accepted = await confirm(
+      `Delete the request for ${row.quantity} × ${row.equipment_type}? Technical Support will no longer see it.`,
+      { title: 'Delete equipment request', confirmLabel: 'Delete', cancelLabel: 'Keep', destructive: true },
+    );
+    if (!accepted) return;
+    setBusyId(row.equipment_request_id);
+    try {
+      await api(`/api/events/${encodeURIComponent(id)}/equipment-requests/${encodeURIComponent(row.equipment_request_id)}`, { method: 'DELETE' });
+    } catch {
+      // api() has already shown the reason; refresh in case it was reviewed meanwhile.
+    } finally {
+      setBusyId(null);
+      setRefresh(value => value + 1);
+    }
+  }
 
   function chooseEvent(id) {
     setSearchParams(id ? { event_id: id } : {}, { replace: true });
@@ -67,11 +88,25 @@ export default function EquipmentRequests() {
               ? <EquipmentRequestForm eventId={id} onSubmitted={() => setRefresh(value => value + 1)} />
               : <p className="metadata">Equipment can only be requested while the event is in planning.</p>}
             {!requests.length && <p>No equipment requests for this event yet.</p>}
-            {requests.map(row => <article key={row.equipment_request_id} className="panel" style={{ marginTop: '12px' }}>
-              <h3>{row.equipment_type}</h3>
-              <EquipmentRequestStatus request={row} />
-              <p>Technical requirements: {row.technical_requirements || 'Not specified'}</p>
-            </article>)}
+            {requests.map(row => {
+              // Technical Support may decide at any moment; once they have,
+              // the request is part of the record and is no longer editable.
+              const changeable = row.status === 'pending' && event.status === 'planning';
+              return <article key={row.equipment_request_id} className="panel" style={{ marginTop: '12px' }}>
+                {editingId === row.equipment_request_id
+                  ? <EquipmentRequestForm eventId={id} request={row} onCancel={() => setEditingId(null)}
+                      onSubmitted={() => { setEditingId(null); setRefresh(value => value + 1); }} />
+                  : <>
+                    <h3>{row.equipment_type}</h3>
+                    <EquipmentRequestStatus request={row} />
+                    <p>Technical requirements: {row.technical_requirements || 'Not specified'}</p>
+                    {changeable && <div>
+                      <button type="button" className="secondary" disabled={busyId !== null} onClick={() => setEditingId(row.equipment_request_id)}>Edit</button>
+                      <button type="button" className="danger-button" disabled={busyId !== null} onClick={() => remove(id, row)}>Delete</button>
+                    </div>}
+                  </>}
+              </article>;
+            })}
           </section>;
         })}
       </>}

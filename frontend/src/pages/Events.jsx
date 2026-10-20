@@ -458,7 +458,11 @@ export default function Events() {
 
       {event && <section className="panel event-reference-side-card"><h2>Equipment</h2>
         {state.equipmentError ? <p role="alert" className="error">{state.equipmentError}</p> : equipmentRequests.length ? <ul className="event-sidebar-equipment">{equipmentRequests.map(item => <li key={item.equipment_request_id}><span>{item.quantity} &times; {item.equipment_type}</span><span className={'event-stage event-stage-' + item.status}>{label(item.status)}</span></li>)}</ul> : <p>No equipment requests yet.</p>}
-        <button type="button" className="event-text-action" onClick={() => document.getElementById('event-equipment')?.scrollIntoView({ behavior: 'smooth' })}>View equipment requests &rarr;</button>
+        {/* Only coordinators can open Request Equipment; everyone else is
+            taken to this event's own equipment section instead. */}
+        {canAccess('/equipment-requests')
+          ? <Link className="button-link" to={`/equipment-requests?event_id=${encodeURIComponent(eventId)}`}>View equipment requests</Link>
+          : <button type="button" onClick={() => document.getElementById('event-equipment')?.scrollIntoView({ behavior: 'smooth' })}>View equipment requests</button>}
       </section>}
       {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
         <h2>Registration arrangements</h2>
