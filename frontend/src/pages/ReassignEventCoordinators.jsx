@@ -31,7 +31,7 @@ function endpoint(item) {
 }
 
 export default function ReassignEventCoordinators() {
-  const { api } = useAuth();
+  const { api, can } = useAuth();
   const [state, setState] = useState({
     loading: true,
     items: [],
@@ -155,7 +155,7 @@ export default function ReassignEventCoordinators() {
                   </label>
                   <button
                     type="button"
-                    disabled={!coordinatorId || unchanged || busyKey === key}
+                    disabled={!can('eventRequest.reassign') || !coordinatorId || unchanged || busyKey === key}
                     onClick={() => reassign(item)}
                   >
                     {busyKey === key ? 'Saving…' : 'Save reassignment'}

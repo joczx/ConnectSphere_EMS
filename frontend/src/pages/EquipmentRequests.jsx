@@ -7,13 +7,12 @@ import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import { useAuth } from '../auth/AuthContext';
 import { loadEvents } from '../services/eventLoading';
 import { statusLabel } from '../services/venueBookings';
-import { userId } from '../services/eventRequests';
 
 // The Event Coordinator's side of equipment: request it for the events they
 // coordinate and follow what Technical Support decided. Reviewing requests is
 // Technical Support's page, /equipment.
 export default function EquipmentRequests() {
-  const { api, token } = useAuth();
+  const { api, userId, can } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const eventId = searchParams.get('event_id') || '';
   const [state, setState] = useState({ loading: true, events: [], requests: [], error: '', warning: '' });
@@ -24,12 +23,11 @@ export default function EquipmentRequests() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const me = token ? userId(token) : null;
     setState(current => ({ ...current, loading: true, error: '' }));
     (async () => {
       try {
         const { data, statusWarning } = await loadEvents(api, '/api/events', { cache: 'no-store', signal: controller.signal });
-        const events = (data.events || []).filter(event => event.event_coordinator_id === me);
+        const events = (data.events || []).filter(event => event.event_coordinator_id === userId);
         const lists = await Promise.all(events.map(async event =>
           (await api(`/api/events/${encodeURIComponent(event.event_id)}/equipment-requests`, { cache: 'no-store', signal: controller.signal })).equipment_requests || []));
         if (!controller.signal.aborted) setState({ loading: false, events, requests: lists.flat(), error: '', warning: statusWarning });
@@ -38,7 +36,7 @@ export default function EquipmentRequests() {
       }
     })();
     return () => controller.abort();
-  }, [api, token, refresh]);
+  }, [api, userId, refresh]);
 
   async function remove(id, row) {
     const accepted = await confirm(
@@ -84,14 +82,14 @@ export default function EquipmentRequests() {
           return <section key={id} className="panel" style={{ marginTop: '24px' }}>
             <div className="heading"><h2>{event.event_name}</h2><Link to={`/events/${id}`}>View event</Link></div>
             <p className="metadata"><span className={'event-stage event-stage-' + event.status}>{statusLabel(event.status)}</span></p>
-            {event.status === 'planning'
+            {event.status === 'planning' && can('equipment.request', event)
               ? <EquipmentRequestForm eventId={id} onSubmitted={() => setRefresh(value => value + 1)} />
               : <p className="metadata">Equipment can only be requested while the event is in planning.</p>}
             {!requests.length && <p>No equipment requests for this event yet.</p>}
             {requests.map(row => {
               // Technical Support may decide at any moment; once they have,
               // the request is part of the record and is no longer editable.
-              const changeable = row.status === 'pending' && event.status === 'planning';
+              const changeable = row.status === 'pending' && event.status === 'planning' && can('equipment.request', event);
               return <article key={row.equipment_request_id} className="panel" style={{ marginTop: '12px' }}>
                 {editingId === row.equipment_request_id
                   ? <EquipmentRequestForm eventId={id} request={row} onCancel={() => setEditingId(null)}

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { hasAccess, rolesForPath } from './access';
+import { can, canViewEvent, hasAccess, rolesForPath } from './access';
+import { userId } from '../services/eventRequests';
 import { readApiResponse } from '../services/http';
 import { useFeedback } from '../components/FeedbackProvider';
 import { actionMessage, shouldNotify } from '../services/actionFeedback';
@@ -135,6 +136,14 @@ export function AuthProvider({ children }) {
   }, [api, accountId]);
   const accountReady = account.accountId === accountId && !account.loading;
   const canAccess = useCallback(path => accountReady && !account.error && hasAccess(account.user?.roles, rolesForPath(path)), [account, accountReady]);
+  const viewerId = useMemo(() => {
+    try { return session?.access_token ? userId(session.access_token) : null; } catch { return null; }
+  }, [session]);
+  // Whether to show an action's button; see ACTIONS in access.js.
+  const canDo = useCallback((action, record) => accountReady && !account.error
+    && can(account.user?.roles, viewerId, action, record), [account, accountReady, viewerId]);
+  const canSeeEvent = useCallback(event => accountReady && !account.error
+    && canViewEvent(account.user?.roles, viewerId, event), [account, accountReady, viewerId]);
 
   const value = useMemo(() => ({
     session,
@@ -146,7 +155,10 @@ export function AuthProvider({ children }) {
     account,
     accountReady,
     canAccess,
-  }), [session, saveSession, signOut, authFetch, api, account, accountReady, canAccess]);
+    userId: viewerId,
+    can: canDo,
+    canViewEvent: canSeeEvent,
+  }), [session, saveSession, signOut, authFetch, api, account, accountReady, canAccess, viewerId, canDo, canSeeEvent]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

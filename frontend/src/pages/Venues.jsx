@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { VENUE_FACILITIES, VENUE_ROOM_LAYOUTS } from '../config/venueOptions';
 
 export default function Venues() {
-  const { api, canAccess } = useAuth();
+  const { api, can } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -70,7 +70,7 @@ export default function Venues() {
             >
               {filtersOpen ? 'Hide filters' : isFiltered ? 'Show active filters' : 'Show filters'}
             </button>
-            {canAccess('/venues/new') && <Link className="button-link" to="/venues/new">Create venue</Link>}
+            {can('venue.create') && <Link className="button-link" to="/venues/new">Create venue</Link>}
           </div>
         </div>
         <p>View and manage the venues available to ConnectSphere.</p>

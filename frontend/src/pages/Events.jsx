@@ -10,7 +10,6 @@ import EquipmentRequestForm from '../components/EquipmentRequestForm';
 import { useAuth } from '../auth/AuthContext';
 import { loadEvents } from '../services/eventLoading';
 import { statusLabel } from '../services/venueBookings';
-import { userId } from '../services/eventRequests';
 import {
   FACILITIES, LAYOUTS,
   display, label, toInput, toIso, toItems, toLines,
@@ -80,7 +79,7 @@ function saved(event, field) {
 
 export default function Events() {
   const { confirm, notify } = useFeedback();
-  const { api, token, canAccess } = useAuth();
+  const { api, can, canViewEvent } = useAuth();
   const { eventId } = useParams();
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
@@ -165,17 +164,16 @@ export default function Events() {
   }, [api, eventId, refresh]);
 
   const data = state.key === eventId ? state.data : null;
-  const event = data?.event;
+  // Only events the viewer is assigned to; a Coordinator Lead sees them all.
+  const hiddenEvent = !!data?.event && !canViewEvent(data.event);
+  const event = hiddenEvent ? null : data?.event;
   const equipmentRequests = state.equipment || [];
   const activity = state.activity || [];
   const editable = event?.status === 'planning';
-  const viewerId = token ? userId(token) : null;
-  const isCoordinator = !!event && viewerId === event.event_coordinator_id;
-  const isOrganiser = !!event && viewerId === event.event_organiser_id;
-  const canRequestChange = isOrganiser && canAccess('/event-change-requests')
+  // Who sees which button: ACTIONS in auth/access.js. The status rules stay here.
+  const canRequestChange = !!event && can('changeRequest.create', event)
     && ['planning', 'pending_safety_checks', 'confirmed'].includes(event.status);
-  const canCancel = !!event && ['planning', 'confirmed'].includes(event.status)
-    && [event.event_coordinator_id, event.event_organiser_id].includes(viewerId);
+  const canCancel = !!event && ['planning', 'confirmed'].includes(event.status) && can('event.cancel', event);
 
   async function updateLifecycle(action, ready) {
     if (action === 'cancel' && !(await confirm('Cancel this event? This cannot be undone.', { title: 'Cancel event', confirmLabel: 'Cancel event', destructive: true }))) return;
@@ -293,17 +291,18 @@ export default function Events() {
       {eventId && <Link to="/events">← My events</Link>}
       <div className="heading"><div><p className="eyebrow">EVENT WORKSPACE</p><h1>{eventId ? event?.event_name || 'Event information' : 'Events'}</h1></div>
         <div className="event-reference-actions">
-          {event && editable && !isOrganiser && !edit.open && <button type="button" onClick={startEditing}>Edit event</button>}
+          {event && editable && can('event.edit', event) && !edit.open && <button type="button" onClick={startEditing}>Edit event</button>}
           {event && canRequestChange && !edit.open && <Link className="button-link secondary" to={`/event-change-requests/new?event_id=${encodeURIComponent(event.event_id)}`}>Request changes</Link>}
           {event && canCancel && <button type="button" className="secondary event-cancel-action" disabled={lifecycle.busy} onClick={() => updateLifecycle('cancel')}>Cancel event</button>}
-          {!eventId && canAccess('/event-requests/new') && <Link className="button-link" to="/event-requests/new">+ New event</Link>}
+          {!eventId && can('event.create') && <Link className="button-link" to="/event-requests/new">+ New event</Link>}
           <button className="secondary" onClick={() => { manualRefresh.current = true; setRefresh(value => value + 1); }} disabled={state.loading}>Refresh</button></div></div>
       {!eventId && <p className="event-page-description">Track schedules, arrangements and progress in one place.</p>}
       <p className="metadata event-refresh-note">Singapore time (SGT) - Refreshes every minute and when you return to this window.</p>
       {state.loading && <p role="status">Loading latest information…</p>}
       {state.error && <div role="alert" className="panel error">{state.error} Use Refresh to try again.</div>}
       {state.statusWarning && <p role="status" className="panel">{state.statusWarning}</p>}
-      {data?.events && <EventList events={data.events} />}
+      {hiddenEvent && <div role="alert" className="panel error">Event not found or access unavailable.</div>}
+      {data?.events && <EventList events={data.events.filter(canViewEvent)} />}
       {event && <>
         <div className="event-reference-identity"><span className={'event-stage event-stage-' + event.status}>{label(event.status)}</span><span>Event #{event.event_id}</span></div>
         <div className="event-reference-info-cards">
@@ -378,10 +377,7 @@ export default function Events() {
 
       {eventId && event && <section className="panel event-detail-section" id="event-equipment" tabIndex={-1}>
         <h2>Equipment requests</h2>
-        <p className="metadata">Submit each additional equipment requirement here during planning. Technical Support reserves equipment before accepting a request.</p>
-        {state.equipmentError && <div className="error">{state.equipmentError}</div>}
 
-        {isCoordinator && editable && <EquipmentRequestForm eventId={eventId} onSubmitted={() => setRefresh(value => value + 1)} />}
 
         <div style={{ marginTop: '24px' }}>
           {equipmentRequests.length === 0 ? (
@@ -431,7 +427,7 @@ export default function Events() {
 
         {/* Only an Event Coordinator may request a venue; Venue Staff assigned
             to the event read this section but decide requests elsewhere. */}
-        {editable && venue.canRequest && <Link className="button-link" to={`/venue-search?event_id=${encodeURIComponent(eventId)}`}>
+        {editable && venue.canRequest && can('event.findVenue', event) && <Link className="button-link" to={`/venue-search?event_id=${encodeURIComponent(eventId)}`}>
           Find venues for this event
         </Link>}
         {!editable && <p className="metadata">A venue can only be requested while the event is in planning.</p>}
@@ -458,17 +454,17 @@ export default function Events() {
 
       {event && <section className="panel event-reference-side-card"><h2>Equipment</h2>
         {state.equipmentError ? <p role="alert" className="error">{state.equipmentError}</p> : equipmentRequests.length ? <ul className="event-sidebar-equipment">{equipmentRequests.map(item => <li key={item.equipment_request_id}><span>{item.quantity} &times; {item.equipment_type}</span><span className={'event-stage event-stage-' + item.status}>{label(item.status)}</span></li>)}</ul> : <p>No equipment requests yet.</p>}
-        {/* Only coordinators can open Request Equipment; everyone else is
-            taken to this event's own equipment section instead. */}
-        {canAccess('/equipment-requests')
-          ? <Link className="button-link" to={`/equipment-requests?event_id=${encodeURIComponent(eventId)}`}>View equipment requests</Link>
-          : <button type="button" onClick={() => document.getElementById('event-equipment')?.scrollIntoView({ behavior: 'smooth' })}>View equipment requests</button>}
+        {/* The event's coordinator requests equipment; its technical support
+            reviews it. Each is taken to their own page, filtered to this event. */}
+        {can('equipment.request', event)
+          ? <Link className="button-link" to={`/equipment-requests?event_id=${encodeURIComponent(eventId)}`}>Request equipment for this event</Link>
+          : can('equipment.review', event) && <Link className="button-link" to={`/equipment?event_id=${encodeURIComponent(eventId)}`}>View equipment requests</Link>}
       </section>}
       {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
         <h2>Registration arrangements</h2>
         {event.registration_needs && <div style={{ marginBottom: '16px' }}>
           <p>Registration arrangements: {event.registration_ready ? 'Ready' : 'Awaiting coordinator confirmation'}</p>
-          {isCoordinator && ['planning', 'confirmed'].includes(event.status) && <label>
+          {can('event.registrationReady', event) && ['planning', 'confirmed'].includes(event.status) && <label>
             <input type="checkbox" checked={!!event.registration_ready} disabled={lifecycle.busy}
               onChange={e => updateLifecycle('registration-readiness', e.target.checked)} />
             Registration arrangements are ready

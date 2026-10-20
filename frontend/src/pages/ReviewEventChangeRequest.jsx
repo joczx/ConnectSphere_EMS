@@ -24,7 +24,7 @@ const IMPACT_LABELS = {
 };
 
 export default function ReviewEventChangeRequest() {
-  const { api } = useAuth();
+  const { api, can } = useAuth();
   const { requestId } = useParams();
   const { confirm, notify } = useFeedback();
   const [state, setState] = useState({ loading: true });
@@ -115,7 +115,7 @@ export default function ReviewEventChangeRequest() {
           <ul>{impacts.map(item => <li key={item}>{IMPACT_LABELS[item] || label(item)}</li>)}</ul>
         </section>}
 
-        {pendingImportant && <form className="panel change-request-decision" onSubmit={event => event.preventDefault()}>
+        {pendingImportant && can('changeRequest.review') && <form className="panel change-request-decision" onSubmit={event => event.preventDefault()}>
           <h2>Decision</h2>
           {attempt.error && <p className="error" role="alert">{attempt.error}</p>}
           <fieldset disabled={attempt.busy}>

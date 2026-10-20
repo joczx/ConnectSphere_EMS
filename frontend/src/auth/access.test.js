@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasAccess, rolesForPath } from './access.js';
+import { can, canViewEvent, hasAccess, rolesForPath } from './access.js';
 
 const allowed = (path, roles) => hasAccess(roles, rolesForPath(path));
 test('role-specific pages reject other roles including nested URLs', () => {
@@ -30,6 +30,73 @@ test('requesting equipment is for coordinators, reviewing it for technical suppo
   assert.equal(allowed('/equipment-requests', ['Technical Support Staff']), false);
   assert.equal(allowed('/equipment-requests', ['Event Organiser']), false);
   assert.equal(allowed('/equipment', ['Event Coordinator']), false);
+});
+
+test('venues are for coordinators and venue staff; events are for everyone', () => {
+  for (const path of ['/venues', '/venues/123']) {
+    assert.equal(allowed(path, ['Event Coordinator']), true);
+    assert.equal(allowed(path, ['Venue Staff']), true);
+    for (const role of ['Event Organiser', 'Technical Support Staff', 'Safety Officer', 'Event Coordinator Lead']) {
+      assert.equal(allowed(path, [role]), false, `${role} on ${path}`);
+    }
+  }
+  for (const role of ['Event Organiser', 'Event Coordinator', 'Event Coordinator Lead', 'Venue Staff', 'Technical Support Staff', 'Safety Officer']) {
+    assert.equal(allowed('/events/7', [role]), true);
+    assert.equal(allowed('/home', [role]), true);
+  }
+});
+
+test('a lead is not a coordinator and a coordinator is not a lead', () => {
+  assert.equal(allowed('/review-event-requests', ['Event Coordinator Lead']), false);
+  assert.equal(allowed('/venue-bookings', ['Event Coordinator Lead']), false);
+  assert.equal(allowed('/assign-event-coordinators', ['Event Coordinator']), false);
+});
+
+const event = {
+  event_organiser_id: 'org', event_coordinator_id: 'coord',
+  technical_support_id: 'tech', venue_staff_id: 'vs',
+};
+
+test('only the assigned coordinator edits, cancels and requests for an event', () => {
+  for (const action of ['event.edit', 'event.cancel', 'event.registrationReady', 'event.findVenue', 'equipment.request']) {
+    assert.equal(can(['Event Coordinator'], 'coord', action, event), true, action);
+    assert.equal(can(['Event Coordinator'], 'someone-else', action, event), false, action);
+    // Linked to the event, but in another role.
+    assert.equal(can(['Event Organiser'], 'org', action, event), false, action);
+    assert.equal(can(['Venue Staff'], 'vs', action, event), false, action);
+    assert.equal(can(['Technical Support Staff'], 'tech', action, event), false, action);
+  }
+});
+
+test('organiser and technical support actions need both the role and the link', () => {
+  assert.equal(can(['Event Organiser'], 'org', 'changeRequest.create', event), true);
+  assert.equal(can(['Event Organiser'], 'coord', 'changeRequest.create', event), false);
+  assert.equal(can(['Technical Support Staff'], 'tech', 'equipment.review', event), true);
+  assert.equal(can(['Technical Support Staff'], 'other', 'equipment.review', event), false);
+  assert.equal(can(['Event Organiser'], 'org', 'event.create'), true);
+  assert.equal(can(['Event Coordinator'], 'coord', 'event.create'), false);
+});
+
+test('without a record only the role is checked; unknown actions are refused', () => {
+  assert.equal(can(['Venue Staff'], 'vs', 'booking.review'), true);
+  assert.equal(can(['Event Coordinator'], 'coord', 'booking.review'), false);
+  assert.equal(can(['Venue Staff'], 'vs', 'venue.create'), true);
+  assert.equal(can(['Event Coordinator'], 'coord', 'venue.viewCalendar'), true);
+  assert.equal(can(['Event Organiser'], 'org', 'venue.viewCalendar'), false);
+  assert.equal(can(['Venue Staff'], 'vs', 'no.such.action'), false);
+  assert.equal(can([], null, 'event.edit', event), false);
+  assert.equal(can(['Event Coordinator'], null, 'event.edit', event), false);
+});
+
+test('users see only events they are assigned to; a lead sees every event', () => {
+  for (const [role, id] of [['Event Organiser', 'org'], ['Event Coordinator', 'coord'], ['Technical Support Staff', 'tech'], ['Venue Staff', 'vs']]) {
+    assert.equal(canViewEvent([role], id, event), true, role);
+    assert.equal(canViewEvent([role], 'someone-else', event), false, role);
+  }
+  assert.equal(canViewEvent(['Safety Officer'], 'safety', event), false);
+  assert.equal(canViewEvent(['Event Coordinator Lead'], 'lead', event), true);
+  assert.equal(canViewEvent(['Event Coordinator'], null, event), false);
+  assert.equal(canViewEvent(['Event Coordinator Lead'], 'lead', null), false);
 });
 
 test('coordinator assignment and reassignment are restricted to leads', () => {

@@ -7,7 +7,6 @@ import luxonPlugin from '@fullcalendar/luxon3';
 import interactionPlugin from '@fullcalendar/interaction';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext';
-import { hasAccess } from '../auth/access';
 import { VENUE_DAYS, VENUE_FACILITIES, VENUE_ROOM_LAYOUTS } from '../config/venueOptions';
 import { period } from '../services/venueBookings';
 
@@ -38,11 +37,11 @@ const STATUSES = {
 };
 
 function AvailabilityCalendar({ venue }) {
-  const { api, account } = useAuth();
+  const { api, can } = useAuth();
   const [selected, setSelected] = useState(null);
   const calendar = useRef(null);
   const [error, setError] = useState('');
-  const staff = hasAccess(account.user?.roles, ['venue staff']);
+  const staff = can('venue.unblock');
 
   // Venue Staff reopen an unavailable period; bookings it cancelled stay cancelled.
   async function removeBlock() {
@@ -163,7 +162,7 @@ function MarkUnavailable({ venueId, onMarked }) {
 
 export default function VenueDetails() {
   const { venueId } = useParams();
-  const { api, canAccess, account } = useAuth();
+  const { api, can } = useAuth();
   const location = useLocation();
   const [state, setState] = useState({ loading: true, venue: null, error: '' });
   const [calendarVersion, setCalendarVersion] = useState(0);
@@ -201,9 +200,9 @@ export default function VenueDetails() {
             <p className="eyebrow">VENUE MANAGEMENT</p>
             <h1>{venue?.venue_name || 'Venue information'}</h1>
           </div>
-          {canAccess(`/venues/${venueId}/edit`) && <div className="venue-page-actions">
-            <Link className="button-link" to={`/venues/${venueId}/edit`}>Update information</Link>
-            <Link className="button-link danger-link" to={`/venues/${venueId}/delete`}>Delete venue</Link>
+          {(can('venue.edit') || can('venue.delete')) && <div className="venue-page-actions">
+            {can('venue.edit') && <Link className="button-link" to={`/venues/${venueId}/edit`}>Update information</Link>}
+            {can('venue.delete') && <Link className="button-link danger-link" to={`/venues/${venueId}/delete`}>Delete venue</Link>}
           </div>}
         </div>
         {location.state?.message && <p className="panel venue-success" role="status">{location.state.message}</p>}
@@ -216,8 +215,8 @@ export default function VenueDetails() {
           </dl>
         </article>}
         {/* Only Event Coordinators and Venue Staff; the API refuses anyone else too. */}
-        {venue && hasAccess(account.user?.roles, ['event coordinator', 'venue staff']) && <AvailabilityCalendar key={calendarVersion} venue={venue} />}
-        {venue && canAccess(`/venues/${venueId}/edit`) && <MarkUnavailable venueId={venue.venue_id} onMarked={() => setCalendarVersion(value => value + 1)} />}
+        {venue && can('venue.viewCalendar') && <AvailabilityCalendar key={calendarVersion} venue={venue} />}
+        {venue && can('venue.block') && <MarkUnavailable venueId={venue.venue_id} onMarked={() => setCalendarVersion(value => value + 1)} />}
       </main>
     </>
   );
