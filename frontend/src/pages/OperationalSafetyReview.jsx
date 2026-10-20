@@ -12,7 +12,7 @@ function list(items, empty = 'None recorded') {
 }
 
 export default function OperationalSafetyReview() {
-  const { api } = useAuth();
+  const { api, can } = useAuth();
   const { eventId } = useParams();
   const navigate = useNavigate();
   const [state, setState] = useState({ loading: true });
@@ -66,7 +66,7 @@ export default function OperationalSafetyReview() {
           <Detail label="Known venue restrictions">{present(event.venue_restrictions)}</Detail>
         </dl>
       </section>
-      <section className="panel safety-decision" aria-label="Record safety decision">
+      {can('safety.decide') && <section className="panel safety-decision" aria-label="Record safety decision">
         <h2>Safety decision</h2>
         <p>Approve only when the arrangements are safe. Reject or request changes with clear follow-up remarks for the Event Coordinator.</p>
         <fieldset disabled={decision.busy}>
@@ -86,7 +86,7 @@ export default function OperationalSafetyReview() {
             <button type="button" onClick={() => decide('approved')}>{decision.busy ? 'Saving…' : 'Approve and confirm event'}</button>
           </div>
         </fieldset>
-      </section>
+      </section>}
     </>}
   </main>;
 }

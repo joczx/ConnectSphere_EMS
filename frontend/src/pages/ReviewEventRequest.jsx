@@ -12,7 +12,7 @@ const list = (items, show) => items?.length ? items.map(show).join(', ') : 'None
 
 export default function ReviewEventRequest() {
   const { confirm, notify } = useFeedback();
-  const { api } = useAuth();
+  const { api, can } = useAuth();
   const { requestId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -77,7 +77,7 @@ export default function ReviewEventRequest() {
       {state.reviews?.length > 0 && <section className="panel"><h2>Review history</h2><dl>
         {state.reviews.map(review => <div key={review.review_id}><dt>{humanise(review.outcome)} on {when(review.created_at)}</dt><dd>{review.comments || 'No remarks'}</dd></div>)}
       </dl></section>}
-      {request?.status === 'submitted' && <form className="panel" onSubmit={review}>
+      {request?.status === 'submitted' && can('eventRequest.review', request) && <form className="panel" onSubmit={review}>
         <fieldset disabled={state.busy}>
           {errorBox}
           <label>Remarks (required when rejecting)<RequiredIndicator title="Required when rejecting" /><textarea name="comments" rows="4" /></label>

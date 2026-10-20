@@ -19,7 +19,7 @@ const requirementsText = (requirements) => requirements.length
   : 'None';
 
 export default function VenueBookings() {
-  const { api } = useAuth();
+  const { api, can } = useAuth();
   const [params] = useSearchParams();
   const eventId = params.get('event_id') || '';
   const venueId = params.get('venue_id') || '';
@@ -187,7 +187,7 @@ export default function VenueBookings() {
 
     {requesting && !choice && !error && <p role="status">Loading the event and venue…</p>}
 
-    {requesting && choice && !confirmation && <form className="panel" onSubmit={submit}>
+    {requesting && choice && !confirmation && can('booking.request') && <form className="panel" onSubmit={submit}>
       <h2>{bookingId ? 'Change booking to' : 'Request'} {venue?.venue_name}</h2>
       <p>
         For <strong>{event?.event_name}</strong> (#{event?.event_id}). The period and expected
@@ -283,7 +283,7 @@ export default function VenueBookings() {
       {alerts.length > 0 && <section className="panel booking-alerts" role="status" aria-labelledby="booking-alerts-heading">
         <div className="heading venue-section-heading">
           <h2 id="booking-alerts-heading">New decisions on your requests</h2>
-          <button type="button" className="secondary" onClick={dismissAlerts}>Dismiss</button>
+          {can('booking.dismissAlerts') && <button type="button" className="secondary" onClick={dismissAlerts}>Dismiss</button>}
         </div>
         <ul>{alerts.map(alert => <li key={alert.notification_id}>
           {alert.message} <span className="metadata">({formatTime(alert.created_at)})</span>{' '}

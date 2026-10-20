@@ -8,7 +8,7 @@ import { eventRequestsApi, humanise, userId } from '../services/eventRequests';
 
 export default function EventRequests() {
   const { confirm } = useFeedback();
-  const { api, token } = useAuth();
+  const { api, token, can } = useAuth();
   const navigate = useNavigate();
   const [state, setState] = useState({ loading: true });
   useEffect(() => {
@@ -41,8 +41,8 @@ export default function EventRequests() {
           <EventRequestPeople request={item} />
         <span>{item.status === 'draft' ? 'Continue editing →' : item.status === 'rejected' ? 'Amend and resubmit →' : 'View request →'}</span>
       </Link>
-      {['draft', 'submitted', 'rejected'].includes(item.status) && <button type="button" className="secondary" onClick={() => cancel(item)}>Cancel request</button>}
-      {item.status === 'draft' && <button className="delete-draft" title="Delete draft" aria-label={`Delete draft ${item.event_name || 'Untitled request'}`} onClick={() => remove(item)}>−</button>}
+      {['draft', 'submitted', 'rejected'].includes(item.status) && can('eventRequest.cancel', item) && <button type="button" className="secondary" onClick={() => cancel(item)}>Cancel request</button>}
+      {item.status === 'draft' && can('eventRequest.delete', item) && <button className="delete-draft" title="Delete draft" aria-label={`Delete draft ${item.event_name || 'Untitled request'}`} onClick={() => remove(item)}>−</button>}
     </div>)}</div>
   </section>;
   return <>

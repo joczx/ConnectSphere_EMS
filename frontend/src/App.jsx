@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Home from './pages/Home';
 import Events from './pages/Events';
 import Equipment from './pages/Equipment';
+import EquipmentRequests from './pages/EquipmentRequests';
 import EventRequests from './pages/EventRequests';
 import EventRequest from './pages/EventRequest';
 import EventChangeRequest from './pages/EventChangeRequest';
@@ -54,6 +55,7 @@ export default function App() {
     <Route path="/events/:eventId" element={protectedView(<Events />)} />
     <Route path="/reserved-equipment" element={protectedView(<ReservedEquipment />)} />
     <Route path="/equipment" element={protectedView(<Equipment />)} />
+    <Route path="/equipment-requests" element={protectedView(<EquipmentRequests />)} />
     <Route path="/event-requests" element={protectedView(<EventRequests />)} />
     <Route path="/event-requests/:requestId" element={protectedView(<EventRequest />)} />
     <Route path="/event-change-requests/new" element={protectedView(<EventChangeRequest />)} />

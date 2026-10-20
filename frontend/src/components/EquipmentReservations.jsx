@@ -9,7 +9,7 @@ const date = value => new Intl.DateTimeFormat('en-SG', {
 
 export default function EquipmentReservations({ refresh, onChanged, eventId = '' }) {
   const { notify, confirm } = useFeedback();
-  const { api } = useAuth();
+  const { api, can } = useAuth();
   const [rows, setRows] = useState([]);
   const [quantity, setQuantity] = useState('');
   const [editing, setEditing] = useState(null);
@@ -96,10 +96,10 @@ export default function EquipmentReservations({ refresh, onChanged, eventId = ''
           </label>
           <button disabled={busy || Number(quantity) === row.quantity}>{busy ? 'Saving...' : 'Save changes'}</button>
           <button type="button" className="secondary" disabled={busy} onClick={() => { setEditing(null); notify('Reservation editing cancelled. No changes were saved.', 'info'); }}>Cancel editing</button>
-        </form> : <button type="button" className="secondary" disabled={busy} onClick={() => {
+        </form> : can('equipment.manageReservation') && <button type="button" className="secondary" disabled={busy} onClick={() => {
           setEditing(row.reservation_id); setQuantity(String(row.quantity)); setError(''); setMessage('');
         }}>Edit quantity</button>}
-        <button type="button" className="secondary" disabled={busy} onClick={() => change(row, true)}>Cancel reservation</button>
+        {can('equipment.manageReservation') && <button type="button" className="secondary" disabled={busy} onClick={() => change(row, true)}>Cancel reservation</button>}
       </article>)}
     </>}
   </section>;

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 
 export default function ReserveEquipment({ onReserved, refresh = 0 }) {
-  const { api } = useAuth();
+  const { api, can } = useAuth();
   const [events, setEvents] = useState([]);
   const [catalogue, setCatalogue] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -20,8 +20,25 @@ export default function ReserveEquipment({ onReserved, refresh = 0 }) {
     Promise.all([
       api('/api/equipment/reservable-events', { signal: controller.signal, cache: 'no-store' }),
       api('/api/equipment-request-reviews', { signal: controller.signal, cache: 'no-store' }),
-    ]).then(([eventData, requestData]) => {
-      if (!controller.signal.aborted) { setEvents(eventData.events); setRequests(requestData.equipment_requests); setCatalogue(requestData.equipment); setState(s => ({ ...s, loading: false, error: '' })); }
+      api('/api/equipment/reservations', { signal: controller.signal, cache: 'no-store' }),
+    ]).then(async ([eventData, requestData, reservationData]) => {
+      const assigned = eventData.events || [];
+      // Each assigned event's requests, read directly: the review queue alone
+      // can come back empty. Its row is kept where it has one, for the linked
+      // reservation; otherwise a reservation already made for the request
+      // marks it as reserved, so it is not offered twice.
+      const lists = await Promise.all(assigned.map(async event =>
+        (await api(`/api/events/${encodeURIComponent(event.event_id)}/equipment-requests`, { signal: controller.signal, cache: 'no-store' })).equipment_requests || []));
+      if (controller.signal.aborted) return;
+      const queued = new Map((requestData.equipment_requests || []).map(row => [String(row.equipment_request_id), row]));
+      const reserved = new Map((reservationData.reservations || []).filter(row => row.equipment_request_id != null)
+        .map(row => [String(row.equipment_request_id), row]));
+      setRequests(lists.flat().map(row => {
+        const id = String(row.equipment_request_id);
+        const merged = { ...row, ...queued.get(id) };
+        return merged.linked_reservation || !reserved.has(id) ? merged : { ...merged, linked_reservation: reserved.get(id) };
+      }));
+      setEvents(assigned); setCatalogue(requestData.equipment); setState(s => ({ ...s, loading: false, error: '' }));
     }).catch(error => { if (!controller.signal.aborted) setState(s => ({ ...s, loading: false, error: error.message })); });
     return () => controller.abort();
   }, [api, refresh, reload]);
@@ -73,7 +90,7 @@ export default function ReserveEquipment({ onReserved, refresh = 0 }) {
         <option value="">Select equipment</option>{matching.map(row => <option key={row.equipment_id} value={row.equipment_id} disabled={row.available_quantity < request.quantity}>{row.name} ? {row.available_quantity} available</option>)}
       </select></label>
       <label>Quantity<input type="number" required min="1" step="1" value={quantity} onChange={e => setQuantity(e.target.value)} /></label>
-      <button disabled={!request || !equipmentId || state.checking}>Reserve equipment</button>
+      <button disabled={!can('equipment.reserve') || !request || !equipmentId || state.checking}>Reserve equipment</button>
     </fieldset></form>
     {state.error && <p role="alert" className="error">{state.error}</p>}
     {message && <p role="status">{message} <Link to="/equipment">Open Equipment Requests ?</Link></p>}
