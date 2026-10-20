@@ -25,6 +25,13 @@ test('multiple roles combine access and unknown roles cannot access restricted p
   assert.equal(allowed('/equipment', ['Unknown']), false);
 });
 
+test('requesting equipment is for coordinators, reviewing it for technical support', () => {
+  assert.equal(allowed('/equipment-requests', ['Event Coordinator']), true);
+  assert.equal(allowed('/equipment-requests', ['Technical Support Staff']), false);
+  assert.equal(allowed('/equipment-requests', ['Event Organiser']), false);
+  assert.equal(allowed('/equipment', ['Event Coordinator']), false);
+});
+
 test('coordinator assignment and reassignment are restricted to leads', () => {
   for (const path of ['/assign-event-coordinators', '/reassign-event-coordinators']) {
     assert.equal(allowed(path, ['Event Coordinator']), false);

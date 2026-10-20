@@ -13,6 +13,7 @@ export const PAGE_ROLES = {
   '/venue-bookings': coordinator,
   '/review-venue-bookings': venueStaff,
   '/equipment': technical,
+  '/equipment-requests': coordinator,
   '/reserved-equipment': technical,
   '/equipment-availability': [...coordinator, ...technical],
   '/venue-search': coordinator,

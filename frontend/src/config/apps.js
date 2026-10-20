@@ -40,6 +40,14 @@ const apps = [
     roles: [],
   },
   {
+    id: 'equipment-requests',
+    label: 'Request Equipment',
+    description: 'Request equipment for your events and track the decisions',
+    path: '/equipment-requests',
+    icon: '🎛️',
+    roles: [],
+  },
+  {
     id: 'events',
     label: 'Events',
     description: 'Open Events',

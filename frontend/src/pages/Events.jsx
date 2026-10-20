@@ -6,6 +6,7 @@ import { Link, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useFeedback } from '../components/FeedbackProvider';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
+import EquipmentRequestForm from '../components/EquipmentRequestForm';
 import { useAuth } from '../auth/AuthContext';
 import { loadEvents } from '../services/eventLoading';
 import { statusLabel } from '../services/venueBookings';
@@ -84,12 +85,6 @@ export default function Events() {
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
   const manualRefresh = useRef(false);
-  const [form, setForm] = useState({
-    equipment_type: '',
-    quantity: 1,
-    technical_requirements: '',
-  });
-  const [submitState, setSubmitState] = useState({ message: '', error: '' });
   const [userNames, setUserNames] = useState({});
   const [edit, setEdit] = useState({ open: false, values: null, busy: false, error: '', details: null, message: '' });
   const [lifecycle, setLifecycle] = useState({ busy: false, error: '', message: '' });
@@ -168,41 +163,6 @@ export default function Events() {
       });
     return () => { ignore = true; };
   }, [api, eventId, refresh]);
-
-  const [equipmentTypes, setEquipmentTypes] = useState([]);
-  const canRequestEquipment = !!eventId && state.key === eventId
-    && state.data?.event?.status === 'planning'
-    && state.data.event.event_coordinator_id === (token ? userId(token) : null);
-
-  useEffect(() => {
-    if (!canRequestEquipment) return;
-    let ignore = false;
-    api('/api/equipment-types', { cache: 'no-store' })
-      .then(data => { if (!ignore) setEquipmentTypes(data.equipment_types || []); })
-      .catch(err => { if (!ignore) setSubmitState({ message: '', error: err.message }); });
-    return () => { ignore = true; };
-  }, [api, canRequestEquipment]);
-
-  async function submitEquipmentRequest(event) {
-    event.preventDefault();
-    setSubmitState({ message: '', error: '' });
-
-    try {
-      const data = await api(`/api/events/${encodeURIComponent(eventId)}/equipment-requests`, {
-        method: 'POST',
-        body: {
-          equipment_type: form.equipment_type,
-          quantity: Number(form.quantity),
-          technical_requirements: form.technical_requirements,
-        },
-      });
-      setSubmitState({ message: data.message || 'Equipment request submitted successfully.', error: '' });
-      setForm({ equipment_type: '', quantity: 1, technical_requirements: '' });
-      setRefresh(value => value + 1);
-    } catch (err) {
-      setSubmitState({ message: '', error: err.message || 'Unable to submit equipment request.' });
-    }
-  }
 
   const data = state.key === eventId ? state.data : null;
   const event = data?.event;
@@ -420,28 +380,8 @@ export default function Events() {
         <h2>Equipment requests</h2>
         <p className="metadata">Submit each additional equipment requirement here during planning. Technical Support reserves equipment before accepting a request.</p>
         {state.equipmentError && <div className="error">{state.equipmentError}</div>}
-        {submitState.error && <div className="error">{submitState.error}</div>}
-        {submitState.message && <div className="success">{submitState.message}</div>}
 
-        {isCoordinator && editable && <form onSubmit={submitEquipmentRequest} className="event-equipment-form">
-          <h3>New equipment request</h3>
-          <label>
-            Equipment Type
-            <RequiredIndicator /><select value={form.equipment_type} onChange={(e) => setForm({ ...form, equipment_type: e.target.value })} required>
-              <option value="">Select</option>
-              {equipmentTypes.map(type => <option key={type} value={type}>{type}</option>)}
-            </select>
-          </label>
-          <label>
-            Quantity
-            <RequiredIndicator /><input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
-          </label>
-          <label>
-            Technical requirements
-            <textarea value={form.technical_requirements} onChange={(e) => setForm({ ...form, technical_requirements: e.target.value })} rows="6" />
-          </label>
-          <button type="submit">Submit equipment request</button>
-        </form>}
+        {isCoordinator && editable && <EquipmentRequestForm eventId={eventId} onSubmitted={() => setRefresh(value => value + 1)} />}
 
         <div style={{ marginTop: '24px' }}>
           {equipmentRequests.length === 0 ? (

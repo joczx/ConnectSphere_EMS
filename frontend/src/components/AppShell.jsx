@@ -8,7 +8,7 @@ export const APP_ICONS = {
   'assign-event-coordinators': 'requests', 'reassign-event-coordinators': 'events',
   events: 'events', 'event-requests': 'requests', 'review-event-requests': 'check',
   'event-change-requests': 'requests', 'review-event-change-requests': 'check',
-  'venue-bookings': 'requests', equipment: 'equipment', 'reserved-equipment': 'equipment', 'equipment-availability': 'equipment',
+  'venue-bookings': 'requests', equipment: 'equipment', 'equipment-requests': 'equipment', 'reserved-equipment': 'equipment', 'equipment-availability': 'equipment',
   'venue-management': 'venues', 'venue-search': 'search', 'venue-suitability': 'check',
   'operational-safety-reviews': 'check',
 };
