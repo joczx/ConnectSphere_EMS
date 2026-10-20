@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import { period, statusLabel } from '../services/venueBookings';
 
 function describe(conflict) {
+  if (conflict.status === 'blocked') return `Venue unavailable: ${conflict.reason}`;
   if (!conflict.visible) return 'Another event';
   return conflict.event_id ? `${conflict.event_name} (#${conflict.event_id})` : conflict.event_name;
 }
@@ -18,14 +19,18 @@ export default function BookingConflicts({ conflicts, linkFor }) {
   return <ul className="booking-conflicts">
     {conflicts.map(conflict => {
       const to = conflict.visible && linkFor ? linkFor(conflict) : null;
-      return <li key={conflict.booking_id}>
+      return <li key={conflict.booking_id || conflict.block_id}>
         <strong>{period(conflict.starts_at, conflict.ends_at)}</strong>
         {' · '}{to ? <Link to={to}>{describe(conflict)}</Link> : describe(conflict)}
         {' · '}<span className="metadata">{statusLabel(conflict.status)}</span>
+        {/* The venue is held longer than the event itself when it has setup or turnaround time. */}
+        {conflict.occupied_from && (conflict.occupied_from !== conflict.starts_at || conflict.occupied_until !== conflict.ends_at)
+          && <span className="metadata">{' · '}held {period(conflict.occupied_from, conflict.occupied_until)} incl. setup and turnaround</span>}
       </li>;
     })}
   </ul>;
 }
 
-export const approvedOnly = (conflicts) => (conflicts || []).filter(item => item.status === 'approved');
+// Everything that makes a venue unavailable: approved bookings, holds and blocked periods.
+export const approvedOnly = (conflicts) => (conflicts || []).filter(item => item.status !== 'submitted');
 export const pendingOnly = (conflicts) => (conflicts || []).filter(item => item.status === 'submitted');

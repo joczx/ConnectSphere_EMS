@@ -268,6 +268,44 @@ def venue_availability(venue_id):
     return jsonify(result)
 
 
+@venues.post("/<venue_id>/unavailability")
+def mark_unavailable(venue_id):
+    """Block a venue for a period. The database cancels the bookings it affects
+    and notifies their coordinators."""
+    token = authenticated_token()
+    body = request.get_json(silent=True) or {}
+    try:
+        payload = {"p_venue_id": str(UUID(venue_id))}
+        for key in ("starts", "ends"):
+            moment = datetime.fromisoformat(body[f"{key}_at"])
+            if moment.tzinfo is None:
+                raise ValueError
+            payload[f"p_{key}"] = moment.isoformat()
+    except (KeyError, TypeError, ValueError):
+        return jsonify(error="Provide a valid venue, start and end."), 400
+    if not isinstance(body.get("reason"), str) or not body["reason"].strip():
+        return jsonify(error="Enter a reason for the unavailability.", errors={"reason": "A reason is required."}), 400
+    payload["p_reason"] = body["reason"]
+    result = supabase_request("/rest/v1/rpc/block_venue", token=token, payload=payload)
+    if result.get("error"):
+        return jsonify(error=result["error"]), result.get("status", 400)
+    return jsonify(message="Venue marked unavailable.", **result), 201
+
+
+@venues.delete("/<venue_id>/unavailability/<block_id>")
+def remove_unavailability(venue_id, block_id):
+    """Reopen an unavailable period for new requests."""
+    token = authenticated_token()
+    try:
+        block_id = str(UUID(block_id))
+    except ValueError:
+        return jsonify(error="Unavailable period not found."), 404
+    result = supabase_request("/rest/v1/rpc/unblock_venue", token=token, payload={"p_block_id": block_id})
+    if result.get("error"):
+        return jsonify(error=result["error"]), result.get("status", 400)
+    return jsonify(message="Unavailable period removed.", **result)
+
+
 @venues.get("/<venue_id>/deletion-check")
 def check_venue_deletion(venue_id):
     """Load the confirmation information and any upcoming-event conflicts."""

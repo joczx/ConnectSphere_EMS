@@ -62,6 +62,35 @@ export default function ReviewVenueBooking() {
     }
   }
 
+  // Reserves the venue until the expiry; approving the request confirms it.
+  async function placeHold(event) {
+    event.preventDefault();
+    const expires = new FormData(event.currentTarget).get('expires_at');
+    setAttempt({ busy: true, error: '', fieldError: '', unmet: [] });
+    try {
+      const result = await venueBookingsApi(api, `/${encodeURIComponent(bookingId)}/hold`, {
+        method: 'POST', body: { expires_at: `${expires}:00+08:00` },
+      });
+      navigate('/review-venue-bookings/' + bookingId, { replace: true, state: { message: result.message } });
+      setAttempt({ busy: false, error: '', fieldError: '', unmet: [] });
+    } catch (err) {
+      setAttempt({ busy: false, error: err.message || 'Unable to place the hold.', fieldError: '', unmet: [] });
+    }
+  }
+
+  async function releaseHold() {
+    if (!(await confirm('Release this tentative hold? The venue becomes available to other requests straight away.',
+      { title: 'Release hold', confirmLabel: 'Release hold', destructive: true }))) return;
+    setAttempt({ busy: true, error: '', fieldError: '', unmet: [] });
+    try {
+      const result = await venueBookingsApi(api, `/${encodeURIComponent(bookingId)}/hold`, { method: 'DELETE' });
+      navigate('/review-venue-bookings/' + bookingId, { replace: true, state: { message: result.message } });
+      setAttempt({ busy: false, error: '', fieldError: '', unmet: [] });
+    } catch (err) {
+      setAttempt({ busy: false, error: err.message || 'Unable to release the hold.', fieldError: '', unmet: [] });
+    }
+  }
+
   const booking = state.data?.booking;
   const pending = booking?.status === 'submitted';
   const shortfalls = booking?.current_shortfalls || [];
@@ -122,6 +151,19 @@ export default function ReviewVenueBooking() {
             </button>
           </div>
         </fieldset>
+      </form>}
+
+      {pending && state.data?.can_review && booking.hold_expires_at && <section className="panel">
+        <h2>Tentative hold</h2>
+        <p>Approve the request to confirm the hold, or release it to free the venue now.</p>
+        <button type="button" className="secondary" disabled={attempt.busy} onClick={releaseHold}>Release hold</button>
+      </section>}
+
+      {pending && state.data?.can_review && !booking.hold_expires_at && !booked && <form className="panel" onSubmit={placeHold}>
+        <h2>Place a tentative hold</h2>
+        <p className="metadata">Reserves the venue until the expiry. Approve the request before then to confirm it, or the hold expires and the venue is released. Singapore time (SGT).</p>
+        <label>Hold expires<RequiredIndicator /><input type="datetime-local" name="expires_at" required /></label>
+        <button type="submit" disabled={attempt.busy}>Place tentative hold</button>
       </form>}
     </main>
   </>;

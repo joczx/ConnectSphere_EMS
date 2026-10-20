@@ -757,3 +757,81 @@ class VenueAvailabilityTests(unittest.TestCase):
 
     def test_sign_in_is_required(self):
         self.assertEqual(self.client.get(self.PATH).status_code, 401)
+
+
+class SetupTurnaroundValidationTests(unittest.TestCase):
+    """Setup and turnaround time: whole minutes from 0 to 1440, with a message naming the field."""
+
+    def test_invalid_minutes_are_refused_by_name(self):
+        for field, label in (("default_setup_minutes", "Setup time"), ("default_turnaround_minutes", "Turnaround time")):
+            for value in (-1, 1441, 2.5, "30", None, True):
+                with self.subTest(field=field, value=value):
+                    _, _, errors = parse_update({"version": 1, field: value})
+                    self.assertEqual(errors[field], f"{label} must be a whole number of minutes from 0 to 1440.")
+
+    def test_boundaries_are_accepted_on_create_and_update(self):
+        for value in (0, 1440):
+            with self.subTest(value=value):
+                _, errors = parse_create(valid_venue(default_setup_minutes=value, default_turnaround_minutes=value))
+                self.assertNotIn("default_setup_minutes", errors)
+                self.assertNotIn("default_turnaround_minutes", errors)
+                changes, _, errors = parse_update({"version": 1, "default_setup_minutes": value})
+                self.assertEqual(changes["default_setup_minutes"], value)
+
+
+class VenueUnavailabilityTests(unittest.TestCase):
+    """Marking a venue temporarily unavailable."""
+
+    BODY = {"starts_at": "2026-11-01T09:00:00+08:00", "ends_at": "2026-11-01T17:00:00+08:00", "reason": "Burst pipe"}
+
+    def post(self, body, result=None):
+        with patch("app.routes.venues.authenticated_token", return_value="staff-token"), patch(
+            "app.routes.venues.supabase_request", return_value=result or {}
+        ) as query:
+            return create_app().test_client().post(f"/api/venues/{VENUE_ID}/unavailability", json=body), query
+
+    def test_the_block_and_its_affected_bookings_are_returned(self):
+        result = {"block": {"reason": "Burst pipe"}, "affected": [{"event_name": "Halloween"}]}
+        response, query = self.post(self.BODY, result)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json["affected"], [{"event_name": "Halloween"}])
+        self.assertEqual(query.call_args.args[0], "/rest/v1/rpc/block_venue")
+        self.assertEqual(query.call_args.kwargs["payload"], {
+            "p_venue_id": VENUE_ID, "p_starts": "2026-11-01T09:00:00+08:00",
+            "p_ends": "2026-11-01T17:00:00+08:00", "p_reason": "Burst pipe"})
+
+    def test_invalid_requests_never_reach_the_database(self):
+        for body in ({}, {**self.BODY, "starts_at": "2026-11-01T09:00"}, {**self.BODY, "reason": " "}):
+            with self.subTest(body=body):
+                response, query = self.post(body)
+                self.assertEqual(response.status_code, 400)
+                query.assert_not_called()
+
+    def test_a_database_refusal_is_passed_on(self):
+        response, _ = self.post(self.BODY, {"error": "Only Venue Staff can mark a venue unavailable.", "status": 403})
+        self.assertEqual(response.status_code, 403)
+
+
+class RemoveUnavailabilityTests(unittest.TestCase):
+    BLOCK = str(uuid4())
+
+    def delete(self, block_id, result=None):
+        with patch("app.routes.venues.authenticated_token", return_value="staff-token"), patch(
+            "app.routes.venues.supabase_request", return_value=result or {}
+        ) as query:
+            return create_app().test_client().delete(f"/api/venues/{VENUE_ID}/unavailability/{block_id}"), query
+
+    def test_an_unavailable_period_can_be_removed(self):
+        response, query = self.delete(self.BLOCK, {"block": {"block_id": self.BLOCK}})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(query.call_args.args[0], "/rest/v1/rpc/unblock_venue")
+        self.assertEqual(query.call_args.kwargs["payload"], {"p_block_id": self.BLOCK})
+
+    def test_a_malformed_period_is_not_found(self):
+        response, query = self.delete("not-a-uuid")
+        self.assertEqual(response.status_code, 404)
+        query.assert_not_called()
+
+    def test_a_refusal_is_passed_on(self):
+        response, _ = self.delete(self.BLOCK, {"error": "Only Venue Staff can remove an unavailable period.", "status": 403})
+        self.assertEqual(response.status_code, 403)

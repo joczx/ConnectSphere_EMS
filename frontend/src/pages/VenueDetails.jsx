@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -30,17 +30,31 @@ function hours(operatingHours) {
 
 // Calendar statuses and their colours. Unavailable time (outside operating
 // hours) is FullCalendar's shaded non-business time; anything unmarked is available.
+const SETUP_COLOR = '#a5b4fc';
 const STATUSES = {
   approved: ['Confirmed', '#0f766e'],
-  submitted: ['Tentatively held', '#d97706'],
+  held: ['Tentatively held', '#d97706'],
   blocked: ['Blocked', '#64748b'],
 };
 
 function AvailabilityCalendar({ venue }) {
   const { api, account } = useAuth();
   const [selected, setSelected] = useState(null);
+  const calendar = useRef(null);
   const [error, setError] = useState('');
   const staff = hasAccess(account.user?.roles, ['venue staff']);
+
+  // Venue Staff reopen an unavailable period; bookings it cancelled stay cancelled.
+  async function removeBlock() {
+    if (!window.confirm('Remove this unavailable period? The venue can be requested for this time again.')) return;
+    try {
+      await api(`/api/venues/${venue.venue_id}/unavailability/${selected.block_id}`, { method: 'DELETE' });
+      setSelected(null);
+      calendar.current.getApi().refetchEvents();
+    } catch (err) {
+      setError(err.message || 'Unable to remove the unavailable period.');
+    }
+  }
 
   // Fetches only the range on screen, each time the view or date changes.
   const load = useCallback((range, success, failure) => {
@@ -49,9 +63,14 @@ function AvailabilityCalendar({ venue }) {
       .then(data => {
         setError('');
         success([
-          ...data.bookings.map(item => ({ ...item, title: item.visible ? item.event_name : 'Another event' })),
+          ...data.bookings.filter(item => item.status !== 'submitted')
+            .map(item => ({ ...item, title: item.visible ? item.event_name : 'Another event' })),
           ...data.blocks.map(item => ({ ...item, status: 'blocked', title: item.reason || 'Blocked' })),
-        ].map(item => ({ title: item.title, start: item.starts_at, end: item.ends_at, color: STATUSES[item.status][1], extendedProps: item })));
+        ].map(item => ({ title: item.title, start: item.starts_at, end: item.ends_at, color: STATUSES[item.status][1], extendedProps: item }))
+          // Setup before and turnaround after each booking, when the venue needs them.
+          .concat(data.bookings.filter(item => item.status !== 'submitted').flatMap(item => [[item.occupied_from, item.starts_at], [item.ends_at, item.occupied_until]])
+            .filter(([start, end]) => start && end && start !== end)
+            .map(([start, end]) => ({ start, end, display: 'background', color: SETUP_COLOR }))));
       })
       .catch(err => { setError(err.message); failure(err); });
   }, [api, venue.venue_id]);
@@ -66,13 +85,14 @@ function AvailabilityCalendar({ venue }) {
   return <section className="panel" style={{ '--fc-today-bg-color': '#e0f2fe' }}>
     <h2>Availability</h2>
     <p className="metadata">
-      {[...Object.values(STATUSES), ['Unavailable (closed)', '#e2e8f0']].map(([label, color]) => <span key={label} style={{ marginRight: 16 }}>
+      {[...Object.values(STATUSES), ['Setup / turnaround', SETUP_COLOR], ['Unavailable (closed)', '#e2e8f0']].map(([label, color]) => <span key={label} style={{ marginRight: 16 }}>
         <span style={{ display: 'inline-block', width: 12, height: 12, marginRight: 6, background: color }} />{label}
       </span>)}
       Unmarked times are available. All times are Singapore time (SGT).
     </p>
     {error && <p className="error" role="alert">{error}</p>}
     <FullCalendar
+      ref={calendar}
       plugins={[dayGridPlugin, timeGridPlugin, luxonPlugin, interactionPlugin]}
       timeZone="Asia/Singapore"
       initialView="dayGridMonth"
@@ -90,8 +110,54 @@ function AvailabilityCalendar({ venue }) {
       <p>{selected.status === 'blocked' ? selected.reason || 'No reason given'
         : selected.visible ? `${selected.event_name} (#${selected.event_id})` : 'Another event'}</p>
       {link && <Link to={link}>View booking request</Link>}{' '}
+      {staff && selected.status === 'blocked' && <button type="button" className="danger-button" onClick={removeBlock}>Remove unavailable period</button>}{' '}
       <button type="button" className="secondary" onClick={() => setSelected(null)}>Close</button>
     </div>}
+  </section>;
+}
+
+// Venue Staff only. Blocking a period cancels the pending and approved bookings in
+// it; the database notifies their coordinators and returns them for display.
+function MarkUnavailable({ venueId, onMarked }) {
+  const { api } = useAuth();
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    if (!window.confirm('Mark this venue unavailable? Pending and approved bookings in this period will be cancelled and their Event Coordinators notified.')) return;
+    setError('');
+    setResult(null);
+    try {
+      const sgt = (name) => new Date(`${data.get(name)}:00+08:00`).toISOString();
+      setResult(await api(`/api/venues/${venueId}/unavailability`, {
+        method: 'POST', body: { starts_at: sgt('starts_at'), ends_at: sgt('ends_at'), reason: data.get('reason') },
+      }));
+      form.reset();
+      onMarked();
+    } catch (err) {
+      setError(err.message || 'Unable to mark the venue unavailable.');
+    }
+  }
+
+  return <section className="panel">
+    <h2>Mark temporarily unavailable</h2>
+    <p className="metadata">Pending and approved bookings during this period are cancelled and their Event Coordinators notified. Times are Singapore time (SGT).</p>
+    {error && <p className="error" role="alert">{error}</p>}
+    {result && <div className="venue-success" role="status">
+      <p>Venue marked unavailable. {result.affected.length ? 'These bookings were cancelled and their coordinators notified:' : 'No bookings were affected.'}</p>
+      {result.affected.length > 0 && <ul>{result.affected.map(item => <li key={item.booking_id}>
+        <Link to={`/review-venue-bookings/${item.booking_id}`}>{item.event_name} (#{item.event_id})</Link> · {period(item.starts_at, item.ends_at)}
+      </li>)}</ul>}
+    </div>}
+    <form className="venue-form-grid" onSubmit={submit}>
+      <label>Start<input type="datetime-local" name="starts_at" required /></label>
+      <label>End<input type="datetime-local" name="ends_at" required /></label>
+      <label>Reason<input name="reason" required maxLength={500} /></label>
+      <button type="submit">Mark unavailable</button>
+    </form>
   </section>;
 }
 
@@ -100,6 +166,7 @@ export default function VenueDetails() {
   const { api, canAccess, account } = useAuth();
   const location = useLocation();
   const [state, setState] = useState({ loading: true, venue: null, error: '' });
+  const [calendarVersion, setCalendarVersion] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -149,7 +216,8 @@ export default function VenueDetails() {
           </dl>
         </article>}
         {/* Only Event Coordinators and Venue Staff; the API refuses anyone else too. */}
-        {venue && hasAccess(account.user?.roles, ['event coordinator', 'venue staff']) && <AvailabilityCalendar venue={venue} />}
+        {venue && hasAccess(account.user?.roles, ['event coordinator', 'venue staff']) && <AvailabilityCalendar key={calendarVersion} venue={venue} />}
+        {venue && canAccess(`/venues/${venueId}/edit`) && <MarkUnavailable venueId={venue.venue_id} onMarked={() => setCalendarVersion(value => value + 1)} />}
       </main>
     </>
   );

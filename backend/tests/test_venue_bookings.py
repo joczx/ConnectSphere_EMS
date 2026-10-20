@@ -168,3 +168,58 @@ def test_cancelling_a_malformed_id_is_not_found(query):
     response = create_app().test_client().post('/api/venue-bookings/not-a-uuid/cancel', headers=HEADERS)
     assert response.status_code == 404
     assert query.call_count == 1
+
+
+@pytest.mark.parametrize('body', [{}, {'expires_at': None}, {'expires_at': 'tomorrow'}, {'expires_at': '2099-01-01T10:00'}])
+@patch('app.routes.venue_bookings.supabase_request', return_value={'id': 'staff'})
+def test_a_hold_without_a_valid_expiry_is_refused(query, body):
+    response = create_app().test_client().post(f'/api/venue-bookings/{BOOKING}/hold', json=body, headers=HEADERS)
+    assert response.status_code == 400
+    assert 'expires_at' in response.json['errors']
+    assert query.call_count == 1
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_a_hold_is_placed_with_its_expiry(query):
+    query.side_effect = [{'id': 'staff'}, {'booking': {'booking_id': BOOKING, 'hold_expires_at': '2099-01-01T10:00:00+08:00'}}]
+    response = create_app().test_client().post(f'/api/venue-bookings/{BOOKING}/hold',
+                                               json={'expires_at': '2099-01-01T10:00:00+08:00'}, headers=HEADERS)
+    assert response.status_code == 200
+    assert query.call_args.args[0] == '/rest/v1/rpc/hold_venue_booking'
+    assert query.call_args.kwargs['payload'] == {'p_booking_id': BOOKING, 'p_expires_at': '2099-01-01T10:00:00+08:00'}
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_a_refused_hold_is_passed_on(query):
+    query.side_effect = [{'id': 'staff'}, {'error': 'The venue is already booked, held or unavailable at this time.', 'status': 409}]
+    response = create_app().test_client().post(f'/api/venue-bookings/{BOOKING}/hold',
+                                               json={'expires_at': '2099-01-01T10:00:00+08:00'}, headers=HEADERS)
+    assert response.status_code == 409
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_a_hold_can_be_released_early(query):
+    query.side_effect = [{'id': 'staff'}, {'booking': {'booking_id': BOOKING, 'status': 'submitted', 'hold_expires_at': None}}]
+    response = create_app().test_client().delete(f'/api/venue-bookings/{BOOKING}/hold', headers=HEADERS)
+    assert response.status_code == 200
+    assert response.json['booking']['hold_expires_at'] is None
+    assert query.call_args.args[0] == '/rest/v1/rpc/release_venue_hold'
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_releasing_without_an_active_hold_is_refused(query):
+    query.side_effect = [{'id': 'staff'}, {'error': 'This request has no active hold.', 'status': 409}]
+    response = create_app().test_client().delete(f'/api/venue-bookings/{BOOKING}/hold', headers=HEADERS)
+    assert response.status_code == 409
+
+
+@pytest.mark.parametrize('method,path,body', [
+    ('post', '/api/venue-bookings', VALID),
+    ('patch', f'/api/venue-bookings/{BOOKING}', MODIFY),
+])
+@patch('app.routes.venue_bookings.supabase_request')
+def test_a_second_active_request_for_the_same_venue_and_event_is_refused(query, method, path, body):
+    query.side_effect = [{'id': 'coordinator'}, StoreError(503, code='23505')]
+    response = getattr(create_app().test_client(), method)(path, json=body, headers=HEADERS)
+    assert response.status_code == 409
+    assert 'already has a pending or approved booking for this venue' in response.json['error']

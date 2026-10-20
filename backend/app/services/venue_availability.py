@@ -6,23 +6,11 @@ approved booking makes a venue unavailable; pending requests may overlap.
 The rule is the database's (027_venue_booking_conflicts.sql), which refuses a
 conflicting request or approval outright. This module applies the same rule to
 search results, so a booked venue is marked before anyone tries to request it.
+The database decides which bookings clash, including each venue's setup and
+turnaround time (040), so every booking returned here is a real conflict.
 """
 
-from datetime import datetime, timezone
-
 from app.services.event_store import supabase_request
-
-
-def overlaps(start_a, end_a, start_b, end_b):
-    """True when two periods share any moment.
-
-    Periods are half-open, [start, end), matching the database: a booking that
-    ends at 18:00 leaves the venue free for one that starts at 18:00.
-    """
-    start_a, end_a, start_b, end_b = (_moment(v) for v in (start_a, end_a, start_b, end_b))
-    if None in (start_a, end_a, start_b, end_b):
-        return False
-    return start_a < end_b and start_b < end_a
 
 
 def approved_bookings(starts, ends, token):
@@ -39,7 +27,7 @@ def approved_bookings(starts, ends, token):
     return rows if isinstance(rows, list) else []
 
 
-def attach_conflicts(venues, bookings, starts, ends):
+def attach_conflicts(venues, bookings):
     """Copy each venue with the approved bookings that make it unavailable.
 
     A venue with any is no longer eligible, whatever it is like otherwise.
@@ -50,8 +38,7 @@ def attach_conflicts(venues, bookings, starts, ends):
         conflicts = [
             booking for booking in bookings
             if booking.get('venue_id') == venue.get('venue_id')
-            and booking.get('status', 'approved') == 'approved'
-            and overlaps(booking.get('starts_at'), booking.get('ends_at'), starts, ends)
+            and booking.get('status', 'approved') != 'submitted'  # approved, held or blocked
         ]
         eligible = venue.get('eligible', True) and not conflicts
         marked.append({**venue, 'conflicts': conflicts, 'eligible': eligible})
@@ -68,18 +55,6 @@ def mark_for_event(venues, event, token, ignore=None):
     starts, ends = event.get('start_datetime'), event.get('end_datetime')
     if not starts or not ends:
         return [{**venue, 'conflicts': []} for venue in venues]
-    bookings = [b for b in approved_bookings(starts, ends, token) if b.get('booking_id') != ignore]
-    return attach_conflicts(venues, bookings, starts, ends)
+    bookings = [b for b in approved_bookings(starts, ends, token) if ignore is None or b.get('booking_id') != ignore]
+    return attach_conflicts(venues, bookings)
 
-
-def _moment(value):
-    if isinstance(value, datetime):
-        moment = value
-    elif isinstance(value, str) and value.strip():
-        try:
-            moment = datetime.fromisoformat(value.strip().replace('Z', '+00:00'))
-        except ValueError:
-            return None
-    else:
-        return None
-    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)

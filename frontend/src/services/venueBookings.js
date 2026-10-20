@@ -10,6 +10,9 @@ export const STATUS_LABELS = {
   approved: 'Approved',
   rejected: 'Rejected',
   cancelled: 'Cancelled',
+  blocked: 'Venue unavailable',
+  held: 'Tentatively held',
+  expired: 'Expired',
 };
 
 export const statusLabel = (status) => STATUS_LABELS[status] || status || 'Unknown';
