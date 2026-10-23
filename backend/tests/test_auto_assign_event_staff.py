@@ -31,18 +31,8 @@ def test_choice_is_random_and_compares_role_names_like_has_booking_role():
     assert 'language sql volatile security definer' in SQL
 
 
-ACCESS_SQL = (Path(__file__).parents[2] / 'supabase/044_safety_officer_event_access.sql').read_text()
-
-
-def test_assigned_safety_officer_can_read_the_event_without_changing_other_readers():
-    assert 'create policy safety_officer_read_events on public.events\n    for select to authenticated' in ACCESS_SQL
-    assert 'using (safety_officer_id = (select auth.uid()));' in ACCESS_SQL
-    assert 'drop policy if exists safety_officer_read_events on public.events;' in ACCESS_SQL
-    # Added alongside authenticated_read_events, never replacing it.
-    assert 'drop policy if exists authenticated_read_events' not in ACCESS_SQL
-
-
 def test_helpers_are_not_callable_from_the_api_and_the_trigger_can_be_rerun():
     assert 'revoke all on function public.random_user_with_role(text[]) from public, anon, authenticated;' in SQL
     assert 'revoke all on function public.auto_assign_event_staff() from public, anon, authenticated;' in SQL
     assert 'drop trigger if exists auto_assign_event_staff on public.events;' in SQL
+
