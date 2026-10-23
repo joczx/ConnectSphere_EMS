@@ -54,7 +54,7 @@ test('a lead is not a coordinator and a coordinator is not a lead', () => {
 
 const event = {
   event_organiser_id: 'org', event_coordinator_id: 'coord',
-  technical_support_id: 'tech', venue_staff_id: 'vs',
+  technical_support_id: 'tech', venue_staff_id: 'vs', safety_officer_id: 'safety',
 };
 
 test('only the assigned coordinator edits, cancels and requests for an event', () => {
@@ -77,6 +77,12 @@ test('organiser and technical support actions need both the role and the link', 
   assert.equal(can(['Event Coordinator'], 'coord', 'event.create'), false);
 });
 
+test('only the assigned safety officer decides the safety review of an event', () => {
+  assert.equal(can(['Safety Officer'], 'safety', 'safety.decide', event), true);
+  assert.equal(can(['Safety Officer'], 'another-officer', 'safety.decide', event), false);
+  assert.equal(can(['Event Coordinator'], 'safety', 'safety.decide', event), false);
+});
+
 test('without a record only the role is checked; unknown actions are refused', () => {
   assert.equal(can(['Venue Staff'], 'vs', 'booking.review'), true);
   assert.equal(can(['Event Coordinator'], 'coord', 'booking.review'), false);
@@ -93,7 +99,8 @@ test('users see only events they are assigned to; a lead sees every event', () =
     assert.equal(canViewEvent([role], id, event), true, role);
     assert.equal(canViewEvent([role], 'someone-else', event), false, role);
   }
-  assert.equal(canViewEvent(['Safety Officer'], 'safety', event), false);
+  assert.equal(canViewEvent(['Safety Officer'], 'safety', event), true);
+  assert.equal(canViewEvent(['Safety Officer'], 'another-officer', event), false);
   assert.equal(canViewEvent(['Event Coordinator Lead'], 'lead', event), true);
   assert.equal(canViewEvent(['Event Coordinator'], null, event), false);
   assert.equal(canViewEvent(['Event Coordinator Lead'], 'lead', null), false);

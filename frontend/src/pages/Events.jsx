@@ -203,6 +203,7 @@ export default function Events() {
       event.event_coordinator_id,
       event.technical_support_id,
       event.venue_staff_id,
+      event.safety_officer_id,
     ].filter(Boolean).join(',');
 
     if (ids) {
@@ -416,6 +417,7 @@ export default function Events() {
           <Detail label="Event coordinator" value={userNames[event.event_coordinator_id] || (event.event_coordinator_id ? event.event_coordinator_id.slice(0, 8) : '-')} />
           <Detail label="Technical support" value={userNames[event.technical_support_id] || (event.technical_support_id ? event.technical_support_id.slice(0, 8) : '-')} />
           <Detail label="Venue staff" value={userNames[event.venue_staff_id] || (event.venue_staff_id ? event.venue_staff_id.slice(0, 8) : '-')} />
+          <Detail label="Safety officer" value={userNames[event.safety_officer_id] || (event.safety_officer_id ? event.safety_officer_id.slice(0, 8) : '-')} />
 </dl></section>}
       {eventId && event && venue.allowed && <section className="panel event-detail-section" id="event-venue" tabIndex={-1}>
         <h2>Venue</h2>
