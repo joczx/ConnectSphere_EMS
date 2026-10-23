@@ -223,3 +223,27 @@ def test_a_second_active_request_for_the_same_venue_and_event_is_refused(query, 
     response = getattr(create_app().test_client(), method)(path, json=body, headers=HEADERS)
     assert response.status_code == 409
     assert 'already has a pending or approved booking for this venue' in response.json['error']
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_people_assigned_to_an_event_read_its_bookings(query):
+    query.side_effect = [{'id': 'organiser'}, {'bookings': [{'booking_id': 'b1', 'event_id': 4, 'venue_name': 'Hall'}]}]
+    response = create_app().test_client().get('/api/venue-bookings/events/4', headers=HEADERS)
+    assert response.status_code == 200
+    assert response.json['bookings'][0]['venue_name'] == 'Hall'
+    assert query.call_args.args[0] == '/rest/v1/rpc/event_venue_bookings'
+    assert query.call_args.kwargs['payload'] == {'p_event_id': 4}
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_event_bookings_pass_on_the_database_refusal(query):
+    query.side_effect = [{'id': 'stranger'}, {'error': 'Only the people assigned to this event can view its venue bookings.', 'status': 403}]
+    response = create_app().test_client().get('/api/venue-bookings/events/4', headers=HEADERS)
+    assert response.status_code == 403
+    assert 'assigned to this event' in response.json['error']
+
+
+@patch('app.routes.venue_bookings.supabase_request')
+def test_event_bookings_require_sign_in(query):
+    assert create_app().test_client().get('/api/venue-bookings/events/4').status_code == 401
+    query.assert_not_called()

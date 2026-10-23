@@ -36,3 +36,15 @@ def test_helpers_are_not_callable_from_the_api_and_the_trigger_can_be_rerun():
     assert 'revoke all on function public.auto_assign_event_staff() from public, anon, authenticated;' in SQL
     assert 'drop trigger if exists auto_assign_event_staff on public.events;' in SQL
 
+
+
+BOOKINGS_SQL = (Path(__file__).parents[2] / 'supabase/045_event_venue_bookings_for_assigned_staff.sql').read_text()
+
+
+def test_event_bookings_are_read_only_for_everyone_the_event_names():
+    for column in ('event_organiser_id', 'event_coordinator_id', 'technical_support_id', 'venue_staff_id', 'safety_officer_id'):
+        assert f'auth.uid() is distinct from planned.{column}' in BOOKINGS_SQL
+    assert 'where b.event_id = p_event_id' in BOOKINGS_SQL
+    for word in ('insert into', 'update public.', 'delete from'):
+        assert word not in BOOKINGS_SQL
+    assert 'revoke all on function public.event_venue_bookings(integer) from public, anon;' in BOOKINGS_SQL

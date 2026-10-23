@@ -145,20 +145,35 @@ export default function Events() {
   useEffect(() => {
     if (!eventId) return undefined;
     let ignore = false;
-    api('/api/venue-bookings', { cache: 'no-store' })
+    // This event's bookings, for everyone the event names: its Organiser,
+    // Coordinator, Technical Support, Venue Staff and Safety Officer (045).
+    // Whether a coordinator may request a venue is decided by
+    // can('event.findVenue') where the button is shown.
+    api(`/api/venue-bookings/events/${encodeURIComponent(eventId)}`, { cache: 'no-store' })
       .then(data => {
-        if (ignore) return;
-        const forThisEvent = (data.bookings || [])
-          .filter(booking => String(booking.event_id) === String(eventId));
-        setVenue(current => ({ ...current, bookings: forThisEvent, error: '', allowed: true, canRequest: !!data.can_submit }));
+        if (!ignore) setVenue(current => ({ ...current, bookings: data.bookings || [], error: '', allowed: true, canRequest: true }));
       })
       .catch(err => {
         if (ignore) return;
-        // Only Event Coordinators and Venue Staff may list venue bookings, so
-        // everyone else is refused. That is not a failure: the people below
-        // still see the event's assigned venue, without the booking list.
-        if (err.status === 403) setVenue(current => ({ ...current, allowed: false, error: '' }));
-        else setVenue(current => ({ ...current, error: err.message || 'Unable to load venue booking requests.' }));
+        // Not assigned to the event: no booking list.
+        if (err.status === 403 || err.status === 404) {
+          setVenue(current => ({ ...current, allowed: false, error: '' }));
+          return;
+        }
+        // Until 045 is run the endpoint is unavailable. Fall back to the full
+        // list, which serves Event Coordinators and Venue Staff only.
+        api('/api/venue-bookings', { cache: 'no-store' })
+          .then(data => {
+            if (ignore) return;
+            const forThisEvent = (data.bookings || [])
+              .filter(booking => String(booking.event_id) === String(eventId));
+            setVenue(current => ({ ...current, bookings: forThisEvent, error: '', allowed: true, canRequest: !!data.can_submit }));
+          })
+          .catch(fallback => {
+            if (ignore) return;
+            if (fallback.status === 403) setVenue(current => ({ ...current, allowed: false, error: '' }));
+            else setVenue(current => ({ ...current, error: fallback.message || 'Unable to load venue booking requests.' }));
+          });
       });
     return () => { ignore = true; };
   }, [api, eventId, refresh]);
