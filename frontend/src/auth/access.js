@@ -36,12 +36,13 @@ export function hasAccess(roles = [], required = []) {
 }
 
 // How a user can be linked to an event or event request, by the column that
-// names them.
+// names them. safety_officer_id is filled on approval (043).
 const RELATION_FIELDS = {
   organiser: 'event_organiser_id',
   coordinator: 'event_coordinator_id',
   technical: 'technical_support_id',
   venueStaff: 'venue_staff_id',
+  safety: 'safety_officer_id',
 };
 
 // Who may see each action's button. `roles`: the user must hold one of them.
@@ -78,7 +79,7 @@ export const ACTIONS = {
   'venue.unblock': { roles: venueStaff },
   'venue.viewCalendar': { roles: [...coordinator, ...venueStaff] },
 
-  'safety.decide': { roles: safetyOfficer },
+  'safety.decide': { roles: safetyOfficer, relation: ['safety'] },
 
   'equipment.request': { roles: coordinator, relation: ['coordinator'] },
   'equipment.review': { roles: technical, relation: ['technical'] },
@@ -87,7 +88,7 @@ export const ACTIONS = {
 };
 
 // Which events a user sees: the ones they are linked to as organiser,
-// coordinator, technical support or venue staff. An Event Coordinator Lead
+// coordinator, technical support, venue staff or safety officer. An Event Coordinator Lead
 // sees every event.
 export function canViewEvent(roles, userId, event) {
   if (!event) return false;

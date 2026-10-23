@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext';
 import { formatDateTime, present, safetyStatusLabel } from '../services/operationalSafety';
 
@@ -20,11 +21,22 @@ export default function OperationalSafetyReview() {
 
   useEffect(() => {
     const controller = new AbortController();
-    api(`/api/operational-safety-reviews/${encodeURIComponent(eventId)}`, { cache: 'no-store', signal: controller.signal })
-      .then(data => { if (!controller.signal.aborted) setState({ loading: false, event: data.event }); })
+    Promise.all([
+      api(`/api/operational-safety-reviews/${encodeURIComponent(eventId)}`, { cache: 'no-store', signal: controller.signal }),
+      api(`/api/events/${encodeURIComponent(eventId)}`, { cache: 'no-store', signal: controller.signal, feedback: false }),
+    ])
+      .then(([data, eventData]) => {
+        if (controller.signal.aborted) return;
+        // Only the Safety Officer assigned to this event reviews it.
+        if (!can('safety.decide', eventData.event || null)) {
+          setState({ loading: false, error: 'Event not found or access unavailable.' });
+          return;
+        }
+        setState({ loading: false, event: data.event });
+      })
       .catch(error => { if (!controller.signal.aborted) setState({ loading: false, error: error.message || 'Unable to load this safety review.' }); });
     return () => controller.abort();
-  }, [api, eventId]);
+  }, [api, can, eventId]);
 
   const event = state.event;
   function toggleArrangement(value) {
@@ -47,7 +59,9 @@ export default function OperationalSafetyReview() {
       setDecision(current => ({ ...current, busy: false, error: error.message || 'Unable to record the safety decision.' }));
     }
   }
-  return <main className="container">
+  return <>
+    <Navbar />
+    <main className="container">
     <Link to="/operational-safety-reviews">← Operational safety reviews</Link>
     {state.loading && <p role="status">Loading safety arrangements…</p>}
     {state.error && <div className="panel error" role="alert">{state.error}</div>}
@@ -88,5 +102,6 @@ export default function OperationalSafetyReview() {
         </fieldset>
       </section>}
     </>}
-  </main>;
+  </main>
+  </>;
 }

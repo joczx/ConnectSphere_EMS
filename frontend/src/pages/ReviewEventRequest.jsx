@@ -12,7 +12,7 @@ const list = (items, show) => items?.length ? items.map(show).join(', ') : 'None
 
 export default function ReviewEventRequest() {
   const { confirm, notify } = useFeedback();
-  const { api, can } = useAuth();
+  const { api, can, userId } = useAuth();
   const { requestId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -48,7 +48,9 @@ export default function ReviewEventRequest() {
     }
   }
 
-  const request = state.request;
+  // Only the coordinator assigned to the request may view it.
+  const hidden = !!state.request && state.request.event_coordinator_id !== userId;
+  const request = hidden ? null : state.request;
   const errorBox = state.error && <div role="alert" className="panel error">{state.error}
     {state.details && <ul>{Object.values(state.details).map(message => <li key={message}>{message}</li>)}</ul>}</div>;
   return <>
@@ -58,6 +60,7 @@ export default function ReviewEventRequest() {
       <div className="heading"><div><p className="eyebrow">EVENT PLANNING</p><h1>{request?.event_name || 'Event request'}</h1></div></div>
       {location.state?.message && <p role="status" className="panel">{location.state.message}</p>}
       {state.loading && <p role="status">Loading event request…</p>}
+      {hidden && <div role="alert" className="panel error">Event request not found or access unavailable.</div>}
       {!request && errorBox}
       {request && <article className="panel"><EventRequestPeople request={request} /><dl>{[
         ['Status', humanise(request.status)],

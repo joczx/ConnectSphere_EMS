@@ -79,7 +79,7 @@ function saved(event, field) {
 
 export default function Events() {
   const { confirm, notify } = useFeedback();
-  const { api, can, canViewEvent } = useAuth();
+  const { api, can, canAccess, canViewEvent, userId } = useAuth();
   const { eventId } = useParams();
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
@@ -145,20 +145,35 @@ export default function Events() {
   useEffect(() => {
     if (!eventId) return undefined;
     let ignore = false;
-    api('/api/venue-bookings', { cache: 'no-store' })
+    // This event's bookings, for everyone the event names: its Organiser,
+    // Coordinator, Technical Support, Venue Staff and Safety Officer (045).
+    // Whether a coordinator may request a venue is decided by
+    // can('event.findVenue') where the button is shown.
+    api(`/api/venue-bookings/events/${encodeURIComponent(eventId)}`, { cache: 'no-store' })
       .then(data => {
-        if (ignore) return;
-        const forThisEvent = (data.bookings || [])
-          .filter(booking => String(booking.event_id) === String(eventId));
-        setVenue(current => ({ ...current, bookings: forThisEvent, error: '', allowed: true, canRequest: !!data.can_submit }));
+        if (!ignore) setVenue(current => ({ ...current, bookings: data.bookings || [], error: '', allowed: true, canRequest: true }));
       })
       .catch(err => {
         if (ignore) return;
-        // Organisers and technical support can read the event but take no part
-        // in venue booking. That is not a failure, so they see no section
-        // rather than an error they can do nothing about.
-        if (err.status === 403) setVenue(current => ({ ...current, allowed: false, error: '' }));
-        else setVenue(current => ({ ...current, error: err.message || 'Unable to load venue booking requests.' }));
+        // Not assigned to the event: no booking list.
+        if (err.status === 403 || err.status === 404) {
+          setVenue(current => ({ ...current, allowed: false, error: '' }));
+          return;
+        }
+        // Until 045 is run the endpoint is unavailable. Fall back to the full
+        // list, which serves Event Coordinators and Venue Staff only.
+        api('/api/venue-bookings', { cache: 'no-store' })
+          .then(data => {
+            if (ignore) return;
+            const forThisEvent = (data.bookings || [])
+              .filter(booking => String(booking.event_id) === String(eventId));
+            setVenue(current => ({ ...current, bookings: forThisEvent, error: '', allowed: true, canRequest: !!data.can_submit }));
+          })
+          .catch(fallback => {
+            if (ignore) return;
+            if (fallback.status === 403) setVenue(current => ({ ...current, allowed: false, error: '' }));
+            else setVenue(current => ({ ...current, error: fallback.message || 'Unable to load venue booking requests.' }));
+          });
       });
     return () => { ignore = true; };
   }, [api, eventId, refresh]);
@@ -170,6 +185,10 @@ export default function Events() {
   const equipmentRequests = state.equipment || [];
   const activity = state.activity || [];
   const editable = event?.status === 'planning';
+  // The event's Organiser, Technical Support Staff and Safety Officer cannot
+  // list venue bookings, but still see which venue the event has.
+  const venueReadOnly = !!event && !venue.allowed && !!userId
+    && [event.event_organiser_id, event.technical_support_id, event.safety_officer_id].includes(userId);
   // Who sees which button: ACTIONS in auth/access.js. The status rules stay here.
   const canRequestChange = !!event && can('changeRequest.create', event)
     && ['planning', 'pending_safety_checks', 'confirmed'].includes(event.status);
@@ -194,6 +213,9 @@ export default function Events() {
   const approvedVenues = venue.bookings
     .filter(booking => booking.status === 'approved')
     .map(booking => booking.venue_name);
+  // Bookings arrive newest first. The assigned Venue Staff is taken to the
+  // newest one still awaiting a decision, or else the newest one.
+  const bookingToReview = venue.bookings.find(booking => booking.status === 'submitted') || venue.bookings[0];
 
   useEffect(() => {
     if (!event) return;
@@ -203,6 +225,7 @@ export default function Events() {
       event.event_coordinator_id,
       event.technical_support_id,
       event.venue_staff_id,
+      event.safety_officer_id,
     ].filter(Boolean).join(',');
 
     if (ids) {
@@ -416,10 +439,13 @@ export default function Events() {
           <Detail label="Event coordinator" value={userNames[event.event_coordinator_id] || (event.event_coordinator_id ? event.event_coordinator_id.slice(0, 8) : '-')} />
           <Detail label="Technical support" value={userNames[event.technical_support_id] || (event.technical_support_id ? event.technical_support_id.slice(0, 8) : '-')} />
           <Detail label="Venue staff" value={userNames[event.venue_staff_id] || (event.venue_staff_id ? event.venue_staff_id.slice(0, 8) : '-')} />
+          <Detail label="Safety officer" value={userNames[event.safety_officer_id] || (event.safety_officer_id ? event.safety_officer_id.slice(0, 8) : '-')} />
 </dl></section>}
-      {eventId && event && venue.allowed && <section className="panel event-detail-section" id="event-venue" tabIndex={-1}>
+      {eventId && event && (venue.allowed || venueReadOnly) && <section className="panel event-detail-section" id="event-venue" tabIndex={-1}>
         <h2>Venue</h2>
-        {venue.assigned && <p>Assigned venue: <Link to={`/venues/${venue.assigned.venue_id}`}>{venue.assigned.venue_name}</Link></p>}
+        {venue.assigned && <p>Assigned venue: {canAccess(`/venues/${venue.assigned.venue_id}`)
+          ? <Link to={`/venues/${venue.assigned.venue_id}`}>{venue.assigned.venue_name}</Link>
+          : <strong>{venue.assigned.venue_name}</strong>}</p>}
         {/* An approved request is what makes a venue available for the event,
             and an event may need more than one, so each is named. */}
         {approvedVenues.length > 0 && <p>Approved by Venue Staff: <strong>{approvedVenues.join(', ')}</strong></p>}
@@ -430,6 +456,10 @@ export default function Events() {
         {editable && venue.canRequest && can('event.findVenue', event) && <Link className="button-link" to={`/venue-search?event_id=${encodeURIComponent(eventId)}`}>
           Find venues for this event
         </Link>}
+        {bookingToReview && can('booking.review', event) && <Link className="button-link" to={`/review-venue-bookings/${encodeURIComponent(bookingToReview.booking_id)}`}>
+          Review venue bookings for this event
+        </Link>}
+        {venue.allowed && <>
         {!editable && <p className="metadata">A venue can only be requested while the event is in planning.</p>}
 
         <h3 style={{ marginTop: '20px' }}>Venue booking requests for this event</h3>
@@ -450,6 +480,7 @@ export default function Events() {
             </dd>
           </div>)}
         </dl>}
+        </>}
       </section>}
 
       {event && <section className="panel event-reference-side-card"><h2>Equipment</h2>
@@ -458,7 +489,7 @@ export default function Events() {
             reviews it. Each is taken to their own page, filtered to this event. */}
         {can('equipment.request', event)
           ? <Link className="button-link" to={`/equipment-requests?event_id=${encodeURIComponent(eventId)}`}>Request equipment for this event</Link>
-          : can('equipment.review', event) && <Link className="button-link" to={`/equipment?event_id=${encodeURIComponent(eventId)}`}>View equipment requests</Link>}
+          : can('equipment.review', event) && <Link className="button-link" to={`/equipment?event_id=${encodeURIComponent(eventId)}`}>Review equipment requests for this event</Link>}
       </section>}
       {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
         <h2>Registration arrangements</h2>

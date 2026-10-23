@@ -75,6 +75,16 @@ def list_bookings():
     return jsonify(result)
 
 
+@venue_bookings.get('/events/<int:event_id>')
+def event_bookings(event_id):
+    """One event's bookings, read only, for the people assigned to that event."""
+    token = authenticated_token(supabase_request)
+    result = rpc('event_venue_bookings', token, {'p_event_id': event_id})
+    if result.get('error'):
+        return refused(result)
+    return jsonify(result)
+
+
 @venue_bookings.get('/alerts')
 def alerts():
     """The caller's unread decisions on their own booking requests."""
