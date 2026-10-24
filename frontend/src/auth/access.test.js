@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import { can, canViewEvent, hasAccess, rolesForPath } from './access.js';
 
 const allowed = (path, roles) => hasAccess(roles, rolesForPath(path));
+
+test('only attendees can browse registration events, including direct URLs', () => {
+  assert.equal(allowed('/event-registration', ['Attendee']), true);
+  assert.equal(allowed('/event-registration/7', ['attendee']), true);
+  for (const roles of [[], ['Event Organiser'], ['Event Coordinator'], ['Safety Officer'], ['Venue Staff'], ['Technical Support Staff'], ['Event Coordinator Lead']]) {
+    assert.equal(allowed('/event-registration', roles), false);
+  }
+});
 test('role-specific pages reject other roles including nested URLs', () => {
   assert.equal(allowed('/equipment', ['Event Organiser']), false);
   assert.equal(allowed('/equipment', ['technical_support_staff']), true);

@@ -4,6 +4,7 @@ import { useAuth } from './auth/AuthContext';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Events from './pages/Events';
+import AttendeeEvents from './pages/AttendeeEvents';
 import Equipment from './pages/Equipment';
 import EquipmentRequests from './pages/EquipmentRequests';
 import EventRequests from './pages/EventRequests';
@@ -52,6 +53,7 @@ export default function App() {
     <Route path="/" element={token ? <Navigate to="/home" replace /> : <Login />} />
     <Route path="/home" element={protectedView(<Home />)} />
     <Route path="/events" element={protectedView(<Events />)} />
+    <Route path="/event-registration" element={protectedView(<AttendeeEvents />)} />
     <Route path="/events/:eventId" element={protectedView(<Events />)} />
     <Route path="/reserved-equipment" element={protectedView(<ReservedEquipment />)} />
     <Route path="/equipment" element={protectedView(<Equipment />)} />
