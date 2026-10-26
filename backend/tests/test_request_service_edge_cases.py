@@ -193,5 +193,3 @@ def test_notification_helpers_empty_and_unread(table):
     client = Mock()
     client.table.return_value = table
     assert notifications.deliver(client, []) == []
-    assert notifications.list_for_recipient(client, 'owner', unread_only=True) == [{'event_request_id': 1}]
-    table.eq.assert_any_call('is_read', False)

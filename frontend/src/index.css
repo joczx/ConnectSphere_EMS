@@ -82,6 +82,18 @@ input:not([type="checkbox"]), select, textarea { display: block; width: 100%; bo
 .notification-menu summary { display: flex; align-items: center; color: #475569; cursor: pointer; list-style: none; }
 .notification-menu summary::-webkit-details-marker { display: none; }
 .notification-menu .account-menu-content { z-index: 50; width: 320px; max-width: 80vw; max-height: 60vh; overflow-y: auto; }
+.notification-list { display: grid; padding: 0; margin: 8px 0; list-style: none; }
+.notification-menu .notification-list { max-height: 380px; overflow-y: auto; }  /* 5 x 76px items */
+.notification-list li button { display: grid; gap: 2px; width: 100%; padding: 8px 10px; border: 0; border-bottom: 1px solid var(--cs-color-border); border-radius: 0; background: transparent; color: var(--cs-color-text); font-weight: 400; text-align: left; }
+.notification-menu .notification-list li button { height: 76px; line-height: 1.35; overflow: hidden; }
+/* In the popup each line is truncated with an ellipsis rather than cut off. */
+.notification-menu .notification-list li button > * { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.notification-list li button strong { color: var(--cs-color-heading); }
+.notification-list li button span { font-size: 13px; }
+.notification-list li button small { color: var(--cs-color-text); font-size: 11px; }
+.notification-list li.unread button { background: #f0fdfa; border-left: 3px solid var(--cs-color-primary); }
+.notification-page-list { background: var(--cs-color-surface); border: 1px solid var(--cs-color-border); border-radius: var(--cs-radius-panel); }
+.assignment-card.highlighted { border: 2px solid var(--cs-color-primary); }
 .notification-count { margin-left: 2px; padding: 1px 6px; border-radius: 999px; background: var(--cs-color-danger); color: white; font-size: 11px; font-weight: 700; vertical-align: top; }
 .assignment-list { text-align: left; }
 .assignment-card h2 { margin-top: 0; }
@@ -200,9 +212,6 @@ input:not([type="checkbox"]), select, textarea { display: block; width: 100%; bo
 .booking-conflicts { margin: 8px 0 0; padding-left: 20px; }
 .booking-conflicts li + li { margin-top: 6px; }
 .booking-conflict-panel { border-color: #fbbf24; background: #fffbeb; }
-.booking-alerts { margin: 20px 0; border-left: 4px solid var(--cs-color-primary); }
-.booking-alerts ul { margin: 12px 0 0; padding-left: 20px; }
-.booking-alerts li + li { margin-top: 8px; }
 .venue-inline-filters { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--cs-color-border); }
 .venue-filter-chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 0; padding: 0; list-style: none; }
 .venue-filter-chips button { width: auto; padding: 6px 12px; border: 1px solid var(--cs-color-border-strong); border-radius: 999px; background: var(--cs-color-surface); color: var(--cs-color-heading); font-size: 13px; font-weight: 600; }

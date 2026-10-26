@@ -85,30 +85,6 @@ def event_bookings(event_id):
     return jsonify(result)
 
 
-@venue_bookings.get('/alerts')
-def alerts():
-    """The caller's unread decisions on their own booking requests."""
-    token = authenticated_token(supabase_request)
-    result = rpc('venue_booking_alerts', token, {})
-    if isinstance(result, dict) and result.get('error'):
-        return refused(result)
-    return jsonify(alerts=result if isinstance(result, list) else [])
-
-
-@venue_bookings.post('/alerts/dismiss')
-def dismiss_alerts():
-    token = authenticated_token(supabase_request)
-    body = request.get_json(silent=True)
-    ids = body.get('notification_ids') if isinstance(body, dict) else None
-    if (not isinstance(ids, list) or not ids
-            or not all(type(item) is int and item > 0 for item in ids)):
-        return jsonify(error='Choose which alerts to dismiss.'), 400
-    result = rpc('dismiss_venue_booking_alerts', token, {'p_notification_ids': ids})
-    if result.get('error'):
-        return refused(result)
-    return jsonify(result)
-
-
 @venue_bookings.get('/<booking_id>')
 def view(booking_id):
     token = authenticated_token(supabase_request)

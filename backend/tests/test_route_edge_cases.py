@@ -115,10 +115,9 @@ def test_refresh_requires_token_and_reports_auth_service_failure(client, monkeyp
     assert response.status_code == 503 and response.json['error'] == 'Unavailable'
 
 
-@pytest.mark.parametrize('error,status', [(StoreError(401), 401), (EventRequestError('Invalid recipient'), 400)])
-def test_notification_error_responses(client, monkeypatch, error, status):
-    monkeypatch.setattr(notifications, 'authenticated_user', Mock(side_effect=error))
-    assert client.get('/api/notifications').status_code == status
+def test_notification_error_responses(client, monkeypatch):
+    monkeypatch.setattr(notifications, 'authenticated_token', Mock(side_effect=StoreError(401)))
+    assert client.get('/api/notifications').status_code == 401
 
 
 def test_user_filter_validation_and_query(client, monkeypatch):
@@ -135,8 +134,7 @@ def test_user_filter_validation_and_query(client, monkeypatch):
 
 
 @pytest.mark.parametrize('method,path,body', [
-    ('get', '/api/venue-bookings', None), ('get', '/api/venue-bookings/alerts', None),
-    ('post', '/api/venue-bookings/alerts/dismiss', {'notification_ids': [1]}),
+    ('get', '/api/venue-bookings', None),
 ])
 def test_booking_read_and_alert_refusals(client, monkeypatch, method, path, body):
     monkeypatch.setattr(venue_bookings, 'rpc', lambda *args: {'error': 'Not yours', 'status': 403})

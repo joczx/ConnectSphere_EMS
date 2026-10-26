@@ -157,35 +157,3 @@ def test_a_request_the_caller_may_not_see_is_not_found(query):
     query.side_effect = [USER, {'error': 'Booking request not found or access unavailable.', 'status': 404}]
     response = client().get(f'/api/venue-bookings/{BOOKING_ID}', headers=HEADERS)
     assert response.status_code == 404
-
-
-# --- "alerts the Event Coordinator on the status and the comments" ---------
-
-@patch('app.routes.venue_bookings.supabase_request')
-def test_the_coordinator_reads_their_alerts(query):
-    alert = {'notification_id': 7, 'venue_booking_id': BOOKING_ID,
-             'notification_type': 'venue_booking_rejected',
-             'message': 'Your booking request for Training Hall (Halloween) was rejected. Comments: Fully booked.'}
-    query.side_effect = [USER, [alert]]
-    response = client().get('/api/venue-bookings/alerts', headers=HEADERS)
-    assert response.status_code == 200
-    assert response.json['alerts'] == [alert]
-    assert query.call_args.args[0] == '/rest/v1/rpc/venue_booking_alerts'
-
-
-@patch('app.routes.venue_bookings.supabase_request')
-def test_alerts_are_dismissed_by_id(query):
-    query.side_effect = [USER, {'dismissed': 2}]
-    response = client().post('/api/venue-bookings/alerts/dismiss',
-                             json={'notification_ids': [7, 8]}, headers=HEADERS)
-    assert response.status_code == 200
-    assert query.call_args.kwargs['payload'] == {'p_notification_ids': [7, 8]}
-
-
-@pytest.mark.parametrize('body', [{}, {'notification_ids': []}, {'notification_ids': ['7']},
-                                  {'notification_ids': [True]}, {'notification_ids': [0]}])
-@patch('app.routes.venue_bookings.supabase_request', return_value=USER)
-def test_dismissing_needs_real_alert_ids(query, body):
-    response = client().post('/api/venue-bookings/alerts/dismiss', json=body, headers=HEADERS)
-    assert response.status_code == 400
-    assert query.call_count == 1

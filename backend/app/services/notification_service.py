@@ -30,17 +30,3 @@ def deliver(client, notifications):
     response = client.table(NOTIFICATION_TABLE).insert(notifications).execute()
 
     return response.data or []
-
-
-def list_for_recipient(client, recipient_id, unread_only=False):
-    """Return a recipient's notifications, newest first."""
-    query = (
-        client.table(NOTIFICATION_TABLE)
-        .select("*")
-        .eq("recipient_id", recipient_id)
-    )
-
-    if unread_only:
-        query = query.eq("is_read", False)
-
-    return query.order("created_at", desc=True).execute().data or []

@@ -10,7 +10,6 @@ from flask import Flask
 from app.schemas import event_request as request_schema
 from app.schemas import event_request_review as review
 from app.routes.event_requests import event_requests_bp
-from app.routes.notifications import notifications_bp
 from app.services import db
 from app.services import event_request_review_service as review_service
 from test_create_submit_event_request import valid_payload
@@ -173,7 +172,6 @@ def test_messages_survive_a_request_with_no_name():
 def review_http():
     app = Flask(__name__)
     app.register_blueprint(event_requests_bp)
-    app.register_blueprint(notifications_bp)
     database = Mock()
     table = database.table.return_value
     for method in ('select', 'eq', 'order', 'limit', 'insert', 'update'):
@@ -181,7 +179,6 @@ def review_http():
     table.execute.return_value.data = []
     with patch.object(db, 'get_supabase', return_value=database), \
          patch.object(review_service, 'get_supabase', return_value=database), \
-         patch('app.routes.notifications.get_supabase', return_value=database), \
          patch('app.routes.event_requests.authenticated_user', return_value=('user-token', COORDINATOR)):
         yield app.test_client(), table
 
@@ -233,14 +230,6 @@ def test_ac3_ac4_ac5_ac6_review_persists_decision_and_notifies_organiser(review_
     assert old['event_organiser_id'] in response.json['notified']
     table.execute.side_effect = [Mock(data=[updated]), Mock(data=[recorded])]
     assert http.get('/api/event-requests/42/reviews').json['reviews'] == [recorded]
-    table.execute.side_effect = None
-    table.execute.return_value.data = [notification]
-    with patch('app.routes.notifications.authenticated_user',
-               return_value=('organiser-token', old['event_organiser_id'])):
-        response = http.get('/api/notifications')
-    assert response.status_code == 200
-    assert response.json['notifications'] == [notification]
-    table.eq.assert_called_with('recipient_id', old['event_organiser_id'])
 
 
 @pytest.mark.parametrize('comments', [None, '', '   '])
