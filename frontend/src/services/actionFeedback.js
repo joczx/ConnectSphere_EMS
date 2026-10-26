@@ -6,7 +6,6 @@ export function actionMessage(url, method, data) {
   const path = url.split('?')[0];
   if (path.endsWith('/registration-readiness')) return `Registration readiness saved. Event status: ${data?.event?.status || 'updated'}.`;
   if (path.endsWith('/coordinator')) return 'Event Coordinator reassigned successfully.';
-  if (path.endsWith('/alerts/dismiss')) return 'Notifications dismissed.';
   if (path.endsWith('/review') || path.includes('equipment-request-reviews')) return 'Review decision recorded successfully.';
   if (path.endsWith('/cancel')) return 'Cancellation recorded successfully.';
   if (path.includes('/equipment/reservations')) return method === 'DELETE' ? 'Equipment reservation cancelled.' : method === 'PATCH' ? 'Equipment reservation updated.' : 'Equipment reserved successfully.';
