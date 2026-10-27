@@ -35,11 +35,6 @@ def venue_catalogue_path(name=None):
     return path + f"&{_ACTIVE_VENUE_FILTER}&order=venue_name.asc"
 
 
-def venue_name_search_path(name):
-    """Build the case-insensitive Supabase query for a venue-name search."""
-    return venue_catalogue_path(name)
-
-
 def venue_detail_path(venue_id):
     return f"/rest/v1/venues?select={_VENUE_FIELDS}&venue_id=eq.{venue_id}&{_ACTIVE_VENUE_FILTER}&limit=1"
 
@@ -149,7 +144,7 @@ def search_by_name():
 
     # PostgREST's `ilike` makes the match case-insensitive. The * wildcard is
     # intentionally added around, not inside, the user's encoded search text.
-    rows = supabase_request(venue_name_search_path(name), token=token)
+    rows = supabase_request(venue_catalogue_path(name), token=token)
 
     return jsonify(count=len(rows), venues=rows)
 

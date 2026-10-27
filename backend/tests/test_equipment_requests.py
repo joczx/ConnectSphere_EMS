@@ -39,7 +39,7 @@ class EquipmentRequestRouteTests(unittest.TestCase):
     def test_create_equipment_request_success(self, query):
         query.side_effect = [
             {'id': 'user-1'},
-            [{'event_id': 2, 'event_coordinator_id': 'coordinator-1'}],
+            [{'event_id': 2, 'event_coordinator_id': 'coordinator-1', 'status': 'planning'}],
             [{
                 'equipment_request_id': 10,
                 'event_id': 2,
@@ -69,7 +69,7 @@ class EquipmentRequestRouteTests(unittest.TestCase):
     def test_create_equipment_request_requires_equipment_type(self, query):
         query.side_effect = [
             {'id': 'user-1'},
-            [{'event_id': 2, 'event_coordinator_id': 'coordinator-1'}],
+            [{'event_id': 2, 'event_coordinator_id': 'coordinator-1', 'status': 'planning'}],
         ]
 
         response = self.client.post(
@@ -88,7 +88,7 @@ class EquipmentRequestRouteTests(unittest.TestCase):
     def test_create_equipment_request_validates_quantity(self, query):
         query.side_effect = [
             {'id': 'user-1'},
-            [{'event_id': 2, 'event_coordinator_id': 'coordinator-1'}],
+            [{'event_id': 2, 'event_coordinator_id': 'coordinator-1', 'status': 'planning'}],
         ]
 
         response = self.client.post(
@@ -137,7 +137,7 @@ class EquipmentRequestRouteTests(unittest.TestCase):
             {'equipment_type': '  ', 'quantity': 1},
         )
         for payload in invalid_payloads:
-            responses = [{'id': 'user'}, [{'event_id': 1}]] if isinstance(payload, dict) else []
+            responses = [{'id': 'user'}, [{'event_id': 1, 'status': 'planning'}]] if isinstance(payload, dict) else []
             with self.subTest(payload=payload), patch(
                 'app.services.equipment_request_service.supabase_request', side_effect=responses,
             ):
@@ -153,8 +153,20 @@ class EquipmentRequestRouteTests(unittest.TestCase):
             with self.assertRaises(EquipmentRequestError):
                 create_equipment_request(1, payload, 'token')
 
+    def test_create_request_only_while_event_is_planning(self):
+        payload = {'equipment_type': 'Projector', 'quantity': 1}
+        for status in ('pending_safety_checks', 'confirmed', 'completed', 'cancelled'):
+            with self.subTest(status=status), patch(
+                'app.services.equipment_request_service.supabase_request',
+                side_effect=[{'id': 'user'}, [{'event_id': 1, 'status': status}]],
+            ) as query:
+                with self.assertRaises(EquipmentRequestError) as raised:
+                    create_equipment_request(1, payload, 'token')
+            self.assertEqual(raised.exception.status, 409)
+            self.assertEqual(query.call_count, 2)
+
     def test_create_request_keeps_record_when_database_returns_no_representation(self):
-        with patch('app.services.equipment_request_service.supabase_request', side_effect=[{'id': 'user'}, [{'event_id': 1}], []]):
+        with patch('app.services.equipment_request_service.supabase_request', side_effect=[{'id': 'user'}, [{'event_id': 1, 'status': 'planning'}], []]):
             record = create_equipment_request(1, {'equipment_type': ' Projector ', 'quantity': 1}, 'token')
         self.assertEqual(record['equipment_type'], 'Projector')
         self.assertIsNone(record['technical_requirements'])

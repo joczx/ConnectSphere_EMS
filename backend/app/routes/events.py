@@ -5,6 +5,8 @@ from app.services.event_store import StoreError, supabase_request, authenticated
 from app.services.event_service import EventError, list_activity, load_event, update_event
 from app.services.event_venue_criteria import criteria_from_event, describe, search_filters
 from app.services.event_status_service import lifecycle_call
+from app.schemas.registration import parse_settings, parse_attendee
+from app.services.registration_service import registration_call
 
 events = Blueprint('events', __name__, url_prefix='/api')
 
@@ -61,10 +63,42 @@ def registration_readiness(event_id):
                                  {'p_event_id': event_id, 'p_ready': payload['ready']}))
 
 
+@events.patch('/events/<int:event_id>/registration-period')
+def set_registration_period(event_id):
+    token = authenticated_token(supabase_request)
+    record, errors = parse_settings(request.get_json(silent=True))
+    if errors:
+        return jsonify(error='Check the registration settings.', errors=errors), 400
+    return jsonify(registration_call('set_event_registration_period', token,
+        {'p_event_id': event_id, **{'p_' + key: value for key, value in record.items()}}))
+
+
+@events.get('/registration-events')
+def registration_events():
+    token = authenticated_token(supabase_request)
+    return jsonify(registration_call('attendee_registration_events', token, {}))
+
+
+@events.post('/events/<int:event_id>/registrations')
+def register_attendee(event_id):
+    token = authenticated_token(supabase_request)
+    record, errors = parse_attendee(request.get_json(silent=True))
+    if errors:
+        return jsonify(error='Check your registration details.', errors=errors), 400
+    return jsonify(registration_call('register_for_event', token,
+        {'p_event_id': event_id, **{'p_' + key: value for key, value in record.items()}}))
+
+
 @events.post('/events/<int:event_id>/cancel')
 def cancel_event(event_id):
     token = authenticated_token(supabase_request)
     return jsonify(lifecycle_call('cancel_planned_event', token, {'p_event_id': event_id}))
+
+
+@events.post('/events/<int:event_id>/safety-checks')
+def submit_for_safety_checks(event_id):
+    token = authenticated_token(supabase_request)
+    return jsonify(lifecycle_call('submit_event_for_safety_checks', token, {'p_event_id': event_id}))
 
 
 def valid_event_id(event_id):
