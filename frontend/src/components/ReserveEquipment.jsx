@@ -75,7 +75,7 @@ export default function ReserveEquipment({ onReserved, refresh = 0 }) {
     <h2>Reserve equipment</h2>
     <p>Select an event and its request, then reserve the full quantity. This holds equipment without accepting the request.</p>
     <button type="button" className="secondary" disabled={busy} onClick={() => setReload(value => value + 1)}>Refresh availability and requests</button>
-    {state.loading && <p role="status">Loading assigned events and requests?</p>}
+    {state.loading && <p role="status">Loading assigned events and requests…</p>}
     <form onSubmit={reserve}><fieldset disabled={busy || state.loading}>
       <label>Event<select required value={eventId} onChange={e => { setEventId(e.target.value); setRequestId(''); setEquipmentId(''); setQuantity(''); setState(s => ({ ...s, equipment: [] })); }}>
         <option value="">Select an event</option>{events.map(row => <option key={row.event_id} value={row.event_id}>{row.event_name}</option>)}
@@ -83,16 +83,16 @@ export default function ReserveEquipment({ onReserved, refresh = 0 }) {
       <label>Equipment request<select required value={requestId} disabled={!eventId} onChange={e => {
         setRequestId(e.target.value); setEquipmentId('');
         setQuantity(String(pending.find(row => String(row.equipment_request_id) === e.target.value)?.quantity || ''));
-      }}><option value="">Select a request</option>{pending.map(row => <option key={row.equipment_request_id} value={row.equipment_request_id}>#{row.equipment_request_id} ? {row.equipment_type} ? {row.quantity} units</option>)}</select></label>
+      }}><option value="">Select a request</option>{pending.map(row => <option key={row.equipment_request_id} value={row.equipment_request_id}>#{row.equipment_request_id} · {row.equipment_type} · {row.quantity} units</option>)}</select></label>
       {eventId && !pending.length && <p>No pending requests without reservations for this event.</p>}
-      {state.checking && <p role="status">Checking availability?</p>}
+      {state.checking && <p role="status">Checking availability…</p>}
       <label>Equipment model<select required value={equipmentId} disabled={!request || state.checking} onChange={e => setEquipmentId(e.target.value)}>
-        <option value="">Select equipment</option>{matching.map(row => <option key={row.equipment_id} value={row.equipment_id} disabled={row.available_quantity < request.quantity}>{row.name} ? {row.available_quantity} available</option>)}
+        <option value="">Select equipment</option>{matching.map(row => <option key={row.equipment_id} value={row.equipment_id} disabled={row.available_quantity < request.quantity}>{row.name} · {row.available_quantity} available</option>)}
       </select></label>
       <label>Quantity<input type="number" required min="1" step="1" value={quantity} onChange={e => setQuantity(e.target.value)} /></label>
       <button disabled={!can('equipment.reserve') || !request || !equipmentId || state.checking}>Reserve equipment</button>
     </fieldset></form>
     {state.error && <p role="alert" className="error">{state.error}</p>}
-    {message && <p role="status">{message} <Link to="/equipment">Open Equipment Requests ?</Link></p>}
+    {message && <p role="status">{message} <Link to="/equipment">Open Equipment Requests →</Link></p>}
   </section>;
 }

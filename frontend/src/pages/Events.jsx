@@ -505,7 +505,9 @@ export default function Events() {
         {/* The event's coordinator requests equipment; its technical support
             reviews it. Each is taken to their own page, filtered to this event. */}
         {can('equipment.request', event)
-          ? <Link className="button-link" to={`/equipment-requests?event_id=${encodeURIComponent(eventId)}`}>Request equipment for this event</Link>
+          ? editable
+            ? <Link className="button-link" to={`/equipment-requests?event_id=${encodeURIComponent(eventId)}`}>Request equipment for this event</Link>
+            : <p className="metadata">Equipment can only be requested while the event is in planning.</p>
           : can('equipment.review', event) && <Link className="button-link" to={`/equipment?event_id=${encodeURIComponent(eventId)}`}>Review equipment requests for this event</Link>}
       </section>}
       {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
