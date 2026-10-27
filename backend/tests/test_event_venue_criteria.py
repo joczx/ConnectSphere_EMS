@@ -6,6 +6,7 @@ conditions, and a venue that cannot meet them is not offered for a booking
 request even once the filters have been cleared.
 
 No database is needed. Supabase calls are patched at the route boundary.
+Venue search and detail endpoint tests live in test_venue_catalogue.py.
 """
 
 from datetime import date
@@ -28,13 +29,6 @@ from app.services.event_venue_criteria import (
 
 HEADERS = {'Authorization': 'Bearer coordinator-token'}
 
-
-@pytest.fixture(autouse=True)
-def nothing_booked():
-    # These tests are about requirements. Availability is covered by
-    # test_venue_booking_conflicts.py, so no venue here is booked.
-    with patch('app.services.venue_availability.approved_bookings', return_value=[]):
-        yield
 
 OPEN_ALL_WEEK = {
     day: {'open': '08:00', 'close': '22:00'}
@@ -255,63 +249,3 @@ def test_venue_criteria_endpoint_rejects_a_malformed_event_id(query):
     query.return_value = {'id': 'coordinator'}
     response = create_app().test_client().get('/api/events/4;drop/venue-criteria', headers=HEADERS)
     assert response.status_code == 404
-
-
-@patch('app.routes.venues.load_event')
-@patch('app.routes.venues.search_venues')
-@patch('app.routes.venues.authenticated_token', return_value='coordinator-token')
-def test_search_marks_each_venue_against_the_event(token, search, event):
-    search.return_value = [venue(), venue(venue_id='second', capacity=10)]
-    event.return_value = EVENT
-    response = create_app().test_client().get('/api/venues/search?event_id=4')
-    assert response.status_code == 200
-    assert [item['eligible'] for item in response.json['venues']] == [True, False]
-    assert response.json['eligible_count'] == 1
-    assert response.json['event']['event_id'] == 4
-    assert response.json['venues'][1]['unmet_requirements'][0]['label'] == 'Expected attendance'
-
-
-@patch('app.routes.venues.load_event')
-@patch('app.routes.venues.search_venues')
-@patch('app.routes.venues.authenticated_token', return_value='coordinator-token')
-def test_an_event_does_not_narrow_the_results_so_filters_can_be_cleared(token, search, event):
-    # The coordinator may read the whole catalogue while planning an event. The
-    # filters decide what is listed; the event only decides what is selectable.
-    search.return_value = [venue(capacity=10)]
-    event.return_value = EVENT
-    response = create_app().test_client().get('/api/venues/search?event_id=4')
-    assert response.json['count'] == 1
-    assert response.json['venues'][0]['eligible'] is False
-    assert search.call_args.args[0]['capacity'] is None
-
-
-@patch('app.routes.venues.search_venues')
-@patch('app.routes.venues.authenticated_token', return_value='coordinator-token')
-def test_search_without_an_event_is_unchanged(token, search):
-    search.return_value = [venue()]
-    response = create_app().test_client().get('/api/venues/search')
-    assert response.json['count'] == 1
-    assert 'eligible' not in response.json['venues'][0]
-    assert 'event' not in response.json
-
-
-@patch('app.routes.venues.search_venues')
-@patch('app.routes.venues.authenticated_token', return_value='coordinator-token')
-def test_search_rejects_a_malformed_event_id(token, search):
-    search.return_value = []
-    response = create_app().test_client().get('/api/venues/search?event_id=4%20or%201=1')
-    assert response.status_code == 404
-
-
-@patch('app.routes.venues.load_event')
-@patch('app.routes.venues.supabase_request')
-@patch('app.routes.venues.authenticated_token', return_value='coordinator-token')
-def test_one_venue_carries_the_verdict_for_the_event_it_is_viewed_for(token, query, event):
-    query.return_value = [venue(capacity=10)]
-    event.return_value = EVENT
-    response = create_app().test_client().get(
-        '/api/venues/b21bdd3b-5fbb-4588-b070-f9a7e923ef02?event_id=4'
-    )
-    assert response.status_code == 200
-    assert response.json['venue']['eligible'] is False
-    assert response.json['requirements'][0]['value'] == 'At least 350'

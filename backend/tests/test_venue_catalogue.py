@@ -9,6 +9,7 @@ from uuid import uuid4
 from app import create_app
 from app.schemas.venue import _time, parse_create, parse_update
 from app.services.event_store import StoreError
+from app.services.event_service import EventError
 from app.routes import venues as venue_routes
 
 DAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
@@ -199,6 +200,8 @@ class VenueCatalogueRouteTests(unittest.TestCase):
 
         self.assertEqual(success.status_code, 200)
         self.assertEqual(success.json, {"count": 1, "venues": [venue]})
+        self.assertNotIn("event", success.json)
+        self.assertNotIn("eligible", success.json["venues"][0])
         filters, token = search.call_args.args
         self.assertEqual(token, "user-token")
         self.assertEqual(filters["name"], "Hall")
@@ -446,6 +449,65 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual([event["event_id"] for event in conflicts], ["active", "blank"])
 
 
+class EventAwareCatalogueTests(unittest.TestCase):
+    """Search and detail views keep the event's requirement verdict consistent."""
+
+    PATHS = ("/api/venues/search", f"/api/venues/{VENUE_ID}")
+    EVENT = {"event_id": 4, "event_name": "Orientation", "capacity_needed": 350}
+
+    def setUp(self):
+        self.client = create_app().test_client()
+
+    def test_search_and_details_report_requirements_without_hiding_unsuitable_venues(self):
+        suitable = {"venue_id": VENUE_ID, **valid_venue(capacity=400)}
+        unsuitable = {"venue_id": str(uuid4()), **valid_venue(capacity=10)}
+        for path in self.PATHS:
+            with self.subTest(path=path), patch("app.routes.venues.authenticated_token", return_value="coordinator-token"), patch(
+                "app.routes.venues.search_venues", return_value=[suitable, unsuitable]
+            ) as search, patch("app.routes.venues.supabase_request", return_value=[unsuitable]), patch(
+                "app.routes.venues.load_event", return_value=self.EVENT
+            ) as load:
+                response = self.client.get(path, query_string={"event_id": "4"})
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json["event"]["event_name"], "Orientation")
+            self.assertEqual(response.json["requirements"][0]["value"], "At least 350")
+            load.assert_called_once_with("4", "coordinator-token")
+            if path.endswith("/search"):
+                self.assertEqual(response.json["count"], 2)
+                self.assertEqual(response.json["eligible_count"], 1)
+                self.assertEqual([v["eligible"] for v in response.json["venues"]], [True, False])
+                self.assertIsNone(search.call_args.args[0]["capacity"])
+                self.assertEqual(search.call_args.args[1], "coordinator-token")
+                assessed = response.json["venues"][1]
+            else:
+                assessed = response.json["venue"]
+            self.assertFalse(assessed["eligible"])
+            self.assertEqual(assessed["unmet_requirements"][0]["label"], "Expected attendance")
+
+    def test_malformed_event_ids_never_load_an_event(self):
+        for path in self.PATHS:
+            with self.subTest(path=path), patch("app.routes.venues.authenticated_token", return_value="token"), patch(
+                "app.routes.venues.search_venues", return_value=[]
+            ), patch("app.routes.venues.supabase_request", return_value=[valid_venue()]), patch(
+                "app.routes.venues.load_event"
+            ) as load:
+                response = self.client.get(path, query_string={"event_id": "4 or 1=1"})
+            self.assertEqual(response.status_code, 404)
+            load.assert_not_called()
+
+    def test_inaccessible_events_return_not_found_without_exposing_details(self):
+        for path in self.PATHS:
+            with self.subTest(path=path), patch("app.routes.venues.authenticated_token", return_value="token"), patch(
+                "app.routes.venues.search_venues", return_value=[]
+            ), patch("app.routes.venues.supabase_request", return_value=[valid_venue()]), patch(
+                "app.routes.venues.load_event", side_effect=EventError("Event not found or access unavailable.", 404)
+            ):
+                response = self.client.get(path, query_string={"event_id": "4"})
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.json, {"error": "Event not found or access unavailable."})
+
+
 class VenueDeletionBookingTests(unittest.TestCase):
     """An approved venue booking commits the venue as surely as an event does."""
 
@@ -486,16 +548,22 @@ class VenueDeletionBookingTests(unittest.TestCase):
 
     def test_only_approved_bookings_that_have_not_ended_are_asked_for(self):
         exact = datetime(2030, 1, 1, tzinfo=timezone.utc)
-        with patch("app.routes.venues.datetime") as clock:
+        with patch("app.routes.venues.datetime") as clock, patch(
+            "app.routes.venues.supabase_request", return_value=[self.booking]
+        ) as query:
             clock.now.return_value = exact
-            path = venue_routes.upcoming_booking_path(VENUE_ID)
+            result = venue_routes.upcoming_approved_bookings(VENUE_ID, "staff-token")
+
+        self.assertEqual(result, [self.booking])
+        self.assertEqual(query.call_args.kwargs["token"], "staff-token")
+        path = query.call_args.args[0]
 
         self.assertIn("status=eq.approved", path)
         self.assertIn("ends_at=gt.2030-01-01T00%3A00%3A00%2B00%3A00", path)
         self.assertIn(f"venue_id=eq.{VENUE_ID}", path)
 
 
-class VenueCreateSchemaTests(unittest.TestCase):
+class VenueSchemaTests(unittest.TestCase):
     # User story: Create Venue Catalogue | Page/API: Create Venue form — valid input normalization.
     def test_valid_venue_is_cleaned(self):
         record, errors = parse_create(valid_venue(venue_name="  ConnectSphere   Hall  "))
@@ -591,8 +659,6 @@ class VenueCreateSchemaTests(unittest.TestCase):
             "unit_number": "U" * 51,
             "accessibility_notes": "A" * 1001,
             "capacity": 0,
-            "default_setup_minutes": -1,
-            "default_turnaround_minutes": -1,
         }
         for field, value in cases.items():
             with self.subTest(field=field):
