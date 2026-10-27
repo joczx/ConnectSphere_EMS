@@ -2,7 +2,6 @@
 
 import unittest
 from datetime import datetime, timezone
-from pprint import pformat
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -16,11 +15,8 @@ VENUE_ID = str(uuid4())
 
 
 def report_test_case(test_case_id, **actual_results):
-    """Print values captured during a successful documented test case."""
-    print(f"\n{test_case_id}")
-    for label, value in actual_results.items():
-        print(f"{label.replace('_', ' ').upper()}: {pformat(value, sort_dicts=False)}")
-    print("STATUS: PASS")
+    """Print a concise result for a successful documented test case."""
+    print(f"{test_case_id}: OK")
 
 
 def valid_venue(**overrides):

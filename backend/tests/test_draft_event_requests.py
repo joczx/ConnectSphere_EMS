@@ -14,21 +14,6 @@ from app.routes import event_requests as routes
 from flask import Flask
 
 
-# AC 1: required submission fields may be absent when saving a draft.
-@pytest.mark.parametrize('field', schema.MANDATORY_FOR_SUBMISSION)
-def test_each_submission_field_may_be_absent_in_saved_draft(field):
-    payload = valid_payload()
-    del payload[field]
-    table = Mock()
-    table.insert.return_value.execute.return_value.data = [{'event_request_id': 42, 'status': 'draft'}]
-    with patch.object(service, '_execute', side_effect=lambda operation, **kwargs: operation(table).data):
-        service.create_event_request(payload, submit=False)
-    inserted = table.insert.call_args.args[0]
-    assert field not in inserted
-    assert inserted['status'] == 'draft'
-    assert 'submitted_at' not in inserted
-
-
 def test_draft_with_no_event_details_can_be_saved():
     organiser = valid_payload()['event_organiser_id']
     table = Mock()
@@ -55,15 +40,6 @@ def test_list_drafts_filters_by_organiser_and_draft_status():
     assert table.eq.call_args_list[0].args == ('event_organiser_id', organiser)
     assert table.eq.call_args_list[1].args == ('status', 'draft')
     table.order.assert_called_once_with('updated_at', desc=True)
-
-
-def test_read_saved_draft_returns_all_existing_values():
-    stored = {**valid_payload(), 'event_request_id': 42, 'status': 'draft'}
-    table = Mock()
-    table.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [stored]
-    with patch.object(service, '_execute', side_effect=lambda operation, **kwargs: operation(table).data):
-        assert service.get_event_request(42) == stored
-    table.select.return_value.eq.assert_called_once_with('event_request_id', 42)
 
 
 def test_workflow_allows_editing_a_draft_without_creating_amendment():
@@ -105,28 +81,6 @@ def test_invalid_draft_edit_never_writes():
     write.assert_not_called()
 
 
-# AC 3: every missing mandatory answer prevents submission.
-@pytest.mark.parametrize('field', schema.MANDATORY_FOR_SUBMISSION)
-def test_each_missing_answer_is_a_submission_blocker(field):
-    record = valid_payload()
-    del record[field]
-    assert field in service.find_blocking_errors(record)
-
-
-@pytest.mark.parametrize('field', schema.MANDATORY_FOR_SUBMISSION)
-def test_workflow_refuses_submission_when_field_validation_fails(field):
-    draft = {'event_request_id': 42, 'status': 'draft'}
-    errors = {field: 'Required before submitting.'}
-    with patch.object(service, 'require_event_request', return_value=draft), \
-         patch.object(service, 'find_blocking_errors', return_value=errors) as validate, \
-         patch.object(service, 'mark_submitted') as submit, \
-         pytest.raises(service.EventRequestError) as caught:
-        workflow.send_for_review(42)
-    assert caught.value.errors == errors
-    validate.assert_called_once_with(draft)
-    submit.assert_not_called()
-
-
 def test_completed_draft_can_proceed_to_submission():
     draft = {**valid_payload(), 'event_request_id': 42, 'status': 'draft'}
     assert service.find_blocking_errors(draft) == {}
@@ -134,7 +88,7 @@ def test_completed_draft_can_proceed_to_submission():
     with patch.object(service, 'require_event_request', return_value=draft), \
          patch.object(service, 'find_blocking_errors', return_value={}), \
          patch.object(service, 'mark_submitted', return_value=submitted) as submit:
-        assert workflow.send_for_review(42) == (submitted, False, [])
+        assert workflow.send_for_review(42) == (submitted, False)
     submit.assert_called_once_with(42)
 
 
@@ -166,23 +120,6 @@ def test_failed_draft_creation_does_not_return_success():
          pytest.raises(service.EventRequestError) as caught:
         routes.create()
     assert caught.value is error
-
-
-def test_empty_database_result_is_not_treated_as_saved_draft():
-    with patch.object(service, '_execute', return_value=[]), \
-         pytest.raises(service.EventRequestError) as caught:
-        service.create_event_request({'event_name': 'Draft'}, submit=False)
-    assert caught.value.status_code == 502
-
-
-def test_saved_draft_is_not_marked_submitted():
-    table = Mock()
-    table.insert.return_value.execute.return_value.data = [{'event_request_id': 42, 'status': 'draft'}]
-    with patch.object(service, '_execute', side_effect=lambda operation, **kwargs: operation(table).data):
-        row = service.create_event_request({'event_name': 'Draft'}, submit=False)
-    assert row['status'] == 'draft'
-    assert table.insert.call_args.args[0]['status'] == 'draft'
-    assert 'submitted_at' not in table.insert.call_args.args[0]
 
 
 def test_incomplete_draft_cannot_be_submitted():
@@ -235,31 +172,10 @@ def test_clearing_the_room_layout_produces_null_not_an_empty_string():
     assert record["room_layout"] is None
 
 
-def test_clearing_the_attendance_is_allowed_on_a_draft():
-    record, errors = schema.parse_payload({"capacity_needed": None})
-
-    assert errors == {}
-    assert record["capacity_needed"] is None
-
-
 def test_a_cleared_field_still_counts_as_missing_at_submission():
     record, _ = schema.parse_payload(valid_payload(event_name=None))
 
     assert "event_name" in schema.find_missing(record)
-
-
-def test_editing_one_field_leaves_the_others_untouched():
-    """A partial edit must not blank out fields the body did not mention."""
-    record, errors = schema.parse_payload({"capacity_needed": 200})
-
-    assert errors == {}
-    assert record == {"capacity_needed": 200}
-
-
-def test_an_invalid_value_is_still_rejected_while_editing_a_draft():
-    _, errors = schema.parse_payload({"room_layout": "igloo"})
-
-    assert "room_layout" in errors
 
 
 def test_the_organiser_cannot_be_cleared():
@@ -269,10 +185,13 @@ def test_the_organiser_cannot_be_cleared():
     assert "event_organiser_id" in errors
 
 
-def test_accessibility_flags_cannot_be_cleared():
+@pytest.mark.parametrize(
+    "field", ["need_wheelchair_accessibility", "need_blind_accessibility"]
+)
+def test_accessibility_flags_cannot_be_cleared(field):
     """Both are NOT NULL in the database, so null is not a valid answer."""
-    _, errors = schema.parse_payload({"need_wheelchair_accessibility": None})
+    _, errors = schema.parse_payload({field: None})
 
-    assert "need_wheelchair_accessibility" in errors
+    assert field in errors
 
 

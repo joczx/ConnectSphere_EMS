@@ -19,10 +19,8 @@ alter table public.event_request
     -- not need registration.
     add column if not exists registration_needs text;
 
--- Only the outer type is enforced here. PostgreSQL does not allow subqueries
--- in a check constraint, so per-item rules (non-empty type, quantity >= 1, no
--- duplicate types) are enforced in app/schemas/event_request.py, where they
--- can also produce a readable error message.
+-- Only the outer type is enforced here. The application validates the
+-- user-entered equipment type and positive quantity before writing each item.
 alter table public.event_request
     drop constraint if exists event_request_equipment_requirements_is_array;
 

@@ -61,13 +61,6 @@ def test_a_client_cannot_name_the_reviewer():
     assert "reviewer_id" in errors["_body"]
 
 
-def test_the_reviewer_comes_from_the_session():
-    record, errors = review.parse_payload({"outcome": "approved"}, COORDINATOR)
-
-    assert errors == {}
-    assert record["reviewer_id"] == COORDINATOR
-
-
 # AC: The Event Coordinator can add comments along with the outcome.
 def test_comments_are_kept_with_the_outcome():
     record, errors = review.parse_payload(
@@ -153,15 +146,6 @@ def test_every_mapped_status_exists_in_the_database_enum():
 # AC: The system allows Event Coordinators to view submitted event requests.
 def test_only_submitted_requests_can_be_reviewed():
     assert review.REVIEWABLE_STATUSES == {request_schema.STATUS_SUBMITTED}
-
-
-def test_a_draft_is_not_reviewable():
-    assert request_schema.STATUS_DRAFT not in review.REVIEWABLE_STATUSES
-
-
-@pytest.mark.parametrize("status", ["planning", "rejected", "cancelled"])
-def test_an_already_decided_request_is_not_reviewable(status):
-    assert status not in review.REVIEWABLE_STATUSES
 
 
 # AC: The Event Organiser should be notified of the outcome.

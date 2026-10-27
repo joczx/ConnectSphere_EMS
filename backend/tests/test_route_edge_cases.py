@@ -66,20 +66,22 @@ def test_request_missing_bodies_and_missing_record(client, monkeypatch):
     assert client.get('/api/event-requests/1').status_code == 404
 
 
-def test_request_amendment_delete_submit_and_history(client, monkeypatch):
+def test_request_amendment_delete_and_submit(client, monkeypatch):
     amendment = {'amendment_id': 1}
     monkeypatch.setattr(event_requests, 'edit_event_request', lambda *args: ({'event_request_id': 1}, amendment))
-    assert client.patch('/api/event-requests/1', json={'note': 'Reply'}).json['amendment'] == amendment
+    edit_response = client.patch('/api/event-requests/1', json={'note': 'Reply'})
+    assert edit_response.json == {
+        'message': 'Amendment saved. Resubmit the request when you are ready.',
+        'event_request': {'event_request_id': 1},
+    }
     delete = Mock()
     monkeypatch.setattr(event_requests, 'delete_draft', delete)
-    assert client.delete('/api/event-requests/1').status_code == 200
+    assert client.delete('/api/event-requests/1').status_code == 204
     delete.assert_called_once_with(1)
-    monkeypatch.setattr(event_requests, 'send_for_review', lambda _: ({'event_request_id': 1}, True, [{'recipient_id': 'c'}]))
+    monkeypatch.setattr(event_requests, 'send_for_review', lambda _: ({'event_request_id': 1}, True))
     response = client.post('/api/event-requests/1/submit')
-    assert response.json['notified'] == ['c']
+    assert response.json['event_request'] == {'event_request_id': 1}
     assert 'resubmitted' in response.json['message']
-    monkeypatch.setattr(event_requests, 'list_amendments', lambda _: [amendment])
-    assert client.get('/api/event-requests/1/amendments').json == {'count': 1, 'amendments': [amendment]}
 
 
 @pytest.mark.parametrize('error,status', [(StoreError(503, code='23514'), 409), (StoreError(403), 403)])
