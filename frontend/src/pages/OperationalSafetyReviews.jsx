@@ -30,7 +30,7 @@ export default function OperationalSafetyReviews() {
     <Navbar />
     <main className="container">
     <div className="heading"><div><p className="eyebrow">SAFETY MANAGEMENT</p><h1>Operational safety reviews</h1></div></div>
-    <p>Events shown here have completed their venue and technical arrangements and are awaiting a safety check.</p>
+    <p>Events shown here are assigned to you and have been submitted by their Event Coordinator for a safety check once their venue and technical arrangements were confirmed.</p>
     {location.state?.message && <p className="panel venue-success" role="status">{location.state.message}</p>}
     {state.loading && <p role="status">Loading events awaiting safety checks…</p>}
     {state.error && <div className="panel error" role="alert">{state.error}</div>}
