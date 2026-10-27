@@ -134,7 +134,7 @@ def test_completed_draft_can_proceed_to_submission():
     with patch.object(service, 'require_event_request', return_value=draft), \
          patch.object(service, 'find_blocking_errors', return_value={}), \
          patch.object(service, 'mark_submitted', return_value=submitted) as submit:
-        assert workflow.send_for_review(42) == (submitted, False, [])
+        assert workflow.send_for_review(42) == (submitted, False)
     submit.assert_called_once_with(42)
 
 
