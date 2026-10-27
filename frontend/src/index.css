@@ -81,9 +81,11 @@ input:not([type="checkbox"]), select, textarea { display: block; width: 100%; bo
 .notification-menu { position: relative; }
 .notification-menu summary { display: flex; align-items: center; color: #475569; cursor: pointer; list-style: none; }
 .notification-menu summary::-webkit-details-marker { display: none; }
-.notification-menu .account-menu-content { z-index: 50; width: 320px; max-width: 80vw; max-height: 60vh; overflow-y: auto; }
+/* Only the list scrolls; the heading and "View all notifications" stay in place. */
+.notification-menu .account-menu-content { z-index: 50; display: flex; flex-direction: column; width: 320px; max-width: 80vw; max-height: min(520px, 70vh); overflow: hidden; }
+.notification-menu .account-menu-content > :not(.notification-list) { flex: none; }
 .notification-list { display: grid; padding: 0; margin: 8px 0; list-style: none; }
-.notification-menu .notification-list { max-height: 380px; overflow-y: auto; }  /* 5 x 76px items */
+.notification-menu .notification-list { flex: 0 1 auto; min-height: 0; max-height: 380px; overflow-y: auto; }  /* 5 x 76px items */
 .notification-list li button { display: grid; gap: 2px; width: 100%; padding: 8px 10px; border: 0; border-bottom: 1px solid var(--cs-color-border); border-radius: 0; background: transparent; color: var(--cs-color-text); font-weight: 400; text-align: left; }
 .notification-menu .notification-list li button { height: 76px; line-height: 1.35; overflow: hidden; }
 /* In the popup each line is truncated with an ellipsis rather than cut off. */

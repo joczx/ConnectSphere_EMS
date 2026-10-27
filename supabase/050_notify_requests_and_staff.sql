@@ -8,8 +8,21 @@
 --    the event already exists: create_event_after_request_approval fires first.
 -- 2. Staff are assigned only when an event is created from an approved request
 --    (auto_assign_event_staff, 043, before insert), so this notifies after insert.
+-- 3. The Safety Officer can read their event too (023 named only the other four),
+--    so their notification opens it like everyone else's.
 
 begin;
+
+drop policy if exists authenticated_read_events on public.events;
+create policy authenticated_read_events on public.events
+    for select to authenticated
+    using (
+        event_organiser_id = (select auth.uid())
+        or event_coordinator_id = (select auth.uid())
+        or technical_support_id = (select auth.uid())
+        or venue_staff_id = (select auth.uid())
+        or safety_officer_id = (select auth.uid())
+    );
 
 create or replace function public.notify_event_request_submitted() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -62,7 +75,7 @@ begin
     for staff in select * from (values
         (new.venue_staff_id, 'Venue Staff', '/events/' || new.event_id),
         (new.technical_support_id, 'Technical Support', '/events/' || new.event_id),
-        (new.safety_officer_id, 'Safety Officer', '/operational-safety-reviews')) as s(user_id, role, link)
+        (new.safety_officer_id, 'Safety Officer', '/events/' || new.event_id)) as s(user_id, role, link)
     loop
         assigned := assigned || format('%s %s', staff.role,
             coalesce((select name from public.users where user_id = staff.user_id), 'not assigned'));
