@@ -67,9 +67,10 @@ def send_for_review(event_request_id):
 
     row = requests.mark_submitted(event_request_id)
 
-    notified = _notify_resubmission(row) if is_resubmission else []
+    if is_resubmission:
+        _notify_resubmission(row)
 
-    return row, is_resubmission, notified
+    return row, is_resubmission
 
 
 def can_amend(event_request):
@@ -93,21 +94,6 @@ def is_awaiting_clarification(event_request):
     latest = reviews.latest_review(event_request["event_request_id"])
 
     return latest is not None and latest["outcome"] == review_schema.OUTCOME_CLARIFICATION
-
-
-def list_amendments(event_request_id):
-    """Return the amendment history for a request, newest first."""
-    requests.require_event_request(event_request_id)
-
-    def query(table):
-        return (
-            table.select("*")
-            .eq("event_request_id", event_request_id)
-            .order("created_at", desc=True)
-            .execute()
-        )
-
-    return reviews.execute_on(AMENDMENT_TABLE, query, action="list the amendments")
 
 
 def _split_note(payload):
@@ -179,13 +165,12 @@ def _notify_resubmission(event_request):
             )
 
     try:
-        return notification_service.deliver(get_supabase(), pending)
+        notification_service.deliver(get_supabase(), pending)
     except Exception:  # noqa: BLE001 - never undo a recorded resubmission
         logger.exception(
             "Could not notify coordinators about event request %s",
             event_request["event_request_id"],
         )
-        return []
 
 
 def _why_not_editable(existing):

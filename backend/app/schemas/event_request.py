@@ -77,10 +77,6 @@ WRITABLE_FIELDS = (
     "registration_needs",
 )
 
-# Fields an equipment requirement may carry. "notes" holds the per-item
-# technical requirements.
-EQUIPMENT_ITEM_FIELDS = frozenset({"equipment_type", "quantity", "notes"})
-
 # Must be filled in before a request may leave draft. For facilities and
 # equipment, null means "not answered yet" and [] means "none needed", so an
 # Organiser must answer but may answer none. The accessibility flags are not
@@ -136,10 +132,8 @@ def parse_payload(payload):
         if field in payload:
             if _is_cleared(payload[field]):
                 record[field] = None
-            elif isinstance(payload[field], str):
-                record[field] = payload[field].strip()
             else:
-                errors[field] = f"{_LABELS[field]} must be text."
+                record[field] = payload[field].strip()
 
     if "event_organiser_id" in payload:
         organiser_id = clean_user_id(payload["event_organiser_id"])
@@ -175,8 +169,6 @@ def parse_payload(payload):
         # empty string is not one of its values.
         if _is_cleared(payload["room_layout"]):
             record["room_layout"] = None
-        elif not isinstance(payload["room_layout"], str):
-            errors["room_layout"] = "Room layout must be text."
         elif payload["room_layout"].strip() not in ROOM_LAYOUTS:
             errors["room_layout"] = (
                 "Room layout must be one of: " + ", ".join(sorted(ROOM_LAYOUTS)) + "."
@@ -209,11 +201,9 @@ def parse_payload(payload):
         needs = payload["registration_needs"]
         if needs is None:
             record["registration_needs"] = None
-        elif isinstance(needs, str):
+        else:
             # Blank is stored as null: the event simply needs no registration.
             record["registration_needs"] = needs.strip() or None
-        else:
-            errors["registration_needs"] = "Registration needs must be text."
 
     if not errors:
         errors.update(check_timing(record))
@@ -304,10 +294,7 @@ def _is_cleared(value):
 
 
 def _clean_int(value):
-    # bool is a subclass of int; True should not pass as an id or a headcount.
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, int):
+    if type(value) is int:
         return value
     if isinstance(value, str) and value.strip().lstrip("-").isdigit():
         return int(value.strip())
@@ -316,23 +303,16 @@ def _clean_int(value):
 
 def _clean_datetime(value):
     """Return (ISO 8601 UTC string, problem). Exactly one is ever set."""
-    if value is None:
+    if _is_cleared(value):
         return None, None
 
-    if isinstance(value, datetime):
-        moment = value
-    elif isinstance(value, str):
-        if not value.strip():
-            return None, None
-        try:
-            moment = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
-        except ValueError:
-            return None, (
-                "must be an ISO 8601 date and time, "
-                "for example 2026-10-01T09:00:00+08:00."
-            )
-    else:
-        return None, "must be an ISO 8601 date and time."
+    try:
+        moment = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None, (
+            "must be an ISO 8601 date and time, "
+            "for example 2026-10-01T09:00:00+08:00."
+        )
 
     if moment.tzinfo is None:
         return None, (
@@ -350,26 +330,15 @@ def _to_datetime(iso_string):
 def _clean_facilities(value):
     if value is None:
         return None, None
-    if not isinstance(value, list):
-        return None, "Required facilities must be a list."
 
-    facilities = []
-    for item in value:
-        if not isinstance(item, str) or not item.strip():
-            return None, "Each required facility must be a non-empty name."
-        facility = item.strip()
+    facilities = [item.strip() for item in value]
+    for facility in facilities:
         if facility not in FACILITIES:
             return None, (
                 "Required facilities must contain only: "
                 + ", ".join(sorted(FACILITIES))
                 + "."
             )
-        facilities.append(facility)
-
-    duplicates = len(facilities) != len(set(facilities))
-    if duplicates:
-        return None, "Required facilities must not repeat the same facility."
-
     return facilities, None
 
 
@@ -381,39 +350,14 @@ def _clean_equipment(value):
     """
     if value is None:
         return None, None
-    if not isinstance(value, list):
-        return None, (
-            "Equipment requirements must be a list, for example "
-            '[{"equipment_type": "projector", "quantity": 2}].'
-        )
 
     items = []
-    seen = set()
 
     for position, raw in enumerate(value, start=1):
-        if not isinstance(raw, dict):
-            return None, (
-                f"Item {position}: each equipment requirement must be an "
-                "object with an equipment_type and a quantity."
-            )
-
-        unknown = sorted(set(raw) - EQUIPMENT_ITEM_FIELDS)
-        if unknown:
-            return None, f"Item {position}: unrecognised field(s): {', '.join(unknown)}."
-
         equipment_type = raw.get("equipment_type")
         if not isinstance(equipment_type, str) or not equipment_type.strip():
             return None, f"Item {position}: equipment type is required."
         equipment_type = equipment_type.strip()
-
-        # Two lines for the same thing should be one line with a larger
-        # quantity, otherwise the totals are ambiguous downstream.
-        if equipment_type.casefold() in seen:
-            return None, (
-                f"Item {position}: {equipment_type} is listed more than once. "
-                "Combine them into a single quantity."
-            )
-        seen.add(equipment_type.casefold())
 
         quantity = _clean_int(raw.get("quantity"))
         if quantity is None:
@@ -422,14 +366,12 @@ def _clean_equipment(value):
             return None, f"Item {position}: quantity must be at least 1."
 
         notes = raw.get("notes")
-        if notes is not None and not isinstance(notes, str):
-            return None, f"Item {position}: notes must be text."
 
         items.append(
             {
                 "equipment_type": equipment_type,
                 "quantity": quantity,
-                "notes": notes.strip() or None if isinstance(notes, str) else None,
+                "notes": notes.strip() or None if notes else None,
             }
         )
 
