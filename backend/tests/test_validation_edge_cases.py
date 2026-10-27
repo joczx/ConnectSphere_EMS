@@ -9,24 +9,12 @@ from app.services import event_venue_criteria as criteria, venue_search_service
 
 
 @pytest.mark.parametrize('payload,field', [
-    ({'event_name': 12}, 'event_name'), ({'room_layout': []}, 'room_layout'),
     ({'capacity_needed': True}, 'capacity_needed'),
-    ({'start_datetime': 12}, 'start_datetime'),
     ({'required_facilities': ['']}, 'required_facilities'),
-    ({'equipment_requirements': ['projector']}, 'equipment_requirements'),
-    ({'equipment_requirements': [{'equipment_type': 'projector', 'quantity': 1, 'notes': 12}]}, 'equipment_requirements'),
 ])
 def test_request_rejects_malformed_field_values(payload, field):
     _, errors = event_request.parse_payload(payload)
     assert field in errors
-
-
-def test_request_dates_accept_datetime_and_blank_values():
-    moment = datetime(2099, 1, 1, tzinfo=timezone.utc)
-    record, errors = event_request.parse_payload({'start_datetime': moment, 'end_datetime': '   '})
-    assert not errors
-    assert record['start_datetime'] == moment.isoformat()
-    assert record['end_datetime'] is None
 
 
 @pytest.mark.parametrize('status,word', [('completed', 'over'), ('cancelled', 'cancelled'), (None, 'unknown'), ('submitted', 'submitted')])

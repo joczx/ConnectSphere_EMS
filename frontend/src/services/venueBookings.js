@@ -43,5 +43,5 @@ export const byStatus = (bookings, status) => (bookings || []).filter(item => it
 
 // Shown before a booking is changed or cancelled while its event is in safety review.
 export const SAFETY_REVIEW_WARNING = 'This event is currently under safety review. Changing or cancelling this venue '
-  + 'booking restarts its safety review, and the event returns to planning until its venue arrangements are complete again.';
+  + 'booking restarts its safety review, and the event returns to planning until its venue arrangements are complete and it is submitted for safety checks again.';
 export const underSafetyReview = (status) => status === 'pending_safety_checks';

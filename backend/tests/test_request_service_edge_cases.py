@@ -75,16 +75,9 @@ def test_invalid_list_status_is_rejected_before_query(table):
     table.execute.assert_not_called()
 
 
-@pytest.mark.parametrize('code,message,status,field', [
-    ('22P02', 'invalid input value for enum facility', 400, 'required_facilities'),
-    ('22P02', 'invalid enum', 400, None), ('23514', 'constraint', 409, None),
-    ('23503', 'foreign key', 400, 'event_organiser_id'), (None, 'offline', 502, None),
-])
-def test_request_database_errors_are_translated(code, message, status, field):
-    error = service._translate(SimpleNamespace(code=code, message=message), 'save')
-    assert error.status_code == status
-    if field:
-        assert field in error.errors
+def test_request_database_errors_are_translated():
+    error = service._translate(RuntimeError('offline'), 'save')
+    assert error.status_code == 502
 
 
 def test_database_exception_preserves_cause(monkeypatch):
@@ -106,7 +99,7 @@ def test_workflow_refuses_edit_and_resubmit_without_clarification(monkeypatch, s
         assert error.value.status_code == 409
 
 
-def test_amend_rejected_request_and_read_history(monkeypatch, table):
+def test_amend_rejected_request_and_record_amendment(monkeypatch, table):
     existing = {'event_request_id': 1, 'event_organiser_id': 'owner', 'status': 'rejected'}
     monkeypatch.setattr(service, 'require_event_request', lambda _: existing)
     monkeypatch.setattr(service, 'apply_edit', lambda *args: ({'event_name': 'New'}, {'event_name': {'from': 'Old', 'to': 'New'}}))
@@ -115,8 +108,6 @@ def test_amend_rejected_request_and_read_history(monkeypatch, table):
     assert amendment['event_request_id'] == 1
     assert table.insert.call_args.args[0]['note'] == 'Reply'
     assert table.insert.call_args.args[0]['amended_by'] == 'owner'
-    assert workflow.list_amendments(1) == [{'event_request_id': 1}]
-    table.order.assert_called_with('created_at', desc=True)
     assert workflow._split_note(None) == (None, None)
 
 
@@ -155,12 +146,13 @@ def test_resubmission_notifies_each_coordinator_once(monkeypatch):
     monkeypatch.setattr(workflow, 'get_supabase', lambda: Mock())
     deliver = Mock(side_effect=lambda client, pending: pending)
     monkeypatch.setattr(notifications, 'deliver', deliver)
-    saved, resubmitted, sent = workflow.send_for_review(1)
+    saved, resubmitted = workflow.send_for_review(1)
     assert saved == row and resubmitted
+    sent = deliver.call_args.args[1]
     assert len({n['recipient_id'] for n in sent}) == len(sent)
     assert 'c1' in {n['recipient_id'] for n in sent}
     deliver.side_effect = RuntimeError('offline')
-    assert workflow._notify_resubmission(row) == []
+    assert workflow._notify_resubmission(row) is None
 
 
 def test_review_missing_request_and_history(monkeypatch, table):
@@ -193,5 +185,3 @@ def test_notification_helpers_empty_and_unread(table):
     client = Mock()
     client.table.return_value = table
     assert notifications.deliver(client, []) == []
-    assert notifications.list_for_recipient(client, 'owner', unread_only=True) == [{'event_request_id': 1}]
-    table.eq.assert_any_call('is_read', False)

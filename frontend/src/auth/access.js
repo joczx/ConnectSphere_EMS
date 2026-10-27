@@ -57,6 +57,7 @@ export const ACTIONS = {
   'event.registrationReady': { roles: coordinator, relation: ['coordinator'] },
   'event.registrationPeriod': { roles: organiser, relation: ['organiser'] },
   'event.findVenue': { roles: coordinator, relation: ['coordinator'] },
+  'event.submitSafety': { roles: coordinator, relation: ['coordinator'] },
 
   'eventRequest.delete': { roles: organiser, relation: ['organiser'] },
   'eventRequest.cancel': { roles: organiser, relation: ['organiser'] },
@@ -69,7 +70,6 @@ export const ACTIONS = {
 
   'booking.request': { roles: coordinator },
   'booking.cancel': { roles: coordinator },
-  'booking.dismissAlerts': { roles: coordinator },
   'booking.review': { roles: venueStaff, relation: ['venueStaff'] },
   'booking.hold': { roles: venueStaff, relation: ['venueStaff'] },
   'booking.releaseHold': { roles: venueStaff, relation: ['venueStaff'] },

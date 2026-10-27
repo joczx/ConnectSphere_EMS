@@ -86,8 +86,8 @@ export default function EquipmentReservations({ refresh, onChanged, eventId = ''
     {loading ? <p role="status">Loading your reservations...</p> : <>
       {!visibleRows.length && !error && <p>{eventId ? 'You have no reservations for this event.' : 'You have no equipment reservations.'}</p>}
       {visibleRows.map(row => <article key={row.reservation_id} className="panel">
-        <h3>{row.name} ? {row.event_name}</h3>
-        <p>{date(row.starts_at)} ? {date(row.ends_at)} (SGT)</p>
+        <h3>{row.name} — {row.event_name}</h3>
+        <p>{date(row.starts_at)} – {date(row.ends_at)} (SGT)</p>
         <p>Reserved quantity: {row.quantity}</p>
         {editing === row.reservation_id ? <form onSubmit={event => { event.preventDefault(); change(row); }}>
           <label>Quantity for {row.name}

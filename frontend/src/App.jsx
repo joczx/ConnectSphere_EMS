@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-d
 import { useAuth } from './auth/AuthContext';
 import Login from './pages/Login';
 import Home from './pages/Home';
+import Notifications from './pages/Notifications';
 import Events from './pages/Events';
 import AttendeeEvents from './pages/AttendeeEvents';
 import Equipment from './pages/Equipment';
@@ -52,6 +53,7 @@ export default function App() {
   return <HashRouter><Routes>
     <Route path="/" element={token ? <Navigate to="/home" replace /> : <Login />} />
     <Route path="/home" element={protectedView(<Home />)} />
+    <Route path="/notifications" element={protectedView(<Notifications />)} />
     <Route path="/events" element={protectedView(<Events />)} />
     <Route path="/event-registration" element={protectedView(<AttendeeEvents />)} />
     <Route path="/events/:eventId" element={protectedView(<Events />)} />

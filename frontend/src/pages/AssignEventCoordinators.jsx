@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext';
 
@@ -20,6 +21,11 @@ export default function AssignEventCoordinators() {
   const [busyId, setBusyId] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  // Opened from a notification: show that request first.
+  const highlight = useSearchParams()[0].get('request');
+  useEffect(() => {
+    if (highlight && !state.loading) document.getElementById(`request-${highlight}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [highlight, state.loading]);
 
   useEffect(() => {
     let ignore = false;
@@ -79,6 +85,9 @@ export default function AssignEventCoordinators() {
       {state.error && <div role="alert" className="panel error">{state.error}</div>}
       {error && <div role="alert" className="panel error">{error}</div>}
       {message && <p role="status" className="assignment-success">{message}</p>}
+      {highlight && !state.loading && !state.requests.some(item => String(item.event_request_id) === highlight) && (
+        <p className="panel">That event request is no longer waiting for a coordinator.</p>
+      )}
       {!state.loading && !state.error && state.requests.length === 0 && (
         <p>No unassigned submitted event requests.</p>
       )}
@@ -89,7 +98,7 @@ export default function AssignEventCoordinators() {
       )}
       <div className="event-list assignment-list">
         {state.requests.map(item => (
-          <article className="panel assignment-card" key={item.event_request_id}>
+          <article className={`panel assignment-card${String(item.event_request_id) === highlight ? ' highlighted' : ''}`} id={`request-${item.event_request_id}`} key={item.event_request_id}>
             <h2>{item.event_name}</h2>
             <dl>
               <div><dt>Purpose</dt><dd>{item.purpose || 'Not specified'}</dd></div>
