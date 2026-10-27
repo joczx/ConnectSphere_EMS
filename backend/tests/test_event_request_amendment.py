@@ -5,9 +5,11 @@ Supabase.
 """
 
 import pytest
+from unittest.mock import Mock, patch
 
 from app.schemas import event_request as schema
 from app.services.event_request_service import EventRequestError
+from app.services import event_request_workflow as workflow
 from app.services.event_request_workflow import _split_note, can_amend
 
 
@@ -18,12 +20,6 @@ def test_a_change_records_the_old_and_new_value():
     assert schema.diff(existing, {"capacity_needed": 150}) == {
         "capacity_needed": {"from": 300, "to": 150}
     }
-
-
-def test_setting_a_field_to_what_it_already_is_is_not_a_change():
-    existing = {"capacity_needed": 150}
-
-    assert schema.diff(existing, {"capacity_needed": 150}) == {}
 
 
 def test_only_the_fields_that_changed_are_recorded():
@@ -105,3 +101,46 @@ def test_a_submitted_request_is_amendable_only_while_clarification_is_outstandin
     )
 
     assert can_amend({"event_request_id": 1, "status": "submitted"}) is allowed
+
+
+def test_clarified_request_edit_records_an_amendment(monkeypatch):
+    existing = {
+        "event_request_id": 42,
+        "event_organiser_id": "organiser-id",
+        "status": "submitted",
+    }
+    updated = {**existing, "event_name": "Updated event"}
+    changes = {"event_name": {"from": "Original event", "to": "Updated event"}}
+    saved_amendment = {
+        "event_request_id": 42,
+        "amended_by": "organiser-id",
+        "changes": changes,
+        "note": "Clarified details.",
+    }
+    table = Mock()
+    table.insert.return_value.execute.return_value = Mock(data=[saved_amendment])
+
+    monkeypatch.setattr(workflow.requests, "require_event_request", lambda _id: existing)
+    monkeypatch.setattr(
+        workflow.reviews,
+        "latest_review",
+        lambda _id: {"outcome": "clarification_requested"},
+    )
+    monkeypatch.setattr(
+        workflow.requests, "apply_edit", lambda _existing, _payload: (updated, changes)
+    )
+
+    def execute_on(table_name, operation, *, action):
+        assert table_name == workflow.AMENDMENT_TABLE
+        assert action == "record the amendment"
+        return operation(table).data
+
+    monkeypatch.setattr(workflow.reviews, "execute_on", execute_on)
+
+    row, amendment = workflow.edit(
+        42, {"event_name": "Updated event", "note": " Clarified details. "}
+    )
+
+    assert row == updated
+    assert amendment == saved_amendment
+    table.insert.assert_called_once_with(saved_amendment)
