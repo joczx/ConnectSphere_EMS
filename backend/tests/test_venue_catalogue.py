@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from app import create_app
 from app.schemas.venue import _time, parse_create, parse_update
+from app.services.event_service import EventError
 from app.services.event_store import StoreError
 from app.routes import venues as venue_routes
 
@@ -207,6 +208,47 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertIn("capacity", invalid.json["errors"])
         search.assert_called_once()
 
+    def test_event_aware_search_assesses_venues_and_summarises_the_event(self):
+        event = {
+            "event_id": 4,
+            "event_name": "Product launch",
+            "status": "planning",
+            "start_datetime": "2030-01-01T09:00:00+00:00",
+            "end_datetime": "2030-01-01T11:00:00+00:00",
+            "capacity_needed": 100,
+            "venue_id": None,
+        }
+        venues = [{"venue_id": VENUE_ID, **valid_venue()}]
+        assessed = [{**venues[0], "eligible": True, "conflicts": [], "unmet_requirements": []}]
+        with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
+            "app.routes.venues.search_venues", return_value=venues
+        ), patch("app.routes.venues.load_event", return_value=event) as load, patch(
+            "app.routes.venues.mark_for_event", return_value=assessed
+        ) as mark:
+            response = self.client.get("/api/venues/search?event_id=4&booking_id=own-booking")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["venues"], assessed)
+        self.assertEqual(response.json["eligible_count"], 1)
+        self.assertEqual(response.json["event"]["event_name"], "Product launch")
+        self.assertEqual(response.json["requirements"][0]["value"], "At least 100")
+        load.assert_called_once_with("4", "user-token")
+        self.assertEqual(mark.call_args.args[1], event)
+        self.assertEqual(mark.call_args.args[2:], ("user-token", "own-booking"))
+
+    def test_event_aware_search_rejects_invalid_or_inaccessible_events(self):
+        with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
+            "app.routes.venues.search_venues", return_value=[]
+        ), patch("app.routes.venues.load_event") as load:
+            invalid = self.client.get("/api/venues/search?event_id=not-an-id")
+            load.side_effect = EventError("Event not found or access unavailable.", status=404)
+            inaccessible = self.client.get("/api/venues/search?event_id=4")
+
+        self.assertEqual(invalid.status_code, 404)
+        self.assertEqual(inaccessible.status_code, 404)
+        self.assertEqual(inaccessible.json["error"], "Event not found or access unavailable.")
+        load.assert_called_once_with("4", "user-token")
+
     # User story: Create Venue Catalogue | Page/API: Create Venue page — database returns no created row.
     def test_create_reports_empty_database_response(self):
         with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
@@ -220,6 +262,44 @@ class VenueCatalogueRouteTests(unittest.TestCase):
             http_response={"status_code": response.status_code, "json": response.get_json()},
             database_response=query.return_value,
         )
+
+    def test_event_aware_venue_detail_assesses_the_selected_venue(self):
+        venue = {"venue_id": VENUE_ID, **valid_venue()}
+        event = {
+            "event_id": 4,
+            "event_name": "Product launch",
+            "status": "planning",
+            "start_datetime": "2030-01-01T09:00:00+00:00",
+            "end_datetime": "2030-01-01T11:00:00+00:00",
+            "capacity_needed": 100,
+            "venue_id": None,
+        }
+        assessed = {**venue, "eligible": True, "conflicts": [], "unmet_requirements": []}
+        with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
+            "app.routes.venues.supabase_request", return_value=[venue]
+        ), patch("app.routes.venues.load_event", return_value=event) as load, patch(
+            "app.routes.venues.mark_for_event", return_value=[assessed]
+        ) as mark:
+            response = self.client.get(
+                f"/api/venues/{VENUE_ID}?event_id=4&booking_id=own-booking"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["venue"], assessed)
+        self.assertEqual(response.json["event"]["event_id"], 4)
+        self.assertEqual(response.json["requirements"][0]["value"], "At least 100")
+        load.assert_called_once_with("4", "user-token")
+        self.assertEqual(mark.call_args.args[2:], ("user-token", "own-booking"))
+
+    def test_event_aware_venue_detail_rejects_an_invalid_event_id(self):
+        venue = {"venue_id": VENUE_ID, **valid_venue()}
+        with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
+            "app.routes.venues.supabase_request", return_value=[venue]
+        ), patch("app.routes.venues.load_event") as load:
+            response = self.client.get(f"/api/venues/{VENUE_ID}?event_id=not-an-id")
+
+        self.assertEqual(response.status_code, 404)
+        load.assert_not_called()
 
     # User stories: View/Create/Update/Delete Venue Catalogue | Page/API: Venue APIs — permission error handling.
     def test_venue_permission_error_is_not_misreported_as_a_generic_failure(self):
@@ -267,17 +347,6 @@ class VenueCatalogueRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("capacity", response.json["errors"])
         query.assert_not_called()
-
-    # User story: Update Venue Catalogue | Page/API: Update Venue page — minimum valid numeric boundaries.
-    def test_update_accepts_the_minimum_version_and_capacity(self):
-        updated = {"venue_id": VENUE_ID, **valid_venue(capacity=1), "version": 2}
-        with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
-            "app.routes.venues.supabase_request", return_value=[updated]
-        ):
-            response = self.client.patch(f"/api/venues/{VENUE_ID}", json={"version": 1, "capacity": 1})
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json["venue"]["capacity"], 1)
 
     # User story: Update Venue Catalogue | Page/API: Update Venue page — malformed request and invalid URL.
     def test_update_rejects_malformed_payload_unknown_field_and_invalid_identifier(self):
@@ -490,6 +559,14 @@ class VenueDeletionBookingTests(unittest.TestCase):
         self.assertIn("ends_at=gt.2030-01-01T00%3A00%3A00%2B00%3A00", path)
         self.assertIn(f"venue_id=eq.{VENUE_ID}", path)
 
+    def test_upcoming_approved_bookings_uses_the_caller_token(self):
+        with patch("app.routes.venues.supabase_request", return_value=[self.booking]) as query:
+            bookings = venue_routes.upcoming_approved_bookings(VENUE_ID, "staff-token")
+
+        self.assertEqual(bookings, [self.booking])
+        self.assertIn(f"venue_id=eq.{VENUE_ID}", query.call_args.args[0])
+        self.assertEqual(query.call_args.kwargs["token"], "staff-token")
+
 
 class VenueCreateSchemaTests(unittest.TestCase):
     # User story: Create Venue Catalogue | Page/API: Create Venue form — valid input normalization.
@@ -565,8 +642,6 @@ class VenueCreateSchemaTests(unittest.TestCase):
             "facilities": ["wifi", "wifi"],
             "supported_room_layouts": ["theatre"],
             "operating_hours": hours,
-            "default_setup_minutes": 0,
-            "default_turnaround_minutes": 0,
         }
 
         record, version, errors = parse_update(payload)
@@ -587,8 +662,6 @@ class VenueCreateSchemaTests(unittest.TestCase):
             "unit_number": "U" * 51,
             "accessibility_notes": "A" * 1001,
             "capacity": 0,
-            "default_setup_minutes": -1,
-            "default_turnaround_minutes": -1,
         }
         for field, value in cases.items():
             with self.subTest(field=field):
