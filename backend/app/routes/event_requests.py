@@ -42,28 +42,12 @@ def prevent_caching(response):
 
 
 # Confirmation shown to the Event Coordinator once the outcome is recorded.
-MESSAGES = {
-    review_schema.OUTCOME_APPROVED: "Event request approved. The Event Organiser has been notified.",
-    review_schema.OUTCOME_REJECTED: "Event request rejected. The Event Organiser has been notified.",
-    review_schema.OUTCOME_CLARIFICATION: "Clarification requested. The Event Organiser has been notified.",
-}
-
 DECISION_MESSAGES = {
     review_schema.OUTCOME_APPROVED: "Event request approved.",
     review_schema.OUTCOME_REJECTED: "Event request rejected.",
     review_schema.OUTCOME_CLARIFICATION: "Clarification requested.",
 }
 
-
-def _review_confirmation(outcome, event_request, notifications):
-    """Only claim notification when the Organiser's row was actually stored."""
-    organiser_id = event_request.get("event_organiser_id")
-    organiser_notified = organiser_id is not None and any(
-        item.get("recipient_id") == organiser_id for item in notifications
-    )
-    if organiser_notified:
-        return MESSAGES[outcome]
-    return DECISION_MESSAGES[outcome] + " The Event Organiser could not be notified."
 
 
 @event_requests_bp.errorhandler(EventRequestError)
@@ -253,8 +237,7 @@ def submit(event_request_id):
     return jsonify(
         {
             "message": (
-                "Event request resubmitted successfully. The Event "
-                "Coordinator has been notified."
+                "Event request resubmitted successfully."
                 if was_resubmission
                 else "Event request submitted successfully."
             ),
@@ -278,17 +261,9 @@ def review(event_request_id):
     # Who is reviewing comes from the verified session, never from the body.
     _, reviewer_id = authenticated_user()
 
-    event_request, recorded, notifications = review_event_request(
-        event_request_id, payload, reviewer_id
-    )
+    _, recorded = review_event_request(event_request_id, payload, reviewer_id)
 
-    return jsonify(
-        {
-            "message": _review_confirmation(
-                recorded["outcome"], event_request, notifications
-            ),
-        }
-    )
+    return jsonify({"message": DECISION_MESSAGES[recorded["outcome"]]})
 
 
 @event_requests_bp.get("/<int:event_request_id>/reviews")

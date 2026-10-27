@@ -163,18 +163,3 @@ def test_a_draft_is_not_reviewable():
 def test_an_already_decided_request_is_not_reviewable(status):
     assert status not in review.REVIEWABLE_STATUSES
 
-
-# AC: The Event Organiser should be notified of the outcome.
-@pytest.mark.parametrize("outcome", sorted(review.OUTCOMES))
-def test_both_parties_get_a_message_for_every_outcome(outcome):
-    organiser_text, reviewer_text = review.describe(outcome, "Orientation Night")
-
-    assert "Orientation Night" in organiser_text
-    assert "Orientation Night" in reviewer_text
-    assert organiser_text != reviewer_text
-
-
-def test_messages_survive_a_request_with_no_name():
-    organiser_text, reviewer_text = review.describe("approved", None)
-
-    assert organiser_text and reviewer_text

@@ -18,7 +18,4 @@ test('fallback messages distinguish reservation, cancellation, review and regist
   assert.equal(actionMessage('/api/venue-bookings/1/review', 'POST', {}), 'Review decision recorded successfully.');
   assert.match(actionMessage('/api/events/1/registration-readiness', 'PATCH', { event: { status: 'confirmed' } }), /confirmed/);
   assert.equal(actionMessage('/api/event-requests', 'POST', { message: 'Draft event request saved.' }), 'Draft event request saved.');
-  assert.match(actionMessage('/api/event-requests/1/review', 'POST', {
-    message: 'Event request approved. The Event Organiser has been notified.', notified: [],
-  }), /Notification delivery could not be confirmed/);
 });

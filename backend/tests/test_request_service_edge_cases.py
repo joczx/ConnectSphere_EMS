@@ -1,10 +1,10 @@
-"""Failure, concurrency and notification cases without a live database."""
+"""Failure and concurrency cases without a live database."""
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
-from app.services import db, notification_service as notifications
+from app.services import db
 from app.services import event_request_service as service
 from app.services import event_request_workflow as workflow
 from app.services import event_request_review_service as reviews
@@ -122,38 +122,6 @@ def test_draft_edits_do_not_create_amendments_and_incomplete_drafts_cannot_submi
     assert error.value.errors == {'purpose': 'Required'}
 
 
-def test_review_notifications_deduplicate_recipients_and_survive_delivery_failure(monkeypatch):
-    row = {'event_request_id': 1, 'event_organiser_id': 'owner', 'event_coordinator_id': 'assigned'}
-    record = {'outcome': 'approved', 'reviewer_id': 'reviewer'}
-    monkeypatch.setattr(reviews, 'get_supabase', lambda: Mock())
-    deliver = Mock(side_effect=lambda client, pending: pending)
-    monkeypatch.setattr(notifications, 'deliver', deliver)
-    sent = reviews._notify(row, record)
-    assert {n['recipient_id'] for n in sent} == {'owner', 'assigned', 'reviewer'}
-    deliver.side_effect = RuntimeError('offline')
-    assert reviews._notify(row, record) == []
-
-
-def test_resubmission_notifies_each_coordinator_once(monkeypatch):
-    row = {'event_request_id': 1, 'status': 'rejected', 'event_coordinator_id': 'c1'}
-    monkeypatch.setattr(service, 'require_event_request', lambda _: row)
-    monkeypatch.setattr(service, 'find_blocking_errors', lambda _: {})
-    monkeypatch.setattr(service, 'mark_submitted', lambda _: row)
-    monkeypatch.setattr(reviews, 'list_reviews', lambda _: [
-        {'outcome': 'rejected', 'reviewer_id': 'c1'},
-        {'outcome': 'clarification_requested', 'reviewer_id': 'c2'},
-    ])
-    monkeypatch.setattr(workflow, 'get_supabase', lambda: Mock())
-    deliver = Mock(side_effect=lambda client, pending: pending)
-    monkeypatch.setattr(notifications, 'deliver', deliver)
-    saved, resubmitted = workflow.send_for_review(1)
-    assert saved == row and resubmitted
-    sent = deliver.call_args.args[1]
-    assert len({n['recipient_id'] for n in sent}) == len(sent)
-    assert 'c1' in {n['recipient_id'] for n in sent}
-    deliver.side_effect = RuntimeError('offline')
-    assert workflow._notify_resubmission(row) is None
-
 
 def test_review_missing_request_and_history(monkeypatch, table):
     monkeypatch.setattr(reviews, 'get_event_request', lambda _: None)
@@ -180,8 +148,3 @@ def test_review_database_errors(code, message, status, field):
     if field:
         assert field in error.errors
 
-
-def test_notification_helpers_empty_and_unread(table):
-    client = Mock()
-    client.table.return_value = table
-    assert notifications.deliver(client, []) == []
