@@ -67,6 +67,12 @@ def cancel_event(event_id):
     return jsonify(lifecycle_call('cancel_planned_event', token, {'p_event_id': event_id}))
 
 
+@events.post('/events/<int:event_id>/safety-checks')
+def submit_for_safety_checks(event_id):
+    token = authenticated_token(supabase_request)
+    return jsonify(lifecycle_call('submit_event_for_safety_checks', token, {'p_event_id': event_id}))
+
+
 def valid_event_id(event_id):
     """Return the id as a string, or None when it is neither an int nor a UUID.
 

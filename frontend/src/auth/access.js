@@ -55,6 +55,7 @@ export const ACTIONS = {
   'event.cancel': { roles: coordinator, relation: ['coordinator'] },
   'event.registrationReady': { roles: coordinator, relation: ['coordinator'] },
   'event.findVenue': { roles: coordinator, relation: ['coordinator'] },
+  'event.submitSafety': { roles: coordinator, relation: ['coordinator'] },
 
   'eventRequest.delete': { roles: organiser, relation: ['organiser'] },
   'eventRequest.cancel': { roles: organiser, relation: ['organiser'] },
