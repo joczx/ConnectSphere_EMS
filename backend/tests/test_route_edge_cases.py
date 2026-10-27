@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 import pytest
 from app import create_app
-from app.routes import coordinator_lead, equipment, event_requests, events, login, notifications, users, venue_bookings, venues
+from app.routes import coordinator_lead, equipment, event_requests, events, login, users, venue_bookings, venues
 from app.services.event_store import StoreError
 from app.services.event_service import EventError
 from app.services.event_request_service import EventRequestError
@@ -115,11 +115,6 @@ def test_refresh_requires_token_and_reports_auth_service_failure(client, monkeyp
     monkeypatch.setattr(login, 'supabase_request', Mock(side_effect=StoreError(503, 'Unavailable')))
     response = client.post('/api/refresh', json={'refresh_token': 'refresh'})
     assert response.status_code == 503 and response.json['error'] == 'Unavailable'
-
-
-def test_notification_error_responses(client, monkeypatch):
-    monkeypatch.setattr(notifications, 'authenticated_token', Mock(side_effect=StoreError(401)))
-    assert client.get('/api/notifications').status_code == 401
 
 
 def test_user_filter_validation_and_query(client, monkeypatch):

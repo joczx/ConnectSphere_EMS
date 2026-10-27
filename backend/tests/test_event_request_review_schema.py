@@ -146,19 +146,3 @@ def test_every_mapped_status_exists_in_the_database_enum():
 # AC: The system allows Event Coordinators to view submitted event requests.
 def test_only_submitted_requests_can_be_reviewed():
     assert review.REVIEWABLE_STATUSES == {request_schema.STATUS_SUBMITTED}
-
-
-# AC: The Event Organiser should be notified of the outcome.
-@pytest.mark.parametrize("outcome", sorted(review.OUTCOMES))
-def test_both_parties_get_a_message_for_every_outcome(outcome):
-    organiser_text, reviewer_text = review.describe(outcome, "Orientation Night")
-
-    assert "Orientation Night" in organiser_text
-    assert "Orientation Night" in reviewer_text
-    assert organiser_text != reviewer_text
-
-
-def test_messages_survive_a_request_with_no_name():
-    organiser_text, reviewer_text = review.describe("approved", None)
-
-    assert organiser_text and reviewer_text

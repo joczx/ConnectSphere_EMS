@@ -33,15 +33,14 @@ def review_as(reviewer_id, existing):
     """Run a review, with everything past the authorisation check stubbed."""
     with patch.object(service, "get_event_request", return_value=existing), \
          patch.object(service, "_record_review", return_value={"outcome": "approved"}), \
-         patch.object(service, "_apply_outcome", return_value=existing), \
-         patch.object(service, "_notify", return_value=[]):
+         patch.object(service, "_apply_outcome", return_value=existing):
         return service.review_event_request(
             1, {"outcome": "approved"}, reviewer_id
         )
 
 
 def test_the_assigned_coordinator_may_review():
-    _, recorded, _ = review_as(COORDINATOR, a_request())
+    _, recorded = review_as(COORDINATOR, a_request())
 
     assert recorded["outcome"] == "approved"
 

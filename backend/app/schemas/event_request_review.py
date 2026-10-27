@@ -91,26 +91,3 @@ def parse_payload(payload, reviewer_id=None):
 
     return record, errors
 
-
-def describe(outcome, event_name):
-    """Messages for the people involved. Returns (organiser_text, reviewer_text)."""
-    name = event_name or "your event request"
-
-    if outcome == OUTCOME_APPROVED:
-        return (
-            f"Your event request '{name}' has been approved.",
-            f"You approved the event request '{name}'.",
-        )
-
-    if outcome == OUTCOME_REJECTED:
-        return (
-            f"Your event request '{name}' has been rejected. "
-            "See the Event Coordinator's comments for the reason.",
-            f"You rejected the event request '{name}'.",
-        )
-
-    return (
-        f"The Event Coordinator has requested clarification on your event "
-        f"request '{name}'.",
-        f"You requested clarification on the event request '{name}'.",
-    )

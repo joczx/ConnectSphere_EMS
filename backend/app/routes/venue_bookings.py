@@ -140,7 +140,7 @@ def hold(booking_id):
     result = rpc('hold_venue_booking', token, {'p_booking_id': booking_id, 'p_expires_at': expires.isoformat()})
     if result.get('error'):
         return refused(result)
-    return jsonify(message='Tentative hold placed. The Event Coordinator has been told when it expires.', booking=result['booking'])
+    return jsonify(message='Tentative hold placed.', booking=result['booking'])
 
 
 @venue_bookings.delete('/<booking_id>/hold')
@@ -152,7 +152,7 @@ def release_hold(booking_id):
     result = rpc('release_venue_hold', token, {'p_booking_id': booking_id})
     if result.get('error'):
         return refused(result)
-    return jsonify(message='Tentative hold released. The Event Coordinator has been told.', booking=result['booking'])
+    return jsonify(message='Tentative hold released.', booking=result['booking'])
 
 
 @venue_bookings.post('/<booking_id>/review')
