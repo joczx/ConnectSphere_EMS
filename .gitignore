@@ -29,3 +29,5 @@ Thumbs.db
 
 #reports
 backend/coverage_report
+
+outputs/

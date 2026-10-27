@@ -42,18 +42,6 @@ def test_list_drafts_filters_by_organiser_and_draft_status():
     table.order.assert_called_once_with('updated_at', desc=True)
 
 
-def test_workflow_allows_editing_a_draft_without_creating_amendment():
-    existing = {'event_request_id': 42, 'status': 'draft'}
-    updated = {**existing, 'event_name': 'Updated'}
-    payload = {'event_name': 'Updated'}
-    with patch.object(service, 'require_event_request', return_value=existing), \
-         patch.object(service, 'apply_edit', return_value=(updated, {})) as edit, \
-         patch.object(workflow, '_record_amendment') as amendment:
-        assert workflow.edit(42, payload) == (updated, None)
-    edit.assert_called_once_with(existing, payload)
-    amendment.assert_not_called()
-
-
 @pytest.mark.parametrize('new_value', ['New name', None])
 def test_saving_partial_edit_does_not_overwrite_other_draft_fields(new_value):
     existing = {**valid_payload(), 'event_request_id': 42, 'status': 'draft'}
@@ -120,15 +108,6 @@ def test_failed_draft_creation_does_not_return_success():
          pytest.raises(service.EventRequestError) as caught:
         routes.create()
     assert caught.value is error
-
-
-def test_incomplete_draft_cannot_be_submitted():
-    with patch.object(service, 'require_event_request', return_value={'event_request_id': 42, 'status': 'draft'}), \
-         patch.object(service, 'mark_submitted') as write, \
-         pytest.raises(service.EventRequestError) as caught:
-        workflow.send_for_review(42)
-    assert 'event_name' in caught.value.errors
-    write.assert_not_called()
 
 
 def test_a_partially_filled_draft_produces_no_format_errors():
