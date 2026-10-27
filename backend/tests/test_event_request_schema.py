@@ -6,6 +6,7 @@ Story-specific tests live in test_create_submit_event_request.py and
 from app.schemas import event_request as schema
 
 
+# TC-CER-052 | AC8 — Keep the submitted status aligned with the database enum.
 def test_every_status_the_database_accepts_is_known_to_the_code():
     assert schema.STATUS_DRAFT in schema.ALL_STATUSES
     assert schema.STATUS_SUBMITTED in schema.ALL_STATUSES
