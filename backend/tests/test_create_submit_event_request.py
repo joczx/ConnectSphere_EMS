@@ -137,6 +137,34 @@ def test_no_equipment_is_valid():
     assert record["equipment_requirements"] == []
 
 
+def test_equipment_requirements_must_be_a_list_of_items():
+    _, errors = schema.parse_payload(
+        valid_payload(equipment_requirements="projector, 2, HDMI input")
+    )
+
+    assert errors["equipment_requirements"] == "Equipment requirements must be a list."
+
+
+def test_each_equipment_item_must_be_an_object():
+    _, errors = schema.parse_payload(
+        valid_payload(equipment_requirements=["projector, 2, HDMI input"])
+    )
+
+    assert errors["equipment_requirements"] == "Item 1: expected an equipment object."
+
+
+def test_equipment_notes_must_be_text():
+    _, errors = schema.parse_payload(
+        valid_payload(
+            equipment_requirements=[
+                {"equipment_type": "projector", "quantity": 2, "notes": 12}
+            ]
+        )
+    )
+
+    assert errors["equipment_requirements"] == "Item 1: notes must be text."
+
+
 @pytest.mark.parametrize("field", ["required_facilities", "equipment_requirements"])
 def test_a_cleared_list_is_unanswered_and_blocks_submission(field):
     record, errors = schema.parse_payload(valid_payload(**{field: None}))
