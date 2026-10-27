@@ -1,4 +1,5 @@
 import EventList from '../components/EventList';
+import RegistrationPeriod from '../components/RegistrationPeriod';
 import EventFormSection from '../components/EventFormSection';
 import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useRef, useState } from 'react';
@@ -351,6 +352,10 @@ export default function Events() {
       </>}
 
       {event && <div className="event-reference-columns"><div className="event-reference-main">
+      <RegistrationPeriod key={event.event_id} event={event} onSaved={updated => {
+        setState(current => ({ ...current, data: { ...current.data, event: updated } }));
+        setRefresh(value => value + 1);
+      }} />
       {event && <article className="panel event-detail-section" id="event-overview" tabIndex={-1}>
         <div className="heading" style={{ alignItems: 'center' }}>
           <h2 style={{ margin: 0 }}>Event details</h2>

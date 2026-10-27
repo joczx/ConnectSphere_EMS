@@ -104,9 +104,8 @@ def parse_update(payload):
             changes[field] = _choices(value, ROOM_LAYOUTS, field, errors)
         elif field == "operating_hours":
             changes[field] = _operating_hours(value, errors)
-        elif field in {"default_setup_minutes", "default_turnaround_minutes"}:  # pragma: no branch
-            # Every CREATE_FIELDS member is handled above, so the false branch
-            # is structurally unreachable.
+        else:
+            # Only setup and turnaround minutes remain in CREATE_FIELDS.
             changes[field] = _integer(value, field, errors, minimum=0)
 
     if not changes:
