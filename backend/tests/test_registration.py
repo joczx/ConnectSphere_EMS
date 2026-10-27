@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 from app import create_app
-from app.schemas.registration import parse_settings
+from app.schemas.registration import parse_settings, parse_attendee
 from app.services.event_service import EventError
 from app.services.event_store import StoreError
 from app.services.registration_service import registration_call
@@ -62,7 +62,7 @@ def test_registration_refusal_is_returned_to_attendee(status, message):
     client = create_app().test_client()
     with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
          patch('app.services.registration_service.supabase_request', return_value={'error': message, 'status': status}):
-        response = client.post('/api/events/1/registrations', headers={'Authorization': 'Bearer attendee'})
+        response = client.post('/api/events/1/registrations', json=attendee_details(), headers={'Authorization': 'Bearer attendee'})
     assert response.status_code == status
     assert response.json['error'] == message
 
@@ -116,3 +116,44 @@ def test_attendee_information_returns_updated_period_and_disables_caching():
     assert response.headers['Cache-Control'] == 'no-store'
     rpc.assert_called_once_with('/rest/v1/rpc/attendee_registration_events',
                                 token='verified', payload={}, method='POST')
+
+
+def attendee_details(**changes):
+    return {'full_name': 'Alex Tan', 'contact_email': 'alex@example.com', 'contact_phone': '+65 8123 4567', **changes}
+
+
+@pytest.mark.parametrize('payload', [None, {}, [], attendee_details(full_name=' '),
+    attendee_details(full_name=123), attendee_details(full_name='a' * 151),
+    attendee_details(full_name='Alex\nTan'), attendee_details(contact_email='bad'),
+    attendee_details(contact_email='alex@example.com\r\nBcc: other@example.com'),
+    attendee_details(contact_phone='letters'), attendee_details(contact_phone='-------')])
+def test_mandatory_personal_details_are_validated(payload):
+    assert parse_attendee(payload)[1]
+
+
+def test_personal_details_are_trimmed():
+    record, errors = parse_attendee(attendee_details(full_name=' Alex Tan '))
+    assert not errors
+    assert record == attendee_details()
+
+
+def test_invalid_attendee_details_never_reach_database():
+    client = create_app().test_client()
+    with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
+         patch('app.services.registration_service.supabase_request') as rpc:
+        response = client.post('/api/events/1/registrations', json={}, headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 400
+    assert response.json['errors']
+    rpc.assert_not_called()
+
+
+def test_registration_submits_details_using_authenticated_identity():
+    client = create_app().test_client()
+    result = {'registration': {'status': 'registered'}, 'notification': 'queued'}
+    with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
+         patch('app.services.registration_service.supabase_request', return_value=result) as rpc:
+        response = client.post('/api/events/1/registrations', json=attendee_details(), headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 200
+    assert response.json == result
+    rpc.assert_called_once_with('/rest/v1/rpc/register_for_event', token='verified', method='POST',
+        payload={'p_event_id': 1, **{'p_' + k: v for k, v in attendee_details().items()}})

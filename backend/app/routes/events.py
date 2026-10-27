@@ -5,7 +5,7 @@ from app.services.event_store import StoreError, supabase_request, authenticated
 from app.services.event_service import EventError, list_activity, load_event, update_event
 from app.services.event_venue_criteria import criteria_from_event, describe, search_filters
 from app.services.event_status_service import lifecycle_call
-from app.schemas.registration import parse_settings
+from app.schemas.registration import parse_settings, parse_attendee
 from app.services.registration_service import registration_call
 
 events = Blueprint('events', __name__, url_prefix='/api')
@@ -82,7 +82,11 @@ def registration_events():
 @events.post('/events/<int:event_id>/registrations')
 def register_attendee(event_id):
     token = authenticated_token(supabase_request)
-    return jsonify(registration_call('register_for_event', token, {'p_event_id': event_id}))
+    record, errors = parse_attendee(request.get_json(silent=True))
+    if errors:
+        return jsonify(error='Check your registration details.', errors=errors), 400
+    return jsonify(registration_call('register_for_event', token,
+        {'p_event_id': event_id, **{'p_' + key: value for key, value in record.items()}}))
 
 
 @events.post('/events/<int:event_id>/cancel')

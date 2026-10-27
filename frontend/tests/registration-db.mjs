@@ -10,10 +10,13 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
   const attendee = '00000000-0000-0000-0000-000000000002';
   const nextAttendee = '00000000-0000-0000-0000-000000000003';
   const actor = async id => db.query("select set_config('request.jwt.claim.sub', $1, false)", [id]);
-  const rpc = async (name, args = []) => (await db.query(`select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) as result`, args)).rows[0].result;
+  const rpc = async (name, args = []) => {
+    if (name === 'register_for_event' && args.length === 1) args = [...args, 'Alex Tan', 'alex@example.com', '+65 8123 4567'];
+    return (await db.query(`select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) as result`, args)).rows[0].result;
+  };
   try {
     await db.exec(`
-      create role anon; create role authenticated;
+      create role anon; create role authenticated; create role service_role bypassrls;
       create schema auth;
       create table auth.users(id uuid primary key);
       create function auth.uid() returns uuid language sql stable as $$
@@ -43,12 +46,16 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     `);
     await db.exec(await readFile(new URL('../../supabase/046_event_registration.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/047_attendee_registration_access.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/048_attendee_registration_details.sql', import.meta.url), 'utf8'));
     // Install the actual updated lifecycle function as on the deployed database.
     await db.exec('create trigger guard_event_lifecycle before insert or update on public.events for each row execute function public.guard_event_lifecycle()');
     const future = new Date(Date.now() + 86400000).toISOString();
     const later = new Date(Date.now() + 172800000).toISOString();
     const past = new Date(Date.now() - 86400000).toISOString();
     await actor(attendee);
+    for (const details of [ ['', 'alex@example.com', '+65 8123 4567'], ['Alex', 'invalid', '+65 8123 4567'], ['Alex', 'alex@example.com', '-------'], ['Alex', 'alex@example.com', null] ]) {
+      assert.equal((await rpc('register_for_event', [1, ...details])).status, 400);
+    }
     assert.equal((await rpc('set_event_registration_period', [1, future, later, true])).status, 403);
     await actor(organiser);
     assert.equal((await rpc('attendee_registration_events')).status, 403);
@@ -67,8 +74,18 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     await actor(attendee);
     assert.equal((await rpc('register_for_event', [1])).registration.status, 'registered');
     assert.equal((await rpc('register_for_event', [1])).registration.status, 'registered');
+    const saved = (await db.query('select * from public.event_registration')).rows[0];
+    assert.equal(saved.full_name, 'Alex Tan');
+    assert.equal(saved.contact_email, 'alex@example.com');
+    assert.equal(saved.contact_phone, '+65 8123 4567');
+    assert.equal((await db.query('select * from public.registration_email_outbox')).rows.length, 1);
+    await db.exec('update public.registration_email_outbox set sent_at=now()');
+    assert.equal((await rpc('register_for_event', [1])).notification, 'sent');
     await actor(nextAttendee);
     assert.equal((await rpc('register_for_event', [1])).registration.status, 'waiting_list');
+    const queued = (await db.query('select * from public.registration_email_outbox order by id')).rows;
+    assert.match(queued[0].body, /registration is confirmed/);
+    assert.match(queued[1].body, /does not confirm a place/);
     const info = (await rpc('attendee_registration_events')).events[0];
     assert.equal(info.my_registration, 'waiting_list');
     assert.equal(info.registration_status, 'open');
@@ -91,7 +108,12 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     assert.equal((await rpc('register_for_event', [1])).status, 401);
     // Authenticated clients cannot bypass the controlled registration function.
     await db.exec('set role authenticated');
-    await assert.rejects(db.exec(`insert into public.event_registration values (1,'${nextAttendee}','registered',now())`), /permission denied/);
+    await actor(attendee);
+    const ownRows = (await db.query('select * from public.event_registration')).rows;
+    assert.equal(ownRows.length, 1);
+    assert.equal(ownRows[0].attendee_id, attendee);
+    await assert.rejects(db.exec(`insert into public.event_registration(event_id,attendee_id,status) values (1,'${nextAttendee}','registered')`), /permission denied/);
+    await assert.rejects(db.exec('select * from public.registration_email_outbox'), /permission denied/);
     await db.exec('reset role');
   } finally { await db.close(); }
 });

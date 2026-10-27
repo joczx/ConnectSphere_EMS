@@ -12,6 +12,8 @@ export default function AttendeeEvents() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [selected, setSelected] = useState(null);
+  const [details, setDetails] = useState({ full_name: '', contact_email: '', contact_phone: '' });
   useEffect(() => {
     const controller = new AbortController();
     api('/api/registration-events', { signal: controller.signal, cache: 'no-store' })
@@ -23,11 +25,15 @@ export default function AttendeeEvents() {
     window.addEventListener('focus', reload);
     return () => { controller.abort(); clearInterval(timer); window.removeEventListener('focus', reload); };
   }, [api, refresh]);
-  async function register(event) {
+  async function register(e, event) {
+    e.preventDefault();
     setBusy(true); setError(''); setMessage('');
     try {
-      const data = await api(`/api/events/${event.event_id}/registrations`, { method: 'POST', body: {} });
-      setMessage(data.registration.status === 'waiting_list' ? 'You have joined the waiting list.' : 'You are registered for the event.');
+      const data = await api(`/api/events/${event.event_id}/registrations`, { method: 'POST', body: details });
+      const emailMessage = data.notification === 'queued' ? ' A confirmation email has been queued.'
+        : data.notification === 'sent' ? ' A confirmation email has already been sent.' : '';
+      setMessage((data.registration.status === 'waiting_list' ? 'You have joined the waiting list. Your place is not confirmed.' : 'You are registered for the event.') + emailMessage);
+      setSelected(null);
       setRefresh(n => n + 1);
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
@@ -51,7 +57,17 @@ export default function AttendeeEvents() {
         <p>{messages[status]}</p>
         <p>Capacity: {event.capacity ?? 'Not set'}. Waiting list: {event.waiting_list_enabled ? 'Enabled' : 'Disabled'}.</p>
         {event.my_registration ? <p>{event.my_registration === 'registered' ? 'You are registered.' : 'You are on the waiting list.'}</p>
-          : <button disabled={busy || status !== 'open'} onClick={() => register(event)}>Register{event.waiting_list_enabled ? ' or join waiting list' : ''}</button>}
+          : selected === event.event_id ? <form onSubmit={e => register(e, event)}>
+            <fieldset disabled={busy}>
+              <legend>Registration details</legend>
+              <label>Full name<input name="full_name" autoComplete="name" required maxLength={150} value={details.full_name} onChange={e => setDetails({ ...details, full_name: e.target.value })} /></label>
+              <label>Contact email<input name="contact_email" type="email" autoComplete="email" required maxLength={254} value={details.contact_email} onChange={e => setDetails({ ...details, contact_email: e.target.value })} /></label>
+              <label>Contact phone<input name="contact_phone" type="tel" autoComplete="tel" required maxLength={30} value={details.contact_phone} onChange={e => setDetails({ ...details, contact_phone: e.target.value })} /></label>
+              {event.waiting_list_enabled && <p>If the event is full, you will join the waiting list rather than receive a confirmed place.</p>}
+              <button type="submit" disabled={status !== 'open'}>{busy ? 'Submitting…' : 'Submit registration'}</button>
+              <button type="button" className="secondary" onClick={() => setSelected(null)}>Cancel</button>
+            </fieldset>
+          </form> : <button disabled={busy || status !== 'open'} onClick={() => { setSelected(event.event_id); setError(''); setMessage(''); }}>Register{event.waiting_list_enabled ? ' or join waiting list' : ''}</button>}
       </article>;
     })}
   </main></>;
