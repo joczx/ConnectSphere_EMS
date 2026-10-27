@@ -350,10 +350,15 @@ def _clean_equipment(value):
     """
     if value is None:
         return None, None
+    if not isinstance(value, list):
+        return None, "Equipment requirements must be a list."
 
     items = []
 
     for position, raw in enumerate(value, start=1):
+        if not isinstance(raw, dict):
+            return None, f"Item {position}: expected an equipment object."
+
         equipment_type = raw.get("equipment_type")
         if not isinstance(equipment_type, str) or not equipment_type.strip():
             return None, f"Item {position}: equipment type is required."
@@ -366,6 +371,8 @@ def _clean_equipment(value):
             return None, f"Item {position}: quantity must be at least 1."
 
         notes = raw.get("notes")
+        if notes is not None and not isinstance(notes, str):
+            return None, f"Item {position}: notes must be text."
 
         items.append(
             {
