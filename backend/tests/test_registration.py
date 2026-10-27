@@ -3,6 +3,9 @@ from unittest.mock import patch
 import pytest
 from app import create_app
 from app.schemas.registration import parse_settings
+from app.services.event_service import EventError
+from app.services.event_store import StoreError
+from app.services.registration_service import registration_call
 
 
 def settings(**changes):
@@ -62,3 +65,54 @@ def test_registration_refusal_is_returned_to_attendee(status, message):
         response = client.post('/api/events/1/registrations', headers={'Authorization': 'Bearer attendee'})
     assert response.status_code == status
     assert response.json['error'] == message
+
+
+def test_missing_database_function_has_actionable_configuration_error():
+    failure = StoreError(503, code='PGRST202')
+    with patch('app.services.registration_service.supabase_request', side_effect=failure):
+        with pytest.raises(EventError) as caught:
+            registration_call('register_for_event', 'verified', {'p_event_id': 1})
+    assert caught.value.status == 503
+    assert '046_event_registration.sql' in caught.value.to_dict()['error']
+    assert caught.value.__cause__ is failure
+
+
+def test_other_database_errors_are_preserved():
+    failure = StoreError(403, 'Access denied.', code='42501')
+    with patch('app.services.registration_service.supabase_request', side_effect=failure):
+        with pytest.raises(StoreError) as caught:
+            registration_call('register_for_event', 'verified', {'p_event_id': 1})
+    assert caught.value is failure
+
+
+def test_database_refusal_without_status_defaults_to_bad_request():
+    with patch('app.services.registration_service.supabase_request', return_value={'error': 'Invalid period.'}):
+        with pytest.raises(EventError) as caught:
+            registration_call('set_event_registration_period', 'verified', {})
+    assert caught.value.status == 400
+    assert caught.value.to_dict()['error'] == 'Invalid period.'
+
+
+def test_invalid_period_is_rejected_before_database_call():
+    client = create_app().test_client()
+    with patch('app.routes.events.supabase_request', return_value={'id': 'organiser'}), \
+         patch('app.services.registration_service.supabase_request') as rpc:
+        response = client.patch('/api/events/1/registration-period',
+                                json=settings(registration_closes_at='2026-12-31T00:00:00Z'),
+                                headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 400
+    assert 'registration_closes_at' in response.json['errors']
+    rpc.assert_not_called()
+
+
+def test_attendee_information_returns_updated_period_and_disables_caching():
+    client = create_app().test_client()
+    event = {'event_id': 1, **settings(), 'registration_status': 'not_open'}
+    with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
+         patch('app.services.registration_service.supabase_request', return_value={'events': [event]}) as rpc:
+        response = client.get('/api/registration-events', headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 200
+    assert response.json == {'events': [event]}
+    assert response.headers['Cache-Control'] == 'no-store'
+    rpc.assert_called_once_with('/rest/v1/rpc/attendee_registration_events',
+                                token='verified', payload={}, method='POST')
