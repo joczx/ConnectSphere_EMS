@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import WithdrawRegistration from '../components/WithdrawRegistration';
 import { registrationDate } from '../components/RegistrationPeriod';
 import { useAuth } from '../auth/AuthContext';
 
@@ -41,6 +43,7 @@ export default function AttendeeEvents() {
   return <><Navbar /><main className="container">
     <div className="heading"><h1>Event registration</h1><button className="secondary" onClick={() => setRefresh(n => n + 1)}>Refresh</button></div>
     <p>All times are in Singapore time (SGT). Event information refreshes every 30 seconds.</p>
+    <p><Link to="/my-registrations">View my registrations</Link></p>
     {loading && <p role="status">Loading events…</p>}
     {error && <p role="alert" className="error">{error}</p>}
     {message && <p role="status">{message}</p>}
@@ -55,8 +58,18 @@ export default function AttendeeEvents() {
         <p>Event starts: {registrationDate(event.start_datetime)}</p>
         <p>Registration opens: {registrationDate(event.registration_opens_at)}<br />Registration closes: {registrationDate(event.registration_closes_at)}</p>
         <p>{messages[status]}</p>
-        <p>Capacity: {event.capacity ?? 'Not set'}. Waiting list: {event.waiting_list_enabled ? 'Enabled' : 'Disabled'}.</p>
-        {event.my_registration ? <p>{event.my_registration === 'registered' ? 'You are registered.' : 'You are on the waiting list.'}</p>
+        <p>Capacity: {event.capacity ?? 'Not set'}. Available places: {event.available_capacity ?? 'Not set'}. Waiting list: {event.waiting_list_enabled ? 'Enabled' : 'Disabled'}.</p>
+        {event.my_registration === 'withdrawn' && <p>Your registration has been withdrawn.</p>}
+        {['registered', 'waiting_list'].includes(event.my_registration) ? <>
+          <p>{event.my_registration === 'registered' ? 'You are registered.' : 'You are on the waiting list.'}</p>
+          <WithdrawRegistration eventId={event.event_id} startDatetime={event.start_datetime} status={event.my_registration} disabled={busy}
+            onWithdrawn={data => {
+              setEvents(current => current.map(item => item.event_id === event.event_id
+                ? { ...item, my_registration: data.registration.status, available_capacity: data.available_capacity } : item));
+              setError(''); setMessage(data.message);
+              setRefresh(n => n + 1);
+            }} />
+        </>
           : selected === event.event_id ? <form onSubmit={e => register(e, event)}>
             <fieldset disabled={busy}>
               <legend>Registration details</legend>

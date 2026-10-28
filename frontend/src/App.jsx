@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import Notifications from './pages/Notifications';
 import Events from './pages/Events';
 import AttendeeEvents from './pages/AttendeeEvents';
+import MyRegistrations from './pages/MyRegistrations';
 import Equipment from './pages/Equipment';
 import EquipmentRequests from './pages/EquipmentRequests';
 import EventRequests from './pages/EventRequests';
@@ -56,6 +57,7 @@ export default function App() {
     <Route path="/notifications" element={protectedView(<Notifications />)} />
     <Route path="/events" element={protectedView(<Events />)} />
     <Route path="/event-registration" element={protectedView(<AttendeeEvents />)} />
+    <Route path="/my-registrations" element={protectedView(<MyRegistrations />)} />
     <Route path="/events/:eventId" element={protectedView(<Events />)} />
     <Route path="/reserved-equipment" element={protectedView(<ReservedEquipment />)} />
     <Route path="/equipment" element={protectedView(<Equipment />)} />

@@ -23,6 +23,16 @@ export default function RegistrationPeriod({ event, onSaved }) {
     if (!opens.isValid || !closes.isValid || closes.toMillis() <= opens.toMillis()) {
       setError('Registration must close after it opens.'); return;
     }
+    const eventStart = DateTime.fromISO(event.start_datetime || '');
+    if (!eventStart.isValid) {
+      setError('Set a valid event start time before configuring registration.'); return;
+    }
+    if (opens.toMillis() >= eventStart.toMillis()) {
+      setError('Registration must open before the event starts.'); return;
+    }
+    if (closes.toMillis() >= eventStart.toMillis()) {
+      setError('Registration must close before the event starts.'); return;
+    }
     setBusy(true);
     try {
       const result = await api(`/api/events/${event.event_id}/registration-period`, { method: 'PATCH', body: {
@@ -46,7 +56,7 @@ export default function RegistrationPeriod({ event, onSaved }) {
       setError(''); setMessage(''); setForm({ opens: inputTime(event.registration_opens_at), closes: inputTime(event.registration_closes_at), waiting: !!event.waiting_list_enabled });
     }}>Set or update registration</button>}
     {form && <form onSubmit={save}>
-      <p>All times are in Singapore time (SGT). Settings can change before or during registration.</p>
+      <p>All times are in Singapore time (SGT). Registration must open before it closes, and both times must be before the event starts at {registrationDate(event.start_datetime)}. Settings can change before or during registration.</p>
       <fieldset disabled={busy}>
         <label>Registration opens<input required type="datetime-local" value={form.opens} onChange={e => setForm({ ...form, opens: e.target.value })} /></label>
         <label>Registration closes<input required type="datetime-local" value={form.closes} onChange={e => setForm({ ...form, closes: e.target.value })} /></label>
