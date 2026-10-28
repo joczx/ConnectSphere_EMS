@@ -11,17 +11,12 @@ customer said clarification "can be a sub-state of under_review" - so it is
 derived from the most recent review against a still-submitted request.
 """
 
-import logging
 
 from app.schemas import event_request as schema
 from app.schemas import event_request_review as review_schema
 from app.services import event_request_service as requests
 from app.services import event_request_review_service as reviews
-from app.services import notification_service
 from app.services.event_request_service import EventRequestError
-from app.services.supabase_client import get_supabase
-
-logger = logging.getLogger(__name__)
 
 AMENDMENT_TABLE = "event_request_amendment"
 
@@ -67,9 +62,7 @@ def send_for_review(event_request_id):
 
     row = requests.mark_submitted(event_request_id)
 
-    notified = _notify_resubmission(row) if is_resubmission else []
-
-    return row, is_resubmission, notified
+    return row, is_resubmission
 
 
 def can_amend(event_request):
@@ -93,21 +86,6 @@ def is_awaiting_clarification(event_request):
     latest = reviews.latest_review(event_request["event_request_id"])
 
     return latest is not None and latest["outcome"] == review_schema.OUTCOME_CLARIFICATION
-
-
-def list_amendments(event_request_id):
-    """Return the amendment history for a request, newest first."""
-    requests.require_event_request(event_request_id)
-
-    def query(table):
-        return (
-            table.select("*")
-            .eq("event_request_id", event_request_id)
-            .order("created_at", desc=True)
-            .execute()
-        )
-
-    return reviews.execute_on(AMENDMENT_TABLE, query, action="list the amendments")
 
 
 def _split_note(payload):
@@ -145,47 +123,6 @@ def _record_amendment(existing, changes, note):
 
     return rows[0] if rows else None
 
-
-def _notify_resubmission(event_request):
-    """Tell the Coordinator who sent the request back that a reply has arrived.
-
-    Best effort, as elsewhere: the resubmission is already recorded, so a
-    failed notification is logged rather than raised.
-    """
-    name = event_request.get("event_name") or "an event request"
-    message = f"The Event Organiser has amended and resubmitted '{name}'."
-
-    recipients = []
-    for review in reviews.list_reviews(event_request["event_request_id"]):
-        if review["outcome"] in (review_schema.OUTCOME_CLARIFICATION, review_schema.OUTCOME_REJECTED):
-            recipients.append(review["reviewer_id"])
-
-    assigned = event_request.get("event_coordinator_id")
-    if assigned is not None:
-        recipients.append(assigned)
-
-    pending = []
-    seen = set()
-    for recipient_id in recipients:
-        if recipient_id not in seen:
-            seen.add(recipient_id)
-            pending.append(
-                notification_service.build(
-                    recipient_id,
-                    event_request["event_request_id"],
-                    "event_request_resubmitted",
-                    message,
-                )
-            )
-
-    try:
-        return notification_service.deliver(get_supabase(), pending)
-    except Exception:  # noqa: BLE001 - never undo a recorded resubmission
-        logger.exception(
-            "Could not notify coordinators about event request %s",
-            event_request["event_request_id"],
-        )
-        return []
 
 
 def _why_not_editable(existing):

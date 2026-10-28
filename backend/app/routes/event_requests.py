@@ -17,7 +17,6 @@ from app.services.event_request_service import (
 )
 from app.services.event_request_workflow import (
     edit as edit_event_request,
-    list_amendments,
     send_for_review,
 )
 from app.services.event_store import (
@@ -43,28 +42,12 @@ def prevent_caching(response):
 
 
 # Confirmation shown to the Event Coordinator once the outcome is recorded.
-MESSAGES = {
-    review_schema.OUTCOME_APPROVED: "Event request approved. The Event Organiser has been notified.",
-    review_schema.OUTCOME_REJECTED: "Event request rejected. The Event Organiser has been notified.",
-    review_schema.OUTCOME_CLARIFICATION: "Clarification requested. The Event Organiser has been notified.",
-}
-
 DECISION_MESSAGES = {
     review_schema.OUTCOME_APPROVED: "Event request approved.",
     review_schema.OUTCOME_REJECTED: "Event request rejected.",
     review_schema.OUTCOME_CLARIFICATION: "Clarification requested.",
 }
 
-
-def _review_confirmation(outcome, event_request, notifications):
-    """Only claim notification when the Organiser's row was actually stored."""
-    organiser_id = event_request.get("event_organiser_id")
-    organiser_notified = organiser_id is not None and any(
-        item.get("recipient_id") == organiser_id for item in notifications
-    )
-    if organiser_notified:
-        return MESSAGES[outcome]
-    return DECISION_MESSAGES[outcome] + " The Event Organiser could not be notified."
 
 
 @event_requests_bp.errorhandler(EventRequestError)
@@ -193,7 +176,7 @@ def index():
 
     rows = list_event_requests(organiser_id, status)
 
-    return jsonify({"count": len(rows), "event_requests": rows})
+    return jsonify({"event_requests": rows})
 
 
 @event_requests_bp.patch("/<int:event_request_id>")
@@ -220,9 +203,6 @@ def edit(event_request_id):
         "event_request": row,
     }
 
-    if amendment is not None:
-        body["amendment"] = amendment
-
     return jsonify(body)
 
 
@@ -231,7 +211,7 @@ def delete(event_request_id):
     """Delete an unsubmitted draft."""
     delete_draft(event_request_id)
 
-    return jsonify({"message": "Draft event request deleted."})
+    return "", 204
 
 
 @event_requests_bp.get("/<int:event_request_id>")
@@ -252,28 +232,18 @@ def submit(event_request_id):
     Submits a draft, or resubmits a request that has been amended in response
     to a request for clarification.
     """
-    row, was_resubmission, notified = send_for_review(event_request_id)
+    row, was_resubmission = send_for_review(event_request_id)
 
     return jsonify(
         {
             "message": (
-                "Event request resubmitted successfully. The Event "
-                "Coordinator has been notified."
+                "Event request resubmitted successfully."
                 if was_resubmission
                 else "Event request submitted successfully."
             ),
             "event_request": row,
-            "notified": [n["recipient_id"] for n in notified],
         }
     )
-
-
-@event_requests_bp.get("/<int:event_request_id>/amendments")
-def amendments(event_request_id):
-    """Return what the Organiser changed after each clarification request."""
-    rows = list_amendments(event_request_id)
-
-    return jsonify({"count": len(rows), "amendments": rows})
 
 
 @event_requests_bp.post("/<int:event_request_id>/review")
@@ -291,20 +261,9 @@ def review(event_request_id):
     # Who is reviewing comes from the verified session, never from the body.
     _, reviewer_id = authenticated_user()
 
-    event_request, recorded, notifications = review_event_request(
-        event_request_id, payload, reviewer_id
-    )
+    _, recorded = review_event_request(event_request_id, payload, reviewer_id)
 
-    return jsonify(
-        {
-            "message": _review_confirmation(
-                recorded["outcome"], event_request, notifications
-            ),
-            "event_request": event_request,
-            "review": recorded,
-            "notified": [n["recipient_id"] for n in notifications],
-        }
-    )
+    return jsonify({"message": DECISION_MESSAGES[recorded["outcome"]]})
 
 
 @event_requests_bp.get("/<int:event_request_id>/reviews")
@@ -312,4 +271,4 @@ def reviews(event_request_id):
     """Return the review history, so the outcome is visible to those involved."""
     rows = list_reviews(event_request_id)
 
-    return jsonify({"count": len(rows), "reviews": rows})
+    return jsonify({"reviews": rows})

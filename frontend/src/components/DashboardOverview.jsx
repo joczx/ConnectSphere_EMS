@@ -52,7 +52,7 @@ export default function DashboardOverview() {
         </Link></li>)}</ul>}
         <p className="metadata">Counts show current stages. Approved event requests enter Planning; equipment requests are accepted in full or rejected.</p>
       </section>
-      <section className="panel"><h2>Upcoming events</h2><p className="metadata">Your next five active events ? Singapore time</p>
+      <section className="panel"><h2>Upcoming events</h2><p className="metadata">Your next five active events · Singapore time</p>
         {!sections.some(section => section.id === 'events') ? <p>Upcoming events are unavailable. Refresh to retry.</p> : next.length === 0 ? <p>No upcoming events.</p> : <ul className="dashboard-upcoming">{next.map(event => <li key={event.event_id}><Link to={'/events/' + event.event_id}>{event.event_name || 'Untitled event'}</Link>
           <span>{event.start_datetime && formatDate(event.start_datetime)} ? {event.status === 'confirmed' ? 'Confirmed' : 'Planning'}</span></li>)}</ul>}
       </section>

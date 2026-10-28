@@ -126,7 +126,7 @@ function MarkUnavailable({ venueId, onMarked }) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    if (!window.confirm('Mark this venue unavailable? Pending and approved bookings in this period will be cancelled and their Event Coordinators notified.')) return;
+    if (!window.confirm('Mark this venue unavailable? Pending and approved bookings in this period will be cancelled.')) return;
     setError('');
     setResult(null);
     try {
@@ -143,10 +143,10 @@ function MarkUnavailable({ venueId, onMarked }) {
 
   return <section className="panel">
     <h2>Mark temporarily unavailable</h2>
-    <p className="metadata">Pending and approved bookings during this period are cancelled and their Event Coordinators notified. Times are Singapore time (SGT).</p>
+    <p className="metadata">Pending and approved bookings during this period are cancelled. Times are Singapore time (SGT).</p>
     {error && <p className="error" role="alert">{error}</p>}
     {result && <div className="venue-success" role="status">
-      <p>Venue marked unavailable. {result.affected.length ? 'These bookings were cancelled and their coordinators notified:' : 'No bookings were affected.'}</p>
+      <p>Venue marked unavailable. {result.affected.length ? 'These bookings were cancelled:' : 'No bookings were affected.'}</p>
       {result.affected.length > 0 && <ul>{result.affected.map(item => <li key={item.booking_id}>
         <Link to={`/review-venue-bookings/${item.booking_id}`}>{item.event_name} (#{item.event_id})</Link> · {period(item.starts_at, item.ends_at)}
       </li>)}</ul>}

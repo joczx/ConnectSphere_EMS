@@ -38,7 +38,7 @@ class EventViewTests(unittest.TestCase):
         response = self.client.get('/api/events', headers=self.headers)
         self.assertEqual(response.json['events'], [{'event_id': EVENT_ID}])
         self.assertEqual(query.call_args.kwargs['token'], 'user-token')
-        self.assertEqual(query.call_args.args[0], '/rest/v1/events?select=event_id,event_name,status,start_datetime,end_datetime,event_coordinator_id,event_organiser_id,technical_support_id,venue_staff_id,purpose,capacity_needed&order=start_datetime.asc.nullslast')
+        self.assertEqual(query.call_args.args[0], '/rest/v1/events?select=*&order=start_datetime.asc.nullslast')
 
     @patch('app.routes.events.supabase_request')
     def test_repeated_reads_return_latest_event_fields(self, query):

@@ -40,30 +40,6 @@ export default function VenueBookings() {
   const [confirmation, setConfirmation] = useState(null);
   const [busy, setBusy] = useState(false);
   const [version, setVersion] = useState(0);
-  const [alerts, setAlerts] = useState([]);
-
-  // Decisions Venue Staff have made since the coordinator last looked. Not
-  // loading them must not stop the requests themselves from showing, and the
-  // outcome is on each request anyway, so a failure here stays quiet.
-  useEffect(() => {
-    const controller = new AbortController();
-    venueBookingsApi(api, '/alerts', { signal: controller.signal })
-      .then(result => { if (!controller.signal.aborted) setAlerts(result.alerts || []); })
-      .catch(() => { if (!controller.signal.aborted) setAlerts([]); });
-    return () => controller.abort();
-  }, [api, version]);
-
-  async function dismissAlerts() {
-    const ids = alerts.map(alert => alert.notification_id);
-    setAlerts([]);
-    try {
-      await venueBookingsApi(api, '/alerts/dismiss', { method: 'POST', body: { notification_ids: ids } });
-    } catch {
-      // Shown again on the next load, which is the honest outcome of a dismissal
-      // that did not save.
-      setVersion(value => value + 1);
-    }
-  }
   const submitting = useRef(false);
 
   useEffect(() => {
@@ -280,17 +256,6 @@ export default function VenueBookings() {
     </section>}
 
     {data && !data.can_review && <>
-      {alerts.length > 0 && <section className="panel booking-alerts" role="status" aria-labelledby="booking-alerts-heading">
-        <div className="heading venue-section-heading">
-          <h2 id="booking-alerts-heading">New decisions on your requests</h2>
-          {can('booking.dismissAlerts') && <button type="button" className="secondary" onClick={dismissAlerts}>Dismiss</button>}
-        </div>
-        <ul>{alerts.map(alert => <li key={alert.notification_id}>
-          {alert.message} <span className="metadata">({formatTime(alert.created_at)})</span>{' '}
-          <Link to={'/venue-bookings/' + alert.venue_booking_id}>View request</Link>
-        </li>)}</ul>
-      </section>}
-
       <p>Dates and times below are in Singapore time (UTC+8).</p>
       {!data.bookings.length && <p className="panel">You have not requested a venue yet.</p>}
       {/* Modelled on My Event Requests: one section per stage, so what is still

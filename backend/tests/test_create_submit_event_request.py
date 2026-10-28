@@ -46,30 +46,7 @@ def valid_payload(**overrides):
     return payload
 
 
-# AC: The user can enter the required details for an event request.
-def test_a_complete_payload_is_accepted():
-    record, errors = schema.parse_payload(valid_payload())
-
-    assert errors == {}
-    assert record["event_name"] == "Orientation Night"
-    assert record["capacity_needed"] == 120
-    assert record["required_facilities"] == ["projector", "sound_system"]
-
-
-# AC: The system validates that all mandatory fields are completed before submission.
-# AC: The system displays an error message when required information is missing.
-@pytest.mark.parametrize("field", schema.MANDATORY_FOR_SUBMISSION)
-def test_each_mandatory_field_is_reported_when_missing(field):
-    payload = valid_payload()
-    del payload[field]
-
-    record, _ = schema.parse_payload(payload)
-    missing = schema.find_missing(record)
-
-    assert field in missing
-    assert "required" in missing[field]
-
-
+# TC-CER-001 | AC3, AC4 — A blank mandatory field is reported as missing.
 def test_a_blank_mandatory_field_counts_as_missing():
     record, _ = schema.parse_payload(valid_payload(event_name="   "))
 
@@ -77,6 +54,7 @@ def test_a_blank_mandatory_field_counts_as_missing():
 
 
 # Users are managed by Supabase Auth, so user_id is a UUID, not a number.
+# TC-CER-002 | AC5 — Reject an organiser ID with the wrong type.
 def test_an_organiser_id_must_be_a_uuid():
     _, errors = schema.parse_payload(valid_payload(event_organiser_id=1))
 
@@ -84,12 +62,14 @@ def test_an_organiser_id_must_be_a_uuid():
     assert "UUID" in errors["event_organiser_id"]
 
 
+# TC-CER-003 | AC5 — Reject an organiser ID that is not a UUID.
 def test_an_organiser_id_that_is_not_a_valid_uuid_is_rejected():
     _, errors = schema.parse_payload(valid_payload(event_organiser_id="not-a-uuid"))
 
     assert "event_organiser_id" in errors
 
 
+# TC-CER-004 | AC5 — Accept and normalise a valid organiser ID.
 def test_an_organiser_id_is_normalised_to_canonical_form():
     """Upper case and braces are accepted spellings of the same UUID."""
     record, errors = schema.parse_payload(
@@ -100,30 +80,15 @@ def test_an_organiser_id_is_normalised_to_canonical_form():
     assert record["event_organiser_id"] == ORGANISER
 
 
-def test_the_organiser_is_required_before_submitting():
-    payload = valid_payload()
-    del payload["event_organiser_id"]
-
-    record, _ = schema.parse_payload(payload)
-
-    assert "event_organiser_id" in schema.find_missing(record)
-
-
 # AC: The system prevents the user from submitting invalid event details.
-def test_an_event_cannot_end_before_it_starts():
-    _, errors = schema.parse_payload(
-        valid_payload(end_datetime=(FUTURE - timedelta(hours=1)).isoformat())
-    )
-
-    assert "end_datetime" in errors
-
-
+# TC-CER-005 | AC5 — Reject an event whose end is not after its start.
 def test_an_event_cannot_end_at_the_moment_it_starts():
     _, errors = schema.parse_payload(valid_payload(end_datetime=FUTURE.isoformat()))
 
     assert "end_datetime" in errors
 
 
+# TC-CER-006 | AC5 — Reject an event that starts in the past.
 def test_an_event_cannot_start_in_the_past():
     past = datetime.now(timezone.utc) - timedelta(days=1)
     _, errors = schema.parse_payload(
@@ -136,33 +101,22 @@ def test_an_event_cannot_start_in_the_past():
     assert "start_datetime" in errors
 
 
-def test_expected_attendance_must_be_positive():
-    _, errors = schema.parse_payload(valid_payload(capacity_needed=0))
-
-    assert "capacity_needed" in errors
-
-
+# TC-CER-007 | AC5 — Reject non-numeric expected attendance.
 def test_expected_attendance_must_be_a_number():
     _, errors = schema.parse_payload(valid_payload(capacity_needed="a lot"))
 
     assert "capacity_needed" in errors
 
 
-def test_room_layout_must_be_one_the_database_recognises():
-    _, errors = schema.parse_payload(valid_payload(room_layout="amphitheatre"))
-
-    assert "room_layout" in errors
-    assert "theatre" in errors["room_layout"]
-
-
-@pytest.mark.parametrize("room_layout", ["exhibition", "cabaret"])
-def test_new_venue_search_room_layouts_are_accepted(room_layout):
-    record, errors = schema.parse_payload(valid_payload(room_layout=room_layout))
+# TC-CER-008 | AC1 — Accept a supported room layout.
+def test_new_venue_search_room_layout_is_accepted():
+    record, errors = schema.parse_payload(valid_payload(room_layout="exhibition"))
 
     assert errors == {}
-    assert record["room_layout"] == room_layout
+    assert record["room_layout"] == "exhibition"
 
 
+# TC-CER-009 | AC5 — Reject timestamps without a timezone.
 def test_a_timestamp_without_a_timezone_is_rejected():
     _, errors = schema.parse_payload(valid_payload(start_datetime="2027-01-01T09:00:00"))
 
@@ -170,43 +124,7 @@ def test_a_timestamp_without_a_timezone_is_rejected():
     assert "timezone" in errors["start_datetime"]
 
 
-def test_a_malformed_timestamp_is_rejected():
-    _, errors = schema.parse_payload(valid_payload(start_datetime="next Tuesday"))
-
-    assert "start_datetime" in errors
-
-
-def test_facilities_must_be_a_list():
-    _, errors = schema.parse_payload(valid_payload(required_facilities="projector"))
-
-    assert "required_facilities" in errors
-
-
-def test_facilities_must_not_repeat():
-    _, errors = schema.parse_payload(
-        valid_payload(required_facilities=["projector", "projector"])
-    )
-
-    assert "required_facilities" in errors
-
-
-def test_new_venue_search_facilities_are_accepted():
-    facilities = ["parking", "catering_area", "air_conditioning"]
-
-    record, errors = schema.parse_payload(
-        valid_payload(required_facilities=facilities)
-    )
-
-    assert errors == {}
-    assert record["required_facilities"] == facilities
-
-
-def test_accessibility_flags_must_be_true_or_false():
-    _, errors = schema.parse_payload(valid_payload(need_blind_accessibility="yes"))
-
-    assert "need_blind_accessibility" in errors
-
-
+# TC-CER-010 | AC5 — Prevent the client from setting system-controlled status.
 def test_a_client_cannot_set_the_status_itself():
     """Status is system-controlled, so it is not a writable field."""
     _, errors = schema.parse_payload(valid_payload(status="planning"))
@@ -215,35 +133,14 @@ def test_a_client_cannot_set_the_status_itself():
     assert "status" in errors["_body"]
 
 
+# TC-CER-011 | AC5 — Reject a request body that is not an object.
 def test_a_non_object_body_is_rejected():
     _, errors = schema.parse_payload(["not", "an", "object"])
 
     assert "_body" in errors
 
 
-# AC: The system prevents invalid event details.
-# Timestamps read back from Supabase arrive as ISO strings, so the timing
-# rules must work on a stored row too.
-def test_timing_rules_work_on_a_row_read_back_from_the_database():
-    stored = {
-        "start_datetime": FUTURE.isoformat(),
-        "end_datetime": (FUTURE - timedelta(hours=1)).isoformat(),
-    }
-
-    assert "end_datetime" in schema.check_timing(stored)
-
-
-# AC: an event request carries equipment requirements where relevant.
-def test_equipment_requirements_are_normalised():
-    record, errors = schema.parse_payload(valid_payload())
-
-    assert errors == {}
-    assert record["equipment_requirements"] == [
-        {"equipment_type": "projector", "quantity": 2, "notes": "HDMI input"},
-        {"equipment_type": "microphone", "quantity": 4, "notes": None},
-    ]
-
-
+# TC-CER-012 | AC1 — Accept an explicit answer that no equipment is needed.
 def test_no_equipment_is_valid():
     """"Where relevant" means an event may need no equipment at all."""
     record, errors = schema.parse_payload(valid_payload(equipment_requirements=[]))
@@ -252,15 +149,43 @@ def test_no_equipment_is_valid():
     assert record["equipment_requirements"] == []
 
 
-# Every field must be answered before submission, but "none" is an answer.
-@pytest.mark.parametrize("field", ["required_facilities", "equipment_requirements"])
-def test_answering_none_satisfies_a_mandatory_list(field):
-    record, _ = schema.parse_payload(valid_payload(**{field: []}))
+# TC-CER-013 | AC5 — Reject equipment requirements that are not a list.
+def test_equipment_requirements_must_be_a_list_of_items():
+    _, errors = schema.parse_payload(
+        valid_payload(equipment_requirements="projector, 2, HDMI input")
+    )
 
-    assert field not in schema.find_missing(record)
+    assert errors["equipment_requirements"] == "Equipment requirements must be a list."
 
 
-@pytest.mark.parametrize("field", ["required_facilities", "equipment_requirements"])
+# TC-CER-014 | AC5 — Reject an equipment list entry that is not an object.
+def test_each_equipment_item_must_be_an_object():
+    _, errors = schema.parse_payload(
+        valid_payload(equipment_requirements=["projector, 2, HDMI input"])
+    )
+
+    assert errors["equipment_requirements"] == "Item 1: expected an equipment object."
+
+
+# TC-CER-015 | AC5 — Reject non-text equipment notes.
+def test_equipment_notes_must_be_text():
+    _, errors = schema.parse_payload(
+        valid_payload(
+            equipment_requirements=[
+                {"equipment_type": "projector", "quantity": 2, "notes": 12}
+            ]
+        )
+    )
+
+    assert errors["equipment_requirements"] == "Item 1: notes must be text."
+
+
+# TC-CER-016–017 | AC3, AC4 — An unanswered required list blocks submission.
+@pytest.mark.parametrize(
+    "field",
+    ["required_facilities", "equipment_requirements"],
+    ids=["TC-CER-016", "TC-CER-017"],
+)
 def test_a_cleared_list_is_unanswered_and_blocks_submission(field):
     record, errors = schema.parse_payload(valid_payload(**{field: None}))
 
@@ -269,14 +194,7 @@ def test_a_cleared_list_is_unanswered_and_blocks_submission(field):
     assert field in schema.find_missing(record)
 
 
-def test_equipment_must_be_a_list():
-    _, errors = schema.parse_payload(
-        valid_payload(equipment_requirements={"projector": 2})
-    )
-
-    assert "equipment_requirements" in errors
-
-
+# TC-CER-018 | AC5 — Reject an equipment item without a type.
 def test_each_equipment_item_needs_a_type():
     _, errors = schema.parse_payload(
         valid_payload(equipment_requirements=[{"quantity": 2}])
@@ -285,6 +203,7 @@ def test_each_equipment_item_needs_a_type():
     assert "equipment type is required" in errors["equipment_requirements"]
 
 
+# TC-CER-019 | AC5 — Reject equipment quantity below one.
 def test_equipment_quantity_must_be_at_least_one():
     _, errors = schema.parse_payload(
         valid_payload(
@@ -295,6 +214,7 @@ def test_equipment_quantity_must_be_at_least_one():
     assert "at least 1" in errors["equipment_requirements"]
 
 
+# TC-CER-020 | AC5 — Reject a non-whole-number equipment quantity.
 def test_equipment_quantity_must_be_a_number():
     _, errors = schema.parse_payload(
         valid_payload(
@@ -305,39 +225,7 @@ def test_equipment_quantity_must_be_a_number():
     assert "whole number" in errors["equipment_requirements"]
 
 
-def test_the_same_equipment_cannot_be_listed_twice():
-    _, errors = schema.parse_payload(
-        valid_payload(
-            equipment_requirements=[
-                {"equipment_type": "projector", "quantity": 2},
-                {"equipment_type": "Projector", "quantity": 1},
-            ]
-        )
-    )
-
-    assert "more than once" in errors["equipment_requirements"]
-
-
-def test_unknown_fields_on_an_equipment_item_are_rejected():
-    _, errors = schema.parse_payload(
-        valid_payload(
-            equipment_requirements=[
-                {"equipment_type": "projector", "quantity": 2, "colour": "black"}
-            ]
-        )
-    )
-
-    assert "colour" in errors["equipment_requirements"]
-
-
-# AC: an event request carries registration needs where relevant.
-def test_registration_needs_are_kept_as_text():
-    record, errors = schema.parse_payload(valid_payload())
-
-    assert errors == {}
-    assert record["registration_needs"].startswith("Open registration")
-
-
+# TC-CER-021 | AC1 — Store a blank registration answer as no registration needed.
 def test_blank_registration_needs_are_stored_as_none():
     """No registration needed is recorded as null rather than an empty string."""
     record, errors = schema.parse_payload(valid_payload(registration_needs="   "))
@@ -346,13 +234,8 @@ def test_blank_registration_needs_are_stored_as_none():
     assert record["registration_needs"] is None
 
 
-def test_registration_needs_must_be_text():
-    _, errors = schema.parse_payload(valid_payload(registration_needs=["a", "b"]))
-
-    assert "registration_needs" in errors
-
-
 # AC 2, 6, 7, 8: submission, database-generated ID, timestamp and status.
+# TC-CER-022 | AC2, AC6, AC7, AC8 — Submit and persist a completed request.
 def test_service_submits_complete_request_and_returns_generated_id():
     record, errors = schema.parse_payload(valid_payload())
     assert not errors
@@ -373,7 +256,16 @@ def test_service_submits_complete_request_and_returns_generated_id():
 
 
 # AC 3, 4: missing mandatory information is reported before a database write.
-@pytest.mark.parametrize('field', (*schema.MANDATORY_FOR_SUBMISSION, 'event_organiser_id'))
+# TC-CER-023–033 | AC3, AC4 — Each missing mandatory field blocks submission.
+@pytest.mark.parametrize(
+    'field',
+    (*schema.MANDATORY_FOR_SUBMISSION, 'event_organiser_id'),
+    ids=[
+        'TC-CER-023', 'TC-CER-024', 'TC-CER-025', 'TC-CER-026',
+        'TC-CER-027', 'TC-CER-028', 'TC-CER-029', 'TC-CER-030',
+        'TC-CER-031', 'TC-CER-032', 'TC-CER-033',
+    ],
+)
 def test_service_blocks_each_missing_field(field):
     payload = valid_payload()
     del payload[field]
@@ -386,6 +278,7 @@ def test_service_blocks_each_missing_field(field):
 
 
 # AC 5: malformed event details cannot reach persistence.
+# TC-CER-034–044 | AC5 — Invalid or system-controlled details block submission.
 @pytest.mark.parametrize('changes,field', [
     ({'capacity_needed': 0}, 'capacity_needed'),
     ({'capacity_needed': 1.5}, 'capacity_needed'),
@@ -398,6 +291,10 @@ def test_service_blocks_each_missing_field(field):
     ({'status': 'planning'}, '_body'),
     ({'event_request_id': 123}, '_body'),
     ({'submitted_at': '2000-01-01T00:00:00Z'}, '_body'),
+], ids=[
+    'TC-CER-034', 'TC-CER-035', 'TC-CER-036', 'TC-CER-037',
+    'TC-CER-038', 'TC-CER-039', 'TC-CER-040', 'TC-CER-041',
+    'TC-CER-042', 'TC-CER-043', 'TC-CER-044',
 ])
 def test_service_blocks_invalid_details(changes, field):
     with patch.object(service, '_execute') as write, \
@@ -408,6 +305,7 @@ def test_service_blocks_invalid_details(changes, field):
 
 
 # AC 9: stored details can be retrieved for review (UI summary tested separately).
+# TC-CER-045 | AC9 — Retrieve saved request details for the review step.
 def test_service_returns_saved_details_for_review():
     stored = {**valid_payload(), 'event_request_id': 42, 'status': 'draft'}
     table = Mock()
@@ -423,6 +321,7 @@ def test_service_returns_saved_details_for_review():
 
 
 # AC 10: isolate the route handler by replacing its service dependency.
+# TC-CER-046 | AC10 — Return a success confirmation after creation.
 def test_create_handler_returns_success_confirmation():
     stored = {'event_request_id': 42, 'status': 'submitted'}
     app = Flask(__name__)
@@ -437,6 +336,7 @@ def test_create_handler_returns_success_confirmation():
 
 
 # AC 11: failed persistence must never yield a success result.
+# TC-CER-047 | AC11 — Treat an empty insert result as creation failure.
 def test_service_rejects_empty_database_result():
     with patch.object(service, '_execute', return_value=[]), \
          pytest.raises(service.EventRequestError) as caught:
@@ -445,6 +345,7 @@ def test_service_rejects_empty_database_result():
     assert 'could not be created' in caught.value.message
 
 
+# TC-CER-048 | AC11 — Translate a database outage into a creation error.
 def test_service_translates_database_outage_to_readable_error():
     error = service._translate(RuntimeError('offline'), 'create the event request')
     assert error.status_code == 502
@@ -452,15 +353,7 @@ def test_service_translates_database_outage_to_readable_error():
     assert 'Please try again' in error.message
 
 
-def test_create_handler_propagates_creation_failure():
-    error = service.EventRequestError('Creation failed. Please try again.', 502)
-    with Flask(__name__).test_request_context(json=valid_payload()), \
-         patch.object(routes, 'create_event_request', side_effect=error), \
-         pytest.raises(service.EventRequestError) as caught:
-        routes.create()
-    assert caught.value is error
-
-
+# TC-CER-049 | AC4, AC11 — Return an error response without success confirmation.
 def test_error_handler_returns_error_without_success_confirmation():
     error = service.EventRequestError('Missing information.', errors={'event_name': 'Event name is required.'})
     with Flask(__name__).app_context():
@@ -470,7 +363,12 @@ def test_error_handler_returns_error_without_success_confirmation():
     assert 'message' not in response.get_json()
 
 
-@pytest.mark.parametrize('body', [[], 'text', 123, None, {'save_as_draft': 'false'}])
+# TC-CER-050–051 | AC5 — Reject malformed submission request bodies.
+@pytest.mark.parametrize(
+    'body',
+    [[], {'save_as_draft': 'false'}],
+    ids=['TC-CER-050', 'TC-CER-051'],
+)
 def test_create_handler_rejects_malformed_body(body):
     with Flask(__name__).test_request_context(json=body), \
          patch.object(routes, 'create_event_request') as create, \

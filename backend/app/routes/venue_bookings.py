@@ -75,25 +75,11 @@ def list_bookings():
     return jsonify(result)
 
 
-@venue_bookings.get('/alerts')
-def alerts():
-    """The caller's unread decisions on their own booking requests."""
+@venue_bookings.get('/events/<int:event_id>')
+def event_bookings(event_id):
+    """One event's bookings, read only, for the people assigned to that event."""
     token = authenticated_token(supabase_request)
-    result = rpc('venue_booking_alerts', token, {})
-    if isinstance(result, dict) and result.get('error'):
-        return refused(result)
-    return jsonify(alerts=result if isinstance(result, list) else [])
-
-
-@venue_bookings.post('/alerts/dismiss')
-def dismiss_alerts():
-    token = authenticated_token(supabase_request)
-    body = request.get_json(silent=True)
-    ids = body.get('notification_ids') if isinstance(body, dict) else None
-    if (not isinstance(ids, list) or not ids
-            or not all(type(item) is int and item > 0 for item in ids)):
-        return jsonify(error='Choose which alerts to dismiss.'), 400
-    result = rpc('dismiss_venue_booking_alerts', token, {'p_notification_ids': ids})
+    result = rpc('event_venue_bookings', token, {'p_event_id': event_id})
     if result.get('error'):
         return refused(result)
     return jsonify(result)
@@ -154,7 +140,7 @@ def hold(booking_id):
     result = rpc('hold_venue_booking', token, {'p_booking_id': booking_id, 'p_expires_at': expires.isoformat()})
     if result.get('error'):
         return refused(result)
-    return jsonify(message='Tentative hold placed. The Event Coordinator has been told when it expires.', booking=result['booking'])
+    return jsonify(message='Tentative hold placed.', booking=result['booking'])
 
 
 @venue_bookings.delete('/<booking_id>/hold')
@@ -166,7 +152,7 @@ def release_hold(booking_id):
     result = rpc('release_venue_hold', token, {'p_booking_id': booking_id})
     if result.get('error'):
         return refused(result)
-    return jsonify(message='Tentative hold released. The Event Coordinator has been told.', booking=result['booking'])
+    return jsonify(message='Tentative hold released.', booking=result['booking'])
 
 
 @venue_bookings.post('/<booking_id>/review')

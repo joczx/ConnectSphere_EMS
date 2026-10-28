@@ -236,30 +236,6 @@ def _execute(operation, action):
 
 
 def _translate(exc, action):
-    code = getattr(exc, "code", None)
-    detail = str(getattr(exc, "message", None) or exc)
-
-    # 22P02: a value did not match a PostgreSQL enum, e.g. an unknown facility.
-    if code == "22P02" and "facility" in detail:
-        return EventRequestError(
-            "One or more of the required facilities is not recognised. Choose "
-            "facilities from the ConnectSphere venue catalogue.",
-            errors={"required_facilities": detail},
-        )
-
-    if code == "22P02":
-        return EventRequestError(f"Some details are not in the expected format: {detail}")
-
-    if code == "23514":
-        return EventRequestError("The request cannot advance until its required conditions are met.", status_code=409)
-
-    # 23503: foreign key violation, i.e. the organiser is not a known user.
-    if code == "23503":
-        return EventRequestError(
-            "The event organiser does not match a known ConnectSphere user.",
-            errors={"event_organiser_id": detail},
-        )
-
     return EventRequestError(
         f"Could not {action} because the database is unavailable. Please try again.",
         status_code=502,

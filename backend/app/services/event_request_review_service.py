@@ -1,23 +1,18 @@
 """Business logic for Event Coordinator review of event requests."""
 
-import logging
-
 from app.schemas import event_request as request_schema
 from app.schemas import event_request_review as review_schema
-from app.services import db, notification_service
+from app.services import db
 from app.services.event_request_service import EventRequestError, get_event_request
-from app.services.supabase_client import get_supabase
-
-logger = logging.getLogger(__name__)
 
 
 def review_event_request(event_request_id, payload, reviewer_id=None):
-    """Record an Event Coordinator's decision and notify the people involved.
+    """Record an Event Coordinator's decision.
 
     `reviewer_id` is the signed-in user, taken from the verified session by the
     route rather than from the request body.
 
-    Returns (event_request, review, notifications).
+    Returns (event_request, review).
     """
     record, errors = review_schema.parse_payload(payload, reviewer_id)
 
@@ -66,9 +61,7 @@ def review_event_request(event_request_id, payload, reviewer_id=None):
 
     updated = _apply_outcome(event_request_id, record["outcome"])
 
-    notifications = _notify(updated or existing, record)
-
-    return updated or existing, review, notifications
+    return updated or existing, review
 
 
 def list_reviews(event_request_id):
@@ -126,52 +119,6 @@ def _apply_outcome(event_request_id, outcome):
         )
     return rows[0]
 
-
-def _notify(event_request, record):
-    """Tell the Organiser the outcome, and confirm it back to the Coordinator.
-
-    Best effort: the decision is already recorded, so a notification failure is
-    logged rather than raised. Losing a message is better than telling the
-    Coordinator their approval failed when it did not.
-    """
-    organiser_text, reviewer_text = review_schema.describe(
-        record["outcome"], event_request.get("event_name")
-    )
-
-    notification_type = f"event_request_{record['outcome']}"
-    event_request_id = event_request.get("event_request_id")
-
-    pending = []
-    seen = set()
-
-    # The Organiser, who is waiting on the outcome.
-    organiser_id = event_request.get("event_organiser_id")
-    if organiser_id is not None:
-        pending.append(
-            notification_service.build(
-                organiser_id, event_request_id, notification_type, organiser_text
-            )
-        )
-        seen.add(organiser_id)
-
-    # The Coordinator who made the decision, and the one assigned to the event
-    # if that is somebody else.
-    for coordinator_id in (record["reviewer_id"], event_request.get("event_coordinator_id")):
-        if coordinator_id is not None and coordinator_id not in seen:
-            pending.append(
-                notification_service.build(
-                    coordinator_id, event_request_id, notification_type, reviewer_text
-                )
-            )
-            seen.add(coordinator_id)
-
-    try:
-        return notification_service.deliver(get_supabase(), pending)
-    except Exception:  # noqa: BLE001 - never undo a recorded decision
-        logger.exception(
-            "Could not notify users about event request %s", event_request_id
-        )
-        return []
 
 
 def _why_not_reviewable(status):

@@ -1,4 +1,5 @@
 import EventList from '../components/EventList';
+import RegistrationPeriod from '../components/RegistrationPeriod';
 import EventFormSection from '../components/EventFormSection';
 import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useRef, useState } from 'react';
@@ -79,7 +80,7 @@ function saved(event, field) {
 
 export default function Events() {
   const { confirm, notify } = useFeedback();
-  const { api, can, canViewEvent } = useAuth();
+  const { api, can, canAccess, canViewEvent, userId } = useAuth();
   const { eventId } = useParams();
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
@@ -145,20 +146,35 @@ export default function Events() {
   useEffect(() => {
     if (!eventId) return undefined;
     let ignore = false;
-    api('/api/venue-bookings', { cache: 'no-store' })
+    // This event's bookings, for everyone the event names: its Organiser,
+    // Coordinator, Technical Support, Venue Staff and Safety Officer (045).
+    // Whether a coordinator may request a venue is decided by
+    // can('event.findVenue') where the button is shown.
+    api(`/api/venue-bookings/events/${encodeURIComponent(eventId)}`, { cache: 'no-store' })
       .then(data => {
-        if (ignore) return;
-        const forThisEvent = (data.bookings || [])
-          .filter(booking => String(booking.event_id) === String(eventId));
-        setVenue(current => ({ ...current, bookings: forThisEvent, error: '', allowed: true, canRequest: !!data.can_submit }));
+        if (!ignore) setVenue(current => ({ ...current, bookings: data.bookings || [], error: '', allowed: true, canRequest: true }));
       })
       .catch(err => {
         if (ignore) return;
-        // Organisers and technical support can read the event but take no part
-        // in venue booking. That is not a failure, so they see no section
-        // rather than an error they can do nothing about.
-        if (err.status === 403) setVenue(current => ({ ...current, allowed: false, error: '' }));
-        else setVenue(current => ({ ...current, error: err.message || 'Unable to load venue booking requests.' }));
+        // Not assigned to the event: no booking list.
+        if (err.status === 403 || err.status === 404) {
+          setVenue(current => ({ ...current, allowed: false, error: '' }));
+          return;
+        }
+        // Until 045 is run the endpoint is unavailable. Fall back to the full
+        // list, which serves Event Coordinators and Venue Staff only.
+        api('/api/venue-bookings', { cache: 'no-store' })
+          .then(data => {
+            if (ignore) return;
+            const forThisEvent = (data.bookings || [])
+              .filter(booking => String(booking.event_id) === String(eventId));
+            setVenue(current => ({ ...current, bookings: forThisEvent, error: '', allowed: true, canRequest: !!data.can_submit }));
+          })
+          .catch(fallback => {
+            if (ignore) return;
+            if (fallback.status === 403) setVenue(current => ({ ...current, allowed: false, error: '' }));
+            else setVenue(current => ({ ...current, error: fallback.message || 'Unable to load venue booking requests.' }));
+          });
       });
     return () => { ignore = true; };
   }, [api, eventId, refresh]);
@@ -170,30 +186,43 @@ export default function Events() {
   const equipmentRequests = state.equipment || [];
   const activity = state.activity || [];
   const editable = event?.status === 'planning';
+  // The event's Organiser, Technical Support Staff and Safety Officer cannot
+  // list venue bookings, but still see which venue the event has.
+  const venueReadOnly = !!event && !venue.allowed && !!userId
+    && [event.event_organiser_id, event.technical_support_id, event.safety_officer_id].includes(userId);
   // Who sees which button: ACTIONS in auth/access.js. The status rules stay here.
   const canRequestChange = !!event && can('changeRequest.create', event)
     && ['planning', 'pending_safety_checks', 'confirmed'].includes(event.status);
   const canCancel = !!event && ['planning', 'confirmed'].includes(event.status) && can('event.cancel', event);
+  // The database refuses while arrangements are incomplete and says which.
+  const canSubmitSafety = !!event && event.status === 'planning' && can('event.submitSafety', event);
+  const showSafetySubmission = canSubmitSafety || lifecycle.action === 'safety-checks';
 
   async function updateLifecycle(action, ready) {
     if (action === 'cancel' && !(await confirm('Cancel this event? This cannot be undone.', { title: 'Cancel event', confirmLabel: 'Cancel event', destructive: true }))) return;
-    setLifecycle({ busy: true, error: '', message: '' });
+    if (action === 'safety-checks' && !(await confirm('Submit this event for safety checks? Event details cannot be edited while the Safety Officer reviews it.', { title: 'Submit for safety checks', confirmLabel: 'Submit' }))) return;
+    setLifecycle({ busy: true, action, error: '', message: '' });
     try {
+      const posted = action === 'cancel' || action === 'safety-checks';
       const result = await api(`/api/events/${encodeURIComponent(eventId)}/${action}`, {
-        method: action === 'cancel' ? 'POST' : 'PATCH',
-        body: action === 'cancel' ? {} : { ready },
+        method: posted ? 'POST' : 'PATCH',
+        body: posted ? {} : { ready },
       });
       setState(current => ({ ...current, data: { ...current.data, event: result.event } }));
-      setLifecycle({ busy: false, error: '', message: action === 'cancel'
-        ? 'Event cancelled.' : `Registration readiness saved. Event status: ${label(result.event.status)}.` });
+      setLifecycle({ busy: false, action, error: '', message: action === 'cancel' ? 'Event cancelled.'
+        : action === 'safety-checks' ? result.message
+        : `Registration readiness saved. Event status: ${label(result.event.status)}.` });
       setRefresh(value => value + 1);
     } catch (error) {
-      setLifecycle({ busy: false, error: error.message || 'Unable to update the event.', message: '' });
+      setLifecycle({ busy: false, action, error: error.message || 'Unable to update the event.', message: '' });
     }
   }
   const approvedVenues = venue.bookings
     .filter(booking => booking.status === 'approved')
     .map(booking => booking.venue_name);
+  // Bookings arrive newest first. The assigned Venue Staff is taken to the
+  // newest one still awaiting a decision, or else the newest one.
+  const bookingToReview = venue.bookings.find(booking => booking.status === 'submitted') || venue.bookings[0];
 
   useEffect(() => {
     if (!event) return;
@@ -203,6 +232,7 @@ export default function Events() {
       event.event_coordinator_id,
       event.technical_support_id,
       event.venue_staff_id,
+      event.safety_officer_id,
     ].filter(Boolean).join(',');
 
     if (ids) {
@@ -291,7 +321,6 @@ export default function Events() {
       {eventId && <Link to="/events">← My events</Link>}
       <div className="heading"><div><p className="eyebrow">EVENT WORKSPACE</p><h1>{eventId ? event?.event_name || 'Event information' : 'Events'}</h1></div>
         <div className="event-reference-actions">
-          {event && editable && can('event.edit', event) && !edit.open && <button type="button" onClick={startEditing}>Edit event</button>}
           {event && canRequestChange && !edit.open && <Link className="button-link secondary" to={`/event-change-requests/new?event_id=${encodeURIComponent(event.event_id)}`}>Request changes</Link>}
           {event && canCancel && <button type="button" className="secondary event-cancel-action" disabled={lifecycle.busy} onClick={() => updateLifecycle('cancel')}>Cancel event</button>}
           {!eventId && can('event.create') && <Link className="button-link" to="/event-requests/new">+ New event</Link>}
@@ -305,20 +334,36 @@ export default function Events() {
       {data?.events && <EventList events={data.events.filter(canViewEvent)} />}
       {event && <>
         <div className="event-reference-identity"><span className={'event-stage event-stage-' + event.status}>{label(event.status)}</span><span>Event #{event.event_id}</span></div>
+        {/* With the safety card, this row uses the same columns as the content
+            below, so the card lines up with the People sidebar. */}
+        <div className={showSafetySubmission ? 'event-reference-info-row' : undefined}>
         <div className="event-reference-info-cards">
           {[['Starts', date(event.start_datetime)], ['Ends', date(event.end_datetime)], ['Attendance', event.capacity_needed ?? '-'], ['Purpose', event.purpose || '-']].map(([name, value]) => <div key={name}><span>{name}</span><strong>{value}</strong></div>)}
+        </div>
+          {/* Stays up after submitting so the outcome is read where it was asked for. */}
+          {showSafetySubmission && <div className="event-safety-submission" id="event-safety-submission">
+            <span>Safety checks</span>
+            <p>Event arrangements confirmed? Click below to send the event for safety checks by the Safety Officer.</p>
+            {lifecycle.action === 'safety-checks' && lifecycle.error && <p role="alert" className="error">{lifecycle.error}</p>}
+            {lifecycle.action === 'safety-checks' && lifecycle.message && <p role="status" className="success">{lifecycle.message}</p>}
+            {canSubmitSafety && <button type="button" className="event-safety-submit" disabled={lifecycle.busy || edit.open} onClick={() => updateLifecycle('safety-checks')}>Submit for safety checks</button>}
+          </div>}
         </div>
       </>}
 
       {event && <div className="event-reference-columns"><div className="event-reference-main">
+      <RegistrationPeriod key={event.event_id} event={event} onSaved={updated => {
+        setState(current => ({ ...current, data: { ...current.data, event: updated } }));
+        setRefresh(value => value + 1);
+      }} />
       {event && <article className="panel event-detail-section" id="event-overview" tabIndex={-1}>
         <div className="heading" style={{ alignItems: 'center' }}>
           <h2 style={{ margin: 0 }}>Event details</h2>
-
+          {editable && can('event.edit', event) && !edit.open && <button type="button" onClick={startEditing}>Edit event</button>}
         </div>
         {edit.message && <div className="success" style={{ marginBottom: '12px' }} role="status">{edit.message}</div>}
-        {lifecycle.error && <p role="alert" className="error">{lifecycle.error}</p>}
-        {lifecycle.message && <p role="status" className="success">{lifecycle.message}</p>}
+        {lifecycle.action !== 'safety-checks' && lifecycle.error && <p role="alert" className="error">{lifecycle.error}</p>}
+        {lifecycle.action !== 'safety-checks' && lifecycle.message && <p role="status" className="success">{lifecycle.message}</p>}
         {!editable && !canRequestChange && <p className="metadata">This event is {event.status}. Details can only be changed during planning.</p>}
 
         {!edit.open && <><h3>About this event</h3><dl className="event-detail-grid">
@@ -416,10 +461,13 @@ export default function Events() {
           <Detail label="Event coordinator" value={userNames[event.event_coordinator_id] || (event.event_coordinator_id ? event.event_coordinator_id.slice(0, 8) : '-')} />
           <Detail label="Technical support" value={userNames[event.technical_support_id] || (event.technical_support_id ? event.technical_support_id.slice(0, 8) : '-')} />
           <Detail label="Venue staff" value={userNames[event.venue_staff_id] || (event.venue_staff_id ? event.venue_staff_id.slice(0, 8) : '-')} />
+          <Detail label="Safety officer" value={userNames[event.safety_officer_id] || (event.safety_officer_id ? event.safety_officer_id.slice(0, 8) : '-')} />
 </dl></section>}
-      {eventId && event && venue.allowed && <section className="panel event-detail-section" id="event-venue" tabIndex={-1}>
+      {eventId && event && (venue.allowed || venueReadOnly) && <section className="panel event-detail-section" id="event-venue" tabIndex={-1}>
         <h2>Venue</h2>
-        {venue.assigned && <p>Assigned venue: <Link to={`/venues/${venue.assigned.venue_id}`}>{venue.assigned.venue_name}</Link></p>}
+        {venue.assigned && <p>Assigned venue: {canAccess(`/venues/${venue.assigned.venue_id}`)
+          ? <Link to={`/venues/${venue.assigned.venue_id}`}>{venue.assigned.venue_name}</Link>
+          : <strong>{venue.assigned.venue_name}</strong>}</p>}
         {/* An approved request is what makes a venue available for the event,
             and an event may need more than one, so each is named. */}
         {approvedVenues.length > 0 && <p>Approved by Venue Staff: <strong>{approvedVenues.join(', ')}</strong></p>}
@@ -430,6 +478,10 @@ export default function Events() {
         {editable && venue.canRequest && can('event.findVenue', event) && <Link className="button-link" to={`/venue-search?event_id=${encodeURIComponent(eventId)}`}>
           Find venues for this event
         </Link>}
+        {bookingToReview && can('booking.review', event) && <Link className="button-link" to={`/review-venue-bookings/${encodeURIComponent(bookingToReview.booking_id)}`}>
+          Review venue bookings for this event
+        </Link>}
+        {venue.allowed && <>
         {!editable && <p className="metadata">A venue can only be requested while the event is in planning.</p>}
 
         <h3 style={{ marginTop: '20px' }}>Venue booking requests for this event</h3>
@@ -450,6 +502,7 @@ export default function Events() {
             </dd>
           </div>)}
         </dl>}
+        </>}
       </section>}
 
       {event && <section className="panel event-reference-side-card"><h2>Equipment</h2>
@@ -457,8 +510,10 @@ export default function Events() {
         {/* The event's coordinator requests equipment; its technical support
             reviews it. Each is taken to their own page, filtered to this event. */}
         {can('equipment.request', event)
-          ? <Link className="button-link" to={`/equipment-requests?event_id=${encodeURIComponent(eventId)}`}>Request equipment for this event</Link>
-          : can('equipment.review', event) && <Link className="button-link" to={`/equipment?event_id=${encodeURIComponent(eventId)}`}>View equipment requests</Link>}
+          ? editable
+            ? <Link className="button-link" to={`/equipment-requests?event_id=${encodeURIComponent(eventId)}`}>Request equipment for this event</Link>
+            : <p className="metadata">Equipment can only be requested while the event is in planning.</p>
+          : can('equipment.review', event) && <Link className="button-link" to={`/equipment?event_id=${encodeURIComponent(eventId)}`}>Review equipment requests for this event</Link>}
       </section>}
       {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
         <h2>Registration arrangements</h2>

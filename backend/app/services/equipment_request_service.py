@@ -31,6 +31,9 @@ def create_equipment_request(event_id, payload, token):
 
     current_user = _current_user_id(token)
     event = _load_event(event_id, token)
+    # Like a venue booking, equipment is arranged only during planning.
+    if event.get('status') != 'planning':
+        raise EquipmentRequestError('Equipment can only be requested while the event is in planning.', 409)
 
     # assigned_coordinator = event.get('event_coordinator_id')
     # if not assigned_coordinator or current_user != assigned_coordinator:
@@ -146,7 +149,7 @@ def _current_user_id(token):
 
 def _load_event(event_id, token):
     rows = supabase_request(
-        f'/rest/v1/events?select=event_id,event_coordinator_id&event_id=eq.{event_id}',
+        f'/rest/v1/events?select=event_id,event_coordinator_id,status&event_id=eq.{event_id}',
         token=token,
     )
     if not rows:

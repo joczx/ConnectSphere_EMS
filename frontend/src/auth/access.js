@@ -10,6 +10,7 @@ const safetyOfficer = ['safety officer'];
 // it, so '/venues' also covers '/venues/:id'. A path with no entry is open to
 // every signed-in user.
 export const PAGE_ROLES = {
+  '/event-registration': ['attendee'],
   '/assign-event-coordinators': lead,
   '/reassign-event-coordinators': lead,
   '/event-requests': organiser,
@@ -36,12 +37,13 @@ export function hasAccess(roles = [], required = []) {
 }
 
 // How a user can be linked to an event or event request, by the column that
-// names them.
+// names them. safety_officer_id is filled on approval (043).
 const RELATION_FIELDS = {
   organiser: 'event_organiser_id',
   coordinator: 'event_coordinator_id',
   technical: 'technical_support_id',
   venueStaff: 'venue_staff_id',
+  safety: 'safety_officer_id',
 };
 
 // Who may see each action's button. `roles`: the user must hold one of them.
@@ -53,7 +55,9 @@ export const ACTIONS = {
   'event.edit': { roles: coordinator, relation: ['coordinator'] },
   'event.cancel': { roles: coordinator, relation: ['coordinator'] },
   'event.registrationReady': { roles: coordinator, relation: ['coordinator'] },
+  'event.registrationPeriod': { roles: organiser, relation: ['organiser'] },
   'event.findVenue': { roles: coordinator, relation: ['coordinator'] },
+  'event.submitSafety': { roles: coordinator, relation: ['coordinator'] },
 
   'eventRequest.delete': { roles: organiser, relation: ['organiser'] },
   'eventRequest.cancel': { roles: organiser, relation: ['organiser'] },
@@ -66,7 +70,6 @@ export const ACTIONS = {
 
   'booking.request': { roles: coordinator },
   'booking.cancel': { roles: coordinator },
-  'booking.dismissAlerts': { roles: coordinator },
   'booking.review': { roles: venueStaff, relation: ['venueStaff'] },
   'booking.hold': { roles: venueStaff, relation: ['venueStaff'] },
   'booking.releaseHold': { roles: venueStaff, relation: ['venueStaff'] },
@@ -78,7 +81,7 @@ export const ACTIONS = {
   'venue.unblock': { roles: venueStaff },
   'venue.viewCalendar': { roles: [...coordinator, ...venueStaff] },
 
-  'safety.decide': { roles: safetyOfficer },
+  'safety.decide': { roles: safetyOfficer, relation: ['safety'] },
 
   'equipment.request': { roles: coordinator, relation: ['coordinator'] },
   'equipment.review': { roles: technical, relation: ['technical'] },
@@ -87,7 +90,7 @@ export const ACTIONS = {
 };
 
 // Which events a user sees: the ones they are linked to as organiser,
-// coordinator, technical support or venue staff. An Event Coordinator Lead
+// coordinator, technical support, venue staff or safety officer. An Event Coordinator Lead
 // sees every event.
 export function canViewEvent(roles, userId, event) {
   if (!event) return false;

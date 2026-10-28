@@ -81,7 +81,21 @@ input:not([type="checkbox"]), select, textarea { display: block; width: 100%; bo
 .notification-menu { position: relative; }
 .notification-menu summary { display: flex; align-items: center; color: #475569; cursor: pointer; list-style: none; }
 .notification-menu summary::-webkit-details-marker { display: none; }
-.notification-menu .account-menu-content { z-index: 50; width: 320px; max-width: 80vw; max-height: 60vh; overflow-y: auto; }
+/* Only the list scrolls; the heading and "View all notifications" stay in place. */
+.notification-menu .account-menu-content { z-index: 50; display: flex; flex-direction: column; width: 320px; max-width: 80vw; max-height: min(520px, 70vh); overflow: hidden; }
+.notification-menu .account-menu-content > :not(.notification-list) { flex: none; }
+.notification-list { display: grid; padding: 0; margin: 8px 0; list-style: none; }
+.notification-menu .notification-list { flex: 0 1 auto; min-height: 0; max-height: 380px; overflow-y: auto; }  /* 5 x 76px items */
+.notification-list li button { display: grid; gap: 2px; width: 100%; padding: 8px 10px; border: 0; border-bottom: 1px solid var(--cs-color-border); border-radius: 0; background: transparent; color: var(--cs-color-text); font-weight: 400; text-align: left; }
+.notification-menu .notification-list li button { height: 76px; line-height: 1.35; overflow: hidden; }
+/* In the popup each line is truncated with an ellipsis rather than cut off. */
+.notification-menu .notification-list li button > * { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.notification-list li button strong { color: var(--cs-color-heading); }
+.notification-list li button span { font-size: 13px; }
+.notification-list li button small { color: var(--cs-color-text); font-size: 11px; }
+.notification-list li.unread button { background: #f0fdfa; border-left: 3px solid var(--cs-color-primary); }
+.notification-page-list { background: var(--cs-color-surface); border: 1px solid var(--cs-color-border); border-radius: var(--cs-radius-panel); }
+.assignment-card.highlighted { border: 2px solid var(--cs-color-primary); }
 .notification-count { margin-left: 2px; padding: 1px 6px; border-radius: 999px; background: var(--cs-color-danger); color: white; font-size: 11px; font-weight: 700; vertical-align: top; }
 .assignment-list { text-align: left; }
 .assignment-card h2 { margin-top: 0; }
@@ -200,9 +214,6 @@ input:not([type="checkbox"]), select, textarea { display: block; width: 100%; bo
 .booking-conflicts { margin: 8px 0 0; padding-left: 20px; }
 .booking-conflicts li + li { margin-top: 6px; }
 .booking-conflict-panel { border-color: #fbbf24; background: #fffbeb; }
-.booking-alerts { margin: 20px 0; border-left: 4px solid var(--cs-color-primary); }
-.booking-alerts ul { margin: 12px 0 0; padding-left: 20px; }
-.booking-alerts li + li { margin-top: 8px; }
 .venue-inline-filters { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--cs-color-border); }
 .venue-filter-chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 0; padding: 0; list-style: none; }
 .venue-filter-chips button { width: auto; padding: 6px 12px; border: 1px solid var(--cs-color-border-strong); border-radius: 999px; background: var(--cs-color-surface); color: var(--cs-color-heading); font-size: 13px; font-weight: 600; }
@@ -492,6 +503,15 @@ button.event-stage-filter.selected { color: #1d4ed8; border-color: #2563eb; back
 .event-reference-info-cards > div { border: 1px solid #e2e8f0; border-radius: 8px; background: white; padding: 14px; min-width: 0; }
 .event-reference-info-cards span { display: block; font-size: 12px; color: #64748b; margin-bottom: 6px; }
 .event-reference-info-cards strong { font-size: 13px; font-weight: 500; color: #334155; overflow-wrap: anywhere; }
+/* Same columns as .event-reference-columns, so the safety card matches the sidebar. */
+.event-reference-info-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 22px; align-items: stretch; margin-bottom: 22px; }
+.event-reference-info-row .event-reference-info-cards { margin-bottom: 0; }
+.event-safety-submission { border: 1px solid #e2e8f0; border-radius: 8px; background: white; padding: 14px; min-width: 0; }
+.event-safety-submission > span { display: block; font-size: 12px; color: #64748b; margin-bottom: 6px; }
+.event-safety-submission p { font-size: 13px; color: #334155; margin: 0 0 10px; }
+/* Green: moves the event to its next stage, unlike the navy buttons that change its details. */
+.event-safety-submission .event-safety-submit { font-size: 13px; padding: 8px 12px; background: #047857; }
+.event-safety-submission .event-safety-submit:hover:not(:disabled) { background: #065f46; }
 .event-reference-columns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 22px; align-items: start; }
 .event-reference-main, .event-reference-sidebar { min-width: 0; display: grid; gap: 18px; }
 .event-reference-columns .panel { margin: 0; padding: 20px; border-radius: 8px; }
@@ -509,7 +529,7 @@ button.event-stage-filter.selected { color: #1d4ed8; border-color: #2563eb; back
 .event-sidebar-equipment .event-stage { font-size: 10px; }
 .event-reference-sidebar #event-venue > p { font-size: 12px; }
 @media (max-width: 1000px) { .events-reference-cards { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 760px) { .event-reference-columns { grid-template-columns: minmax(0, 1fr); } .event-reference-info-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .events-stat-cards { grid-template-columns: minmax(0, 1fr); } .event-reference-actions { justify-content: flex-start; } .events-sort { white-space: normal; } }
+@media (max-width: 760px) { .event-reference-columns { grid-template-columns: minmax(0, 1fr); } .event-reference-info-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .event-reference-info-row { grid-template-columns: minmax(0, 1fr); } .events-stat-cards { grid-template-columns: minmax(0, 1fr); } .event-reference-actions { justify-content: flex-start; } .events-sort { white-space: normal; } }
 @media (max-width: 430px) { .event-reference-card-heading { flex-direction: column; } .events-reference-card { padding: 12px; gap: 10px; } .events-results-toolbar, .events-reference-cards { padding: 12px; } }
 
 /* Compact spacing only inside the event view's equipment request section. */
