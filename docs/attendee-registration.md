@@ -1,11 +1,20 @@
 # Attendee registration
 
-Apply Supabase migrations 046, 047 and 048 in order. Attendees register on
+Apply Supabase migrations 046 through 050 in order. Attendees register on
 `/event-registration`, providing full name, contact email and phone number.
 The API and database reject missing or malformed details. The database serialises
 registrations per event, rechecks the registration window, and prevents confirmed
 places exceeding capacity. A full event accepts waiting-list entries only when
 the organiser enabled that option; these are explicitly not confirmed places.
+
+Registration times must satisfy `opening < closing < event start`, with equality
+refused. The form checks against the displayed event start, and the database RPC
+checks the current stored event under a lock. A table constraint also prevents
+direct writes or rescheduling the event to at/before registration closing.
+An event needs a valid start time before registration can be configured.
+
+Migration 050 validates existing records. Correct any periods that violate the
+ordering before applying it; the migration does not silently change existing times.
 
 Registration details are visible only to the attendee through the existing RLS
 policy. Existing registrations keep null personal details; no details are invented.
@@ -41,3 +50,24 @@ python -m coverage report --fail-under=100 -m
 From the repository root: `node --test frontend/tests/registration-db.mjs`.
 The database test uses the existing local PGlite test dependency and applies the
 actual migrations to an isolated database; no production email is sent.
+
+## Withdrawal
+
+Attendees use Withdraw registration on the same page, backed by
+`POST /api/events/<id>/registrations/withdraw`. The database derives identity from
+the session, locks the event against concurrent registrations, then reads the
+clock. Withdrawal is allowed strictly before event start, including after the
+registration window closes. At or after start (or without a recorded start),
+the request is refused without changing the registration.
+
+Withdrawal preserves the row with status `withdrawn` and a `withdrawn_at` timestamp.
+Repeated withdrawals before start return the same record. Available capacity is
+computed from confirmed registrations; withdrawing a waiting-list entry does not
+release a confirmed place. Existing waiting-list entries are not automatically
+promoted by this story. The updated capacity and status appear in attendee event
+information and immediately after a successful withdrawal.
+
+Attendees may register again while registration is open, subject to capacity.
+Re-registration resets the withdrawal timestamp and queues a fresh confirmation.
+Withdrawal removes pending confirmation emails; a message already accepted by SMTP
+or currently being sent cannot be recalled.

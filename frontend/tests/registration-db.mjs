@@ -47,6 +47,8 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     await db.exec(await readFile(new URL('../../supabase/046_event_registration.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/047_attendee_registration_access.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/048_attendee_registration_details.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/049_withdraw_event_registration.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/050_registration_before_event_start.sql', import.meta.url), 'utf8'));
     // Install the actual updated lifecycle function as on the deployed database.
     await db.exec('create trigger guard_event_lifecycle before insert or update on public.events for each row execute function public.guard_event_lifecycle()');
     const future = new Date(Date.now() + 86400000).toISOString();
@@ -61,7 +63,27 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     assert.equal((await rpc('attendee_registration_events')).status, 403);
     assert.equal((await rpc('register_for_event', [1])).status, 403);
     assert.equal((await rpc('set_event_registration_period', [1, later, future, true])).status, 400);
+    const eventStart = (await db.query('select start_datetime from public.events where event_id=1')).rows[0].start_datetime;
+    const startInstant = new Date(eventStart).getTime();
+    const afterStart = new Date(startInstant + 3600000).toISOString();
+    const justBeforeStart = new Date(startInstant - 1).toISOString();
+    for (const closing of [new Date(startInstant).toISOString(), afterStart]) {
+      const refused = await rpc('set_event_registration_period', [1, future, closing, true]);
+      assert.equal(refused.status, 400, 'closing at or after event start is refused');
+      assert.ok(refused.errors.registration_closes_at);
+    }
+    for (const opening of [new Date(startInstant).toISOString(), new Date(startInstant + 1).toISOString()]) {
+      const refused = await rpc('set_event_registration_period', [1, opening, afterStart, true]);
+      assert.equal(refused.status, 400, 'opening at or after event start is refused');
+      assert.ok(refused.errors.registration_opens_at);
+    }
+    assert.equal((await rpc('set_event_registration_period', [1, future, justBeforeStart, true])).event.event_id, 1);
     let result = await rpc('set_event_registration_period', [1, future, later, true]);
+    await db.exec('alter table public.events disable trigger guard_event_lifecycle');
+    await assert.rejects(db.query('update public.events set start_datetime=registration_closes_at where event_id=1'), /registration_before_event_start/);
+    await assert.rejects(db.query('update public.events set start_datetime=null where event_id=1'), /registration_before_event_start/);
+    await assert.rejects(db.query('update public.events set registration_closes_at=start_datetime where event_id=1'), /registration_before_event_start/);
+    await db.exec('alter table public.events enable trigger guard_event_lifecycle');
     assert.equal(result.event.status, 'confirmed');
     assert.ok(result.event.safety_approved_at, 'registration edits preserve safety approval');
     await actor(attendee);
@@ -90,6 +112,24 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     assert.equal(info.my_registration, 'waiting_list');
     assert.equal(info.registration_status, 'open');
     assert.equal(info.event_organiser_id, undefined);
+    // Withdrawing a waiting-list entry does not release a confirmed place.
+    assert.equal((await rpc('withdraw_event_registration', [1])).available_capacity, 0);
+    assert.equal((await rpc('withdraw_event_registration', [1])).registration.status, 'withdrawn');
+    assert.equal((await rpc('register_for_event', [1])).registration.status, 'waiting_list');
+    await actor(attendee);
+    const withdrawn = await rpc('withdraw_event_registration', [1]);
+    assert.equal(withdrawn.registration.status, 'withdrawn');
+    assert.ok(withdrawn.registration.withdrawn_at);
+    assert.match(withdrawn.message, /successfully withdrawn/);
+    assert.equal(withdrawn.available_capacity, 1);
+    assert.equal((await rpc('attendee_registration_events')).events[0].available_capacity, 1);
+    assert.equal((await rpc('attendee_registration_events')).events[0].my_registration, 'withdrawn');
+    assert.equal((await rpc('withdraw_event_registration', [1])).registration.withdrawn_at, withdrawn.registration.withdrawn_at);
+    // Re-registration uses the released place, resets withdrawal and requeues email.
+    const again = await rpc('register_for_event', [1]);
+    assert.equal(again.registration.status, 'registered');
+    assert.equal(again.registration.withdrawn_at, null);
+    await actor(nextAttendee);
     await db.exec(`delete from public.event_registration where attendee_id='${nextAttendee}'`);
     await actor(organiser);
     await rpc('set_event_registration_period', [1, past, future, false]);
@@ -103,7 +143,9 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     assert.equal((await rpc('attendee_registration_events')).events[0].registration_status, 'closed');
     await actor(organiser);
     assert.equal((await rpc('set_event_registration_period', [1, past, future, false])).status, 409);
+    assert.equal((await rpc('withdraw_event_registration', [1])).status, 403);
     await actor('');
+    assert.equal((await rpc('withdraw_event_registration', [1])).status, 401);
     assert.equal((await rpc('attendee_registration_events')).status, 401);
     assert.equal((await rpc('register_for_event', [1])).status, 401);
     // Authenticated clients cannot bypass the controlled registration function.
@@ -115,5 +157,31 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     await assert.rejects(db.exec(`insert into public.event_registration(event_id,attendee_id,status) values (1,'${nextAttendee}','registered')`), /permission denied/);
     await assert.rejects(db.exec('select * from public.registration_email_outbox'), /permission denied/);
     await db.exec('reset role');
+    await actor(nextAttendee);
+    assert.equal((await rpc('withdraw_event_registration', [1])).status, 404, 'cannot withdraw another attendee registration');
+    assert.equal((await rpc('withdraw_event_registration', [999])).status, 404);
+    await actor(attendee);
+    assert.equal((await rpc('withdraw_event_registration', [1])).registration.status, 'withdrawn', 'withdrawal remains possible after registration closes');
+    assert.equal((await db.query("select count(*)::int as n from public.registration_email_outbox where sent_at is null")).rows[0].n, 0);
+    // Fixture events at/past start time, independent of lifecycle editing rules.
+    await db.exec(`
+      alter table public.events disable trigger guard_event_lifecycle;
+      insert into public.events(event_id,event_name,status,start_datetime,end_datetime,capacity_needed)
+      values (2,'Started','confirmed',clock_timestamp(),now()+interval '1 day',1),
+             (3,'Past','confirmed',now()-interval '1 day',now()+interval '1 day',1),
+             (4,'Unknown start','confirmed',null,now()+interval '1 day',1);
+      insert into public.event_registration(event_id,attendee_id,status)
+      select event_id,'${attendee}','registered' from public.events where event_id in (2,3,4);
+      update public.events set event_organiser_id='${organiser}' where event_id=4;
+      alter table public.events enable trigger guard_event_lifecycle;
+    `);
+    for (const id of [2,3,4]) {
+      assert.equal((await rpc('withdraw_event_registration', [id])).status, 409);
+      assert.equal((await db.query('select status from public.event_registration where event_id=$1', [id])).rows[0].status, 'registered');
+    }
+    await actor(organiser);
+    const missingStart = await rpc('set_event_registration_period', [4, past, future, false]);
+    assert.equal(missingStart.status, 400);
+    assert.match(missingStart.error, /valid event start time/);
   } finally { await db.close(); }
 });
