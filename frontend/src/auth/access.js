@@ -10,7 +10,9 @@ const safetyOfficer = ['safety officer'];
 // it, so '/venues' also covers '/venues/:id'. A path with no entry is open to
 // every signed-in user.
 export const PAGE_ROLES = {
+  '/events': [...organiser, ...coordinator, ...lead, ...technical, ...venueStaff, ...safetyOfficer],
   '/event-registration': ['attendee'],
+  '/my-registrations': ['attendee'],
   '/assign-event-coordinators': lead,
   '/reassign-event-coordinators': lead,
   '/event-requests': organiser,

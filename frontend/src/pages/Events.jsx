@@ -1,4 +1,5 @@
 import EventList from '../components/EventList';
+import EventRegistrationRoster from '../components/EventRegistrationRoster';
 import RegistrationPeriod from '../components/RegistrationPeriod';
 import EventFormSection from '../components/EventFormSection';
 import RequiredIndicator from '../components/RequiredIndicator';
@@ -515,6 +516,8 @@ export default function Events() {
             : <p className="metadata">Equipment can only be requested while the event is in planning.</p>
           : can('equipment.review', event) && <Link className="button-link" to={`/equipment?event_id=${encodeURIComponent(eventId)}`}>Review equipment requests for this event</Link>}
       </section>}
+      {event && (can('event.registrationPeriod', event) || can('event.edit', event)) &&
+        <EventRegistrationRoster key={event.event_id} eventId={event.event_id} />}
       {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
         <h2>Registration arrangements</h2>
         {event.registration_needs && <div style={{ marginBottom: '16px' }}>

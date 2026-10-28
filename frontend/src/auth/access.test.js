@@ -7,8 +7,10 @@ const allowed = (path, roles) => hasAccess(roles, rolesForPath(path));
 test('only attendees can browse registration events, including direct URLs', () => {
   assert.equal(allowed('/event-registration', ['Attendee']), true);
   assert.equal(allowed('/event-registration/7', ['attendee']), true);
+  assert.equal(allowed('/my-registrations', ['Attendee']), true);
   for (const roles of [[], ['Event Organiser'], ['Event Coordinator'], ['Safety Officer'], ['Venue Staff'], ['Technical Support Staff'], ['Event Coordinator Lead']]) {
     assert.equal(allowed('/event-registration', roles), false);
+    assert.equal(allowed('/my-registrations', roles), false);
   }
 });
 test('role-specific pages reject other roles including nested URLs', () => {
@@ -40,7 +42,7 @@ test('requesting equipment is for coordinators, reviewing it for technical suppo
   assert.equal(allowed('/equipment', ['Event Coordinator']), false);
 });
 
-test('venues are for coordinators and venue staff; events are for everyone', () => {
+test('venues are for coordinators and venue staff; event management is for staff', () => {
   for (const path of ['/venues', '/venues/123']) {
     assert.equal(allowed(path, ['Event Coordinator']), true);
     assert.equal(allowed(path, ['Venue Staff']), true);
@@ -52,6 +54,14 @@ test('venues are for coordinators and venue staff; events are for everyone', () 
     assert.equal(allowed('/events/7', [role]), true);
     assert.equal(allowed('/home', [role]), true);
   }
+  for (const path of ['/events', '/events/7']) {
+    for (const roles of [[], ['Attendee'], ['Unknown']]) {
+      assert.equal(allowed(path, roles), false);
+    }
+  }
+  assert.equal(allowed('/event-registration', ['Attendee']), true);
+  assert.equal(allowed('/my-registrations', ['Attendee']), true);
+  assert.equal(allowed('/home', ['Attendee']), true);
 });
 
 test('a lead is not a coordinator and a coordinator is not a lead', () => {

@@ -12,6 +12,7 @@ import { rolesForPath } from '../auth/access';
  * }
  */
 const apps = [
+  { id: 'my-registrations', label: 'My Registrations', description: 'View your registration status and event details', path: '/my-registrations', icon: '🎟️', roles: [] },
   { id: 'event-registration', label: 'Event Registration', description: 'Browse events and register or join a waiting list', path: '/event-registration', icon: '📅', roles: [] },
   { id: 'reserved-equipment', label: 'Reserved Equipment', description: 'Reserve equipment for event requests and manage reservations', path: '/reserved-equipment', icon: '???', roles: [] },
   {

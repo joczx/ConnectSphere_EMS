@@ -38,9 +38,9 @@ test('coordinator sees assigned requests and equipment for assigned events only'
 });
 test('technical and venue staff receive review queues without organiser or coordinator requests', async () => {
   const { api, paths } = mockApi({
-    '/api/events': { events: [] },
-    '/api/venue-bookings': { bookings: [{ status: 'submitted' }] },
-    '/api/equipment-request-reviews': { equipment_requests: [{ status: 'pending' }, { status: 'accepted' }] },
+    '/api/events': { events: [{ event_id: 1, technical_support_id: 'me', venue_staff_id: 'me' }] },
+    '/api/venue-bookings': { bookings: [{ event_id: 1, status: 'submitted' }] },
+    '/api/equipment-request-reviews': { equipment_requests: [{ event_id: 1, status: 'pending' }, { event_id: 1, status: 'accepted' }] },
   });
   const data = await loadDashboard(api, ['Technical Support Staff', 'Venue Staff'], 'me');
   assert.equal(data.sections.find(s => s.id === 'equipment').reviewed, 1);

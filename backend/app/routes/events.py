@@ -89,6 +89,24 @@ def register_attendee(event_id):
         {'p_event_id': event_id, **{'p_' + key: value for key, value in record.items()}}))
 
 
+@events.get('/my-registrations')
+def my_registrations():
+    token = authenticated_token(supabase_request)
+    return jsonify(registration_call('my_event_registrations', token, {}))
+
+
+@events.get('/events/<int:event_id>/registrations')
+def event_registrations(event_id):
+    token = authenticated_token(supabase_request)
+    return jsonify(registration_call('event_registration_roster', token, {'p_event_id': event_id}))
+
+
+@events.post('/events/<int:event_id>/registrations/withdraw')
+def withdraw_attendee(event_id):
+    token = authenticated_token(supabase_request)
+    return jsonify(registration_call('withdraw_event_registration', token, {'p_event_id': event_id}))
+
+
 @events.post('/events/<int:event_id>/cancel')
 def cancel_event(event_id):
     token = authenticated_token(supabase_request)
