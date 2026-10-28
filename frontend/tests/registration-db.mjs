@@ -9,6 +9,11 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
   const organiser = '00000000-0000-0000-0000-000000000001';
   const attendee = '00000000-0000-0000-0000-000000000002';
   const nextAttendee = '00000000-0000-0000-0000-000000000003';
+  const coordinator = '00000000-0000-0000-0000-000000000004';
+  const otherOrganiser = '00000000-0000-0000-0000-000000000005';
+  const otherCoordinator = '00000000-0000-0000-0000-000000000006';
+  const venueStaff = '00000000-0000-0000-0000-000000000007';
+  const waitingAttendee = '00000000-0000-0000-0000-000000000008';
   const actor = async id => db.query("select set_config('request.jwt.claim.sub', $1, false)", [id]);
   const rpc = async (name, args = []) => {
     if (name === 'register_for_event' && args.length === 1) args = [...args, 'Alex Tan', 'alex@example.com', '+65 8123 4567'];
@@ -41,15 +46,19 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
         ('10000000-0000-0000-0000-000000000002','Approved Auditorium'),
         ('10000000-0000-0000-0000-000000000003','Unapproved Room');
       create function public.has_booking_role(text) returns boolean language sql as $$
-        select case when $1 = 'event_organiser' then auth.uid() = '${organiser}'::uuid
+        select case when $1 = 'event_organiser' then auth.uid() in ('${organiser}'::uuid, '${otherOrganiser}'::uuid)
+          when $1 = 'event_coordinator' then auth.uid() in ('${coordinator}'::uuid, '${otherCoordinator}'::uuid)
+          when $1 = 'venue_staff' then auth.uid() = '${venueStaff}'::uuid
           when $1 = 'attendee' then auth.uid() in ('${attendee}'::uuid, '${nextAttendee}'::uuid)
           else false end;
       $$;
       create function public.event_safety_check_blockers(public.events) returns text[] language sql as $$ select '{}'::text[]; $$;
       create function public.event_confirmation_blockers(public.events) returns text[] language sql as $$ select '{}'::text[]; $$;
       insert into auth.users values ('${organiser}'), ('${attendee}'), ('${nextAttendee}');
+      insert into auth.users values ('${coordinator}'), ('${otherOrganiser}'), ('${otherCoordinator}'), ('${venueStaff}'), ('${waitingAttendee}');
       insert into public.events(event_id,event_name,description,event_organiser_id,status,start_datetime,end_datetime,capacity_needed,safety_approved_at)
       values (1,'Conference','Public description','${organiser}','confirmed',now()+interval '10 days',now()+interval '11 days',1,now());
+      update public.events set event_coordinator_id='${coordinator}' where event_id=1;
     `);
     await db.exec(await readFile(new URL('../../supabase/046_event_registration.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/047_attendee_registration_access.sql', import.meta.url), 'utf8'));
@@ -57,6 +66,9 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     await db.exec(await readFile(new URL('../../supabase/049_withdraw_event_registration.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/050_registration_before_event_start.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/051_my_registrations.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/052_event_registration_roster.sql', import.meta.url), 'utf8'));
+    // Rerunning the roster migration updates the function without duplicate errors.
+    await db.exec(await readFile(new URL('../../supabase/052_event_registration_roster.sql', import.meta.url), 'utf8'));
     // Install the actual updated lifecycle function as on the deployed database.
     await db.exec('create trigger guard_event_lifecycle before insert or update on public.events for each row execute function public.guard_event_lifecycle()');
     const future = new Date(Date.now() + 86400000).toISOString();
@@ -214,5 +226,53 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     const missingStart = await rpc('set_event_registration_period', [4, past, future, false]);
     assert.equal(missingStart.status, 400);
     assert.match(missingStart.error, /valid event start time/);
+    // Roster access requires the matching role AND assignment; counts distinguish statuses.
+    await db.exec(`
+      alter table public.events disable trigger guard_event_lifecycle;
+      insert into public.events(event_id,event_name,status,event_organiser_id,event_coordinator_id)
+      values (5,'Other event','planning','${otherOrganiser}','${otherCoordinator}'),
+             (6,'Empty event','planning','${organiser}',null);
+      insert into public.event_registration(event_id,attendee_id,status,full_name,contact_email,contact_phone) values
+        (1,'${nextAttendee}','registered','Confirmed Person','confirmed@example.com','81234567'),
+        (1,'${waitingAttendee}','waiting_list','Waiting Person','waiting@example.com','82345678'),
+        (5,'${attendee}','registered','Other Event Person','private@example.com','83456789');
+      alter table public.events enable trigger guard_event_lifecycle;
+    `);
+    for (const manager of [organiser, coordinator]) {
+      await actor(manager);
+      const roster = await rpc('event_registration_roster', [1]);
+      assert.equal(roster.total_registered, 1);
+      assert.equal(roster.total_waitlisted, 1);
+      assert.equal(roster.total_withdrawn, 1);
+      assert.equal(roster.registrations.length, 3);
+      const confirmed = roster.registrations.find(item => item.status === 'registered');
+      assert.equal(confirmed.full_name, 'Confirmed Person');
+      assert.equal(confirmed.contact_email, 'confirmed@example.com');
+      assert.equal(confirmed.contact_phone, '81234567');
+      assert.ok(!JSON.stringify(roster).includes('private@example.com'));
+      assert.equal((await rpc('event_registration_roster', [999])).status, 404);
+    }
+    await actor(organiser);
+    const legacyRoster = await rpc('event_registration_roster', [4]);
+    assert.equal(legacyRoster.total_registered, 1); // Legacy registration with no supplied contact details.
+    assert.equal(legacyRoster.registrations[0].contact_email, null);
+    const emptyRoster = await rpc('event_registration_roster', [6]);
+    assert.equal(emptyRoster.total_registered, 0);
+    assert.equal(emptyRoster.total_waitlisted, 0);
+    assert.equal(emptyRoster.total_withdrawn, 0);
+    assert.deepEqual(emptyRoster.registrations, []);
+    await actor(coordinator);
+    assert.equal((await rpc('event_registration_roster', [4])).status, 404, 'null coordinator assignment must not grant access');
+    for (const manager of [otherOrganiser, otherCoordinator]) {
+      await actor(manager);
+      assert.equal((await rpc('event_registration_roster', [1])).status, 404);
+      assert.equal((await rpc('event_registration_roster', [5])).total_registered, 1);
+    }
+    for (const user of [attendee, venueStaff]) {
+      await actor(user);
+      assert.equal((await rpc('event_registration_roster', [1])).status, 403);
+    }
+    await actor('');
+    assert.equal((await rpc('event_registration_roster', [1])).status, 401);
   } finally { await db.close(); }
 });

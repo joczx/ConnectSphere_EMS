@@ -86,3 +86,18 @@ times in SGT and venue names. Approved booking venues take precedence over an
 event's linked venue; unapproved bookings are excluded. Missing venues display
 "Venue not assigned yet". An empty list displays "You have no registration records."
 It refreshes on focus, every 30 seconds, and using Refresh.
+
+## Managed event registration roster
+
+Apply `052_event_registration_roster.sql` after the withdrawal migration.
+Assigned Event Organisers and Event Coordinators open Events, select their event,
+and view Attendee registrations. Names, contact email/phone, registration dates
+and Confirmed/Waitlisted/Withdrawn statuses appear in the roster. Older records
+without personal details show "Not provided". Counts distinguish confirmed places
+from waiting-list entries and withdrawals. The roster refreshes every 30 seconds,
+on focus, and through Refresh registrations; errors never appear as zero counts.
+
+`GET /api/events/<id>/registrations` passes only the verified token and event ID
+to `event_registration_roster()`. The database requires both the appropriate role
+and its matching event assignment. Unassigned managers receive 404 without attendee
+data; other roles receive 403. The read does not grant broader direct table access.

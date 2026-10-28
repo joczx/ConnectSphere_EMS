@@ -8,7 +8,7 @@ def registration_call(name, token, payload):
                                   payload=payload, method='POST')
     except StoreError as error:
         if error.code == 'PGRST202':
-            raise EventError('Registration is not configured yet. Apply supabase/046_event_registration.sql through 051_my_registrations.sql in order.', 503) from error
+            raise EventError('Registration is not configured yet. Apply supabase/046_event_registration.sql through 052_event_registration_roster.sql in order.', 503) from error
         raise
     if isinstance(result, dict) and result.get('error'):
         raise EventError(result['error'], result.get('status', 400), errors=result.get('errors'))
