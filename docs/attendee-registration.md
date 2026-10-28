@@ -71,3 +71,17 @@ Attendees may register again while registration is open, subject to capacity.
 Re-registration resets the withdrawal timestamp and queues a fresh confirmation.
 Withdrawal removes pending confirmation emails; a message already accepted by SMTP
 or currently being sent cannot be recalled.
+
+## My registrations
+
+Apply `051_my_registrations.sql` after the withdrawal migration. Attendees can
+open `/my-registrations` from the home launcher or Event registration page.
+`GET /api/my-registrations` calls `my_event_registrations()` with the verified
+session token; it accepts no attendee identity. The database returns only that
+attendee's registration records, including past/cancelled events and withdrawals.
+
+The view displays Confirmed, Waitlisted or Withdrawn, the event name, start/end
+times in SGT and venue names. Approved booking venues take precedence over an
+event's linked venue; unapproved bookings are excluded. Missing venues display
+"Venue not assigned yet". An empty list displays "You have no registration records."
+It refreshes on focus, every 30 seconds, and using Refresh.

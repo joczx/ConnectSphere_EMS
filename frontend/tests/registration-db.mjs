@@ -33,6 +33,13 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
         updated_at timestamptz default now()
       );
       create table public.operational_safety_decision(event_id integer, safety_officer_id uuid, outcome text, created_at timestamptz);
+      alter table public.events add column venue_id uuid;
+      create table public.venues(venue_id uuid primary key, venue_name text);
+      create table public.venue_booking_requests(event_id integer, venue_id uuid, status text);
+      insert into public.venues values
+        ('10000000-0000-0000-0000-000000000001','Linked Hall'),
+        ('10000000-0000-0000-0000-000000000002','Approved Auditorium'),
+        ('10000000-0000-0000-0000-000000000003','Unapproved Room');
       create function public.has_booking_role(text) returns boolean language sql as $$
         select case when $1 = 'event_organiser' then auth.uid() = '${organiser}'::uuid
           when $1 = 'attendee' then auth.uid() in ('${attendee}'::uuid, '${nextAttendee}'::uuid)
@@ -49,17 +56,20 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     await db.exec(await readFile(new URL('../../supabase/048_attendee_registration_details.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/049_withdraw_event_registration.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/050_registration_before_event_start.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/051_my_registrations.sql', import.meta.url), 'utf8'));
     // Install the actual updated lifecycle function as on the deployed database.
     await db.exec('create trigger guard_event_lifecycle before insert or update on public.events for each row execute function public.guard_event_lifecycle()');
     const future = new Date(Date.now() + 86400000).toISOString();
     const later = new Date(Date.now() + 172800000).toISOString();
     const past = new Date(Date.now() - 86400000).toISOString();
     await actor(attendee);
+    assert.deepEqual((await rpc('my_event_registrations')).registrations, []);
     for (const details of [ ['', 'alex@example.com', '+65 8123 4567'], ['Alex', 'invalid', '+65 8123 4567'], ['Alex', 'alex@example.com', '-------'], ['Alex', 'alex@example.com', null] ]) {
       assert.equal((await rpc('register_for_event', [1, ...details])).status, 400);
     }
     assert.equal((await rpc('set_event_registration_period', [1, future, later, true])).status, 403);
     await actor(organiser);
+    assert.equal((await rpc('my_event_registrations')).status, 403);
     assert.equal((await rpc('attendee_registration_events')).status, 403);
     assert.equal((await rpc('register_for_event', [1])).status, 403);
     assert.equal((await rpc('set_event_registration_period', [1, later, future, true])).status, 400);
@@ -95,6 +105,7 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     assert.equal(result.event.status, 'confirmed');
     await actor(attendee);
     assert.equal((await rpc('register_for_event', [1])).registration.status, 'registered');
+    assert.equal((await rpc('my_event_registrations')).registrations[0].status, 'registered');
     assert.equal((await rpc('register_for_event', [1])).registration.status, 'registered');
     const saved = (await db.query('select * from public.event_registration')).rows[0];
     assert.equal(saved.full_name, 'Alex Tan');
@@ -110,6 +121,7 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     assert.match(queued[1].body, /does not confirm a place/);
     const info = (await rpc('attendee_registration_events')).events[0];
     assert.equal(info.my_registration, 'waiting_list');
+    assert.equal((await rpc('my_event_registrations')).registrations[0].status, 'waiting_list');
     assert.equal(info.registration_status, 'open');
     assert.equal(info.event_organiser_id, undefined);
     // Withdrawing a waiting-list entry does not release a confirmed place.
@@ -145,6 +157,7 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     assert.equal((await rpc('set_event_registration_period', [1, past, future, false])).status, 409);
     assert.equal((await rpc('withdraw_event_registration', [1])).status, 403);
     await actor('');
+    assert.equal((await rpc('my_event_registrations')).status, 401);
     assert.equal((await rpc('withdraw_event_registration', [1])).status, 401);
     assert.equal((await rpc('attendee_registration_events')).status, 401);
     assert.equal((await rpc('register_for_event', [1])).status, 401);
@@ -158,6 +171,7 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     await assert.rejects(db.exec('select * from public.registration_email_outbox'), /permission denied/);
     await db.exec('reset role');
     await actor(nextAttendee);
+    assert.deepEqual((await rpc('my_event_registrations')).registrations, [], 'another attendee cannot see prior registrations');
     assert.equal((await rpc('withdraw_event_registration', [1])).status, 404, 'cannot withdraw another attendee registration');
     assert.equal((await rpc('withdraw_event_registration', [999])).status, 404);
     await actor(attendee);
@@ -173,12 +187,29 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
       insert into public.event_registration(event_id,attendee_id,status)
       select event_id,'${attendee}','registered' from public.events where event_id in (2,3,4);
       update public.events set event_organiser_id='${organiser}' where event_id=4;
+      update public.events set venue_id='10000000-0000-0000-0000-000000000001' where event_id in (1,2);
+      update public.events set status='cancelled' where event_id=3;
+      insert into public.venue_booking_requests values
+        (1,'10000000-0000-0000-0000-000000000002','approved'),
+        (1,'10000000-0000-0000-0000-000000000003','submitted');
       alter table public.events enable trigger guard_event_lifecycle;
     `);
     for (const id of [2,3,4]) {
       assert.equal((await rpc('withdraw_event_registration', [id])).status, 409);
       assert.equal((await db.query('select status from public.event_registration where event_id=$1', [id])).rows[0].status, 'registered');
     }
+    const mine = (await rpc('my_event_registrations')).registrations;
+    assert.equal(mine.length, 4);
+    const conference = mine.find(item => item.event_id === 1);
+    assert.equal(conference.status, 'withdrawn');
+    assert.deepEqual(conference.venues, ['Approved Auditorium']);
+    assert.equal(conference.event_name, 'Conference');
+    assert.ok(conference.start_datetime);
+    assert.ok(conference.end_datetime);
+    assert.equal(conference.contact_email, undefined, 'contact details are excluded from the status view');
+    assert.deepEqual(mine.find(item => item.event_id === 2).venues, ['Linked Hall']);
+    assert.equal(mine.find(item => item.event_id === 3).event_status, 'cancelled');
+    assert.deepEqual(mine.find(item => item.event_id === 4).venues, []);
     await actor(organiser);
     const missingStart = await rpc('set_event_registration_period', [4, past, future, false]);
     assert.equal(missingStart.status, 400);

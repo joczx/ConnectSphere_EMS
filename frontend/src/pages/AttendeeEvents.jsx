@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { registrationDate } from '../components/RegistrationPeriod';
 import { useAuth } from '../auth/AuthContext';
@@ -52,6 +53,7 @@ export default function AttendeeEvents() {
   return <><Navbar /><main className="container">
     <div className="heading"><h1>Event registration</h1><button className="secondary" onClick={() => setRefresh(n => n + 1)}>Refresh</button></div>
     <p>All times are in Singapore time (SGT). Event information refreshes every 30 seconds.</p>
+    <p><Link to="/my-registrations">View my registrations</Link></p>
     {loading && <p role="status">Loading events…</p>}
     {error && <p role="alert" className="error">{error}</p>}
     {message && <p role="status">{message}</p>}

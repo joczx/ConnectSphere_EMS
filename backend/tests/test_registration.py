@@ -36,6 +36,7 @@ def test_timezone_and_fractional_second_ordering():
     ('patch', '/api/events/1/registration-period'),
     ('get', '/api/registration-events'), ('post', '/api/events/1/registrations'),
     ('post', '/api/events/1/registrations/withdraw'),
+    ('get', '/api/my-registrations'),
 ])
 def test_registration_requires_authentication(method, path):
     client = create_app().test_client()
@@ -198,3 +199,19 @@ def test_withdrawal_refusals_are_returned_unchanged(status, message):
         response = client.post('/api/events/1/registrations/withdraw', headers={'Authorization': 'Bearer verified'})
     assert response.status_code == status
     assert response.json['error'] == message
+
+
+@pytest.mark.parametrize('records', [[], [
+    {'event_id': 1, 'event_name': 'Conference', 'status': 'registered', 'venues': ['Hall']},
+    {'event_id': 2, 'event_name': 'Workshop', 'status': 'waiting_list', 'venues': []},
+    {'event_id': 3, 'event_name': 'Talk', 'status': 'withdrawn', 'venues': []},
+]])
+def test_my_registrations_returns_only_the_verified_users_rpc_result(records):
+    client = create_app().test_client()
+    with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
+         patch('app.services.registration_service.supabase_request', return_value={'registrations': records}) as rpc:
+        response = client.get('/api/my-registrations?attendee_id=someone-else', headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 200
+    assert response.json == {'registrations': records}
+    assert response.headers['Cache-Control'] == 'no-store'
+    rpc.assert_called_once_with('/rest/v1/rpc/my_event_registrations', token='verified', payload={}, method='POST')
