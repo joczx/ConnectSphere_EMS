@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import WithdrawRegistration from '../components/WithdrawRegistration';
 import { registrationDate } from '../components/RegistrationPeriod';
 import { useAuth } from '../auth/AuthContext';
 
@@ -15,6 +16,7 @@ export default function MyRegistrations({ embedded = false }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
+  const [message, setMessage] = useState('');
   useEffect(() => {
     const controller = new AbortController();
     api('/api/my-registrations', { signal: controller.signal, cache: 'no-store' })
@@ -42,6 +44,7 @@ export default function MyRegistrations({ embedded = false }) {
     </div>}
     {loading && <p role="status">Loading your registrations…</p>}
     {error && <p role="alert" className="error">{error}</p>}
+    {message && <p role="status">{message}</p>}
     {!loading && !error && !registrations.length && <p role="status">You have no registration records.</p>}
     {!error && registrations.map(item => <article className="panel" key={item.event_id}>
       <EventHeading>{item.event_name}</EventHeading>
@@ -54,6 +57,13 @@ export default function MyRegistrations({ embedded = false }) {
         <div><dt>Ends</dt><dd>{registrationDate(item.end_datetime)}</dd></div>
         <div><dt>Venue</dt><dd>{item.venues?.length ? item.venues.join(', ') : 'Venue not assigned yet'}</dd></div>
       </dl>
+      <WithdrawRegistration eventId={item.event_id} startDatetime={item.start_datetime} status={item.status}
+        onWithdrawn={data => {
+          setRegistrations(current => current.map(record => record.event_id === item.event_id
+            ? { ...record, status: data.registration.status, withdrawn_at: data.registration.withdrawn_at } : record));
+          setMessage(data.message);
+          setRefresh(value => value + 1);
+        }} />
     </article>)}
   </Container></>;
 }

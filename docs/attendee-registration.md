@@ -53,7 +53,8 @@ actual migrations to an isolated database; no production email is sent.
 
 ## Withdrawal
 
-Attendees use Withdraw registration on the same page, backed by
+Attendees use Withdraw registration from Event registration, My registrations,
+or their dashboard, backed by
 `POST /api/events/<id>/registrations/withdraw`. The database derives identity from
 the session, locks the event against concurrent registrations, then reads the
 clock. Withdrawal is allowed strictly before event start, including after the
