@@ -158,3 +158,72 @@ class StaffNotifiedOfAssignment(unittest.TestCase):
         self.assertIn("perform public.notify_user(new.event_coordinator_id, 'event_staff_assigned', 'Staff assigned to your event',",
                       self.notify)
         self.assertIn("'Staff assigned to %s: %s.'", self.notify)
+
+
+class CoordinatorNotifiedOfVenueBooking(unittest.TestCase):
+    """As an Event Coordinator, I want to receive notifications about my venue booking request and its outcome."""
+
+    notify = function("notify_venue_booking_change", "051_notify_venue_bookings.sql")
+
+    def test_coordinator_is_sent_a_confirmation_on_submission(self):
+        self.assertIn("after insert or update of status, hold_expires_at on public.venue_booking_requests",
+                      migration("051_notify_venue_bookings.sql"))
+        self.assertIn("perform public.notify_user(new.requested_by, 'venue_booking_submitted', 'Venue booking request submitted',",
+                      self.notify)
+
+    def test_the_events_venue_staff_is_notified_of_a_new_request(self):
+        self.assertIn("perform public.notify_user((select venue_staff_id from public.events where event_id = new.event_id),",
+                      self.notify)
+        self.assertIn("'/review-venue-bookings/' || new.booking_id", self.notify)
+
+    def test_coordinator_is_notified_of_approval_or_rejection(self):
+        self.assertIn("if old.status = 'submitted' and new.status in ('approved', 'rejected') then", self.notify)
+        self.assertIn("'Your venue booking request for %s has been %s by %s.%s', booking, new.status,", self.notify)
+
+    def test_notification_includes_the_event_venue_and_status(self):
+        self.assertIn("booking text := format('%s for %s (%s – %s SGT)', venue, coalesce(new.event_name", self.notify)
+        self.assertIn("Status: pending Venue Staff review.", self.notify)
+
+
+class CoordinatorNotifiedOfVenueUnavailability(unittest.TestCase):
+    """As an Event Coordinator, I want to receive notifications when my booking is affected by a venue becoming unavailable."""
+
+    notify = function("notify_venue_booking_change", "051_notify_venue_bookings.sql")
+
+    def test_coordinator_is_notified_when_a_booked_venue_becomes_unavailable(self):
+        self.assertIn("elsif new.status = 'cancelled' and new.cancellation_reason like 'Venue unavailable: %' then", self.notify)
+        self.assertIn("perform public.notify_user(new.requested_by, 'venue_unavailable', 'Venue unavailable',", self.notify)
+        self.assertIn("when old.status = 'approved' then 'approved booking of'", self.notify)
+
+    def test_notification_identifies_the_venue_event_and_unavailable_period(self):
+        self.assertIn("tstzrange(k.starts_at, k.ends_at, '[)') && tstzrange(new.occupied_from, new.occupied_until, '[)')", self.notify)
+        self.assertIn("'%s is unavailable from %s to %s SGT (%s), which affects your %s %s. It has been cancelled.', venue,",
+                      self.notify)
+
+    def test_coordinator_is_notified_when_a_pending_request_is_affected(self):
+        self.assertIn("else 'pending booking request for' end, booking)", self.notify)
+
+
+class CoordinatorNotifiedOfTentativeHolds(unittest.TestCase):
+    """As an Event Coordinator, I want to receive notifications about tentative venue holds and their expiry."""
+
+    notify = function("notify_venue_booking_change", "051_notify_venue_bookings.sql")
+    expire = function("expire_venue_holds", "051_notify_venue_bookings.sql")
+
+    def test_coordinator_is_notified_when_a_hold_is_placed(self):
+        self.assertIn("elsif old.hold_expires_at is null and new.hold_expires_at is not null and new.status = 'submitted' then",
+                      self.notify)
+        self.assertIn("perform public.notify_user(new.requested_by, 'venue_hold_placed', 'Tentative hold placed',", self.notify)
+
+    def test_notification_includes_the_venue_event_and_expiry(self):
+        self.assertIn("expiry text := to_char(new.hold_expires_at at time zone 'Asia/Singapore', 'DD Mon YYYY HH24:MI');", self.notify)
+        self.assertIn("'Venue Staff have placed a tentative hold on %s. It expires on %s SGT.', booking, expiry", self.notify)
+
+    def test_coordinator_is_reminded_once_before_the_hold_expires(self):
+        self.assertIn("b.hold_expires_at > now() and b.hold_expires_at <= now() + interval '24 hours'", self.expire)
+        self.assertIn("n.kind = 'venue_hold_reminder'", self.expire)
+        self.assertIn("perform public.notify_user(held.requested_by, 'venue_hold_reminder', 'Tentative hold expiring soon',", self.expire)
+
+    def test_coordinator_is_separately_notified_when_the_hold_expires(self):
+        self.assertIn("elsif old.status = 'submitted' and new.status = 'expired' then", self.notify)
+        self.assertIn("perform public.notify_user(new.requested_by, 'venue_hold_expired', 'Tentative hold expired',", self.notify)
