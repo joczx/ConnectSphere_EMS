@@ -82,7 +82,7 @@ export default function OperationalSafetyReview() {
       </section>
       {can('safety.decide') && <section className="panel safety-decision" aria-label="Record safety decision">
         <h2>Safety decision</h2>
-        <p>Approve only when the arrangements are safe. Reject or request changes with clear follow-up remarks for the Event Coordinator.</p>
+        <p>Approve only when the arrangements are safe. Reject with clear remarks describing what the Event Coordinator must change.</p>
         <fieldset disabled={decision.busy}>
           <label>
             Remarks and required follow-up
@@ -96,7 +96,6 @@ export default function OperationalSafetyReview() {
           {decision.error && <p className="error" role="alert">{decision.error}</p>}
           <div className="safety-decision-actions">
             <button type="button" className="secondary" onClick={() => decide('rejected')}>Reject</button>
-            <button type="button" className="secondary" onClick={() => decide('changes_requested')}>Request changes</button>
             <button type="button" onClick={() => decide('approved')}>{decision.busy ? 'Saving…' : 'Approve and confirm event'}</button>
           </div>
         </fieldset>
