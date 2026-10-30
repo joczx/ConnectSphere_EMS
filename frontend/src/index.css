@@ -282,6 +282,8 @@ body { font-size: 14px; color: #0f172a; }
 .sidebar-brand span { color: #ffffff66; font-family: monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; }
 .sidebar-brand strong { font-size: 14px; font-weight: 600; }
 .portal-sidebar nav { flex: 1; overflow-y: auto; padding: 12px 0; }
+.sidebar-group { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ffffff14; }
+.sidebar-group-heading { margin: 0; padding: 3px 16px 7px; color: #ffffff80; font-size: 10px; font-weight: 600; line-height: 1.5; letter-spacing: .1em; text-transform: uppercase; }
 .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 11px 16px; color: #ffffff99; text-decoration: none; font-size: 13px; line-height: 1.4; transition: background .15s, color .15s; }
 .sidebar-link svg { flex-shrink: 0; width: 17px; height: 17px; }
 .sidebar-link:hover { color: white; background: #ffffff0d; }
