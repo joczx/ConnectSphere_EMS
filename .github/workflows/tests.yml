@@ -22,3 +22,33 @@ jobs:
       - name: Run unit tests for CI
         working-directory: backend
         run: python -m unittest discover -s tests -v
+
+  integration-tests:
+    # These write to the shared integration-test Supabase project. Pull requests
+    # from forks get no secrets, so they run only for branches in this repo.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # One run at a time, so two runs never change the test data together.
+    concurrency:
+      group: integration-test-database
+      cancel-in-progress: false
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+        working-directory: backend
+      - name: Write integration test config
+        working-directory: backend
+        run: printf '%s\n' "$INTEGRATION_ENV_FILE" > .env.integration-test
+        env:
+          INTEGRATION_ENV_FILE: ${{ secrets.INTEGRATION_ENV_FILE }}
+      - name: Run integration tests
+        working-directory: backend
+        env:
+          RUN_INTEGRATION_TESTS: "1"
+        run: python -m pytest tests/integration -v
