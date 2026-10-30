@@ -454,6 +454,7 @@ class EventAwareCatalogueTests(unittest.TestCase):
     def setUp(self):
         self.client = create_app().test_client()
 
+    # Verifies search and detail views show event requirements without hiding unsuitable venues.
     def test_search_and_details_report_requirements_without_hiding_unsuitable_venues(self):
         suitable = {"venue_id": VENUE_ID, **valid_venue(capacity=400)}
         unsuitable = {"venue_id": str(uuid4()), **valid_venue(capacity=10)}
@@ -481,6 +482,7 @@ class EventAwareCatalogueTests(unittest.TestCase):
             self.assertFalse(assessed["eligible"])
             self.assertEqual(assessed["unmet_requirements"][0]["label"], "Expected attendance")
 
+    # Ensures malformed event IDs are rejected before an event lookup is attempted.
     def test_malformed_event_ids_never_load_an_event(self):
         for path in self.PATHS:
             with self.subTest(path=path), patch("app.routes.venues.authenticated_token", return_value="token"), patch(
@@ -492,6 +494,7 @@ class EventAwareCatalogueTests(unittest.TestCase):
             self.assertEqual(response.status_code, 404)
             load.assert_not_called()
 
+    # Ensures inaccessible event details are not exposed through venue search or detail pages.
     def test_inaccessible_events_return_not_found_without_exposing_details(self):
         for path in self.PATHS:
             with self.subTest(path=path), patch("app.routes.venues.authenticated_token", return_value="token"), patch(
@@ -512,6 +515,7 @@ class VenueDeletionBookingTests(unittest.TestCase):
         self.venue = {"venue_id": VENUE_ID, **valid_venue()}
         self.booking = {"event_id": 6, "event_name": "Halloween", "starts_at": "2030-10-31T10:35:00+00:00"}
 
+    # Ensures an approved future booking prevents deletion and is reported as a conflict.
     def test_an_approved_booking_ahead_blocks_deletion(self):
         with patch("app.routes.venues.authenticated_token", return_value="staff-token"), patch(
             "app.routes.venues.supabase_request", side_effect=[[self.venue], []]
@@ -524,6 +528,7 @@ class VenueDeletionBookingTests(unittest.TestCase):
             "start_datetime": "2030-10-31T10:35:00+00:00",
         }])
 
+    # Verifies the deletion confirmation endpoint lists an approved booking as an event conflict.
     def test_the_deletion_check_lists_it_like_an_event(self):
         with patch("app.routes.venues.authenticated_token", return_value="staff-token"), patch(
             "app.routes.venues.supabase_request", side_effect=[[self.venue], []]
@@ -532,6 +537,7 @@ class VenueDeletionBookingTests(unittest.TestCase):
 
         self.assertEqual(response.json["events"][0]["event_name"], "Halloween")
 
+    # Ensures one event linked to and booked at a venue appears only once in deletion conflicts.
     def test_an_event_both_linked_and_booked_is_listed_once(self):
         linked = {"event_id": 6, "event_name": "Halloween", "status": "planning",
                   "start_datetime": "2030-10-31T10:35:00+00:00"}
@@ -542,6 +548,7 @@ class VenueDeletionBookingTests(unittest.TestCase):
 
         self.assertEqual(conflicts, [linked])
 
+    # Verifies the approved-booking query includes only bookings that have not ended.
     def test_only_approved_bookings_that_have_not_ended_are_asked_for(self):
         exact = datetime(2030, 1, 1, tzinfo=timezone.utc)
         with patch("app.routes.venues.datetime") as clock, patch(
@@ -790,6 +797,7 @@ class VenueAvailabilityTests(unittest.TestCase):
         ) as query:
             return self.client.get(path), query
 
+    # Verifies the availability endpoint returns bookings and blocked periods for the requested range.
     def test_returns_the_venue_bookings_and_blocks_for_the_range(self):
         result = {"bookings": [{"status": "approved"}], "blocks": [{"reason": "Maintenance"}]}
         response, query = self.get(self.PATH, result)
@@ -803,12 +811,14 @@ class VenueAvailabilityTests(unittest.TestCase):
         })
         self.assertEqual(query.call_args.kwargs["token"], "user-token")
 
+    # Ensures database permission refusals are passed through without exposing availability data.
     def test_unauthorised_users_are_refused(self):
         refusal = {"error": "Only Event Coordinators and Venue Staff can view venue availability.", "status": 403}
         response, _ = self.get(self.PATH, refusal)
         self.assertEqual(response.status_code, 403)
         self.assertNotIn("bookings", response.json)
 
+    # Ensures malformed availability requests are rejected before the availability RPC is called.
     def test_invalid_requests_never_reach_the_database(self):
         for path in (f"/api/venues/{VENUE_ID}/availability",
                      f"/api/venues/{VENUE_ID}/availability?start=soon&end=later",
@@ -817,6 +827,7 @@ class VenueAvailabilityTests(unittest.TestCase):
             self.assertEqual(response.status_code, 400, path)
             query.assert_not_called()
 
+    # Ensures the availability endpoint requires an authenticated user.
     def test_sign_in_is_required(self):
         self.assertEqual(self.client.get(self.PATH).status_code, 401)
 
@@ -824,6 +835,7 @@ class VenueAvailabilityTests(unittest.TestCase):
 class SetupTurnaroundValidationTests(unittest.TestCase):
     """Setup and turnaround time: whole minutes from 0 to 1440, with a message naming the field."""
 
+    # Ensures setup and turnaround values outside the allowed whole-minute range are rejected.
     def test_invalid_minutes_are_refused_by_name(self):
         for field, label in (("default_setup_minutes", "Setup time"), ("default_turnaround_minutes", "Turnaround time")):
             for value in (-1, 1441, 2.5, "30", None, True):
@@ -831,6 +843,7 @@ class SetupTurnaroundValidationTests(unittest.TestCase):
                     _, _, errors = parse_update({"version": 1, field: value})
                     self.assertEqual(errors[field], f"{label} must be a whole number of minutes from 0 to 1440.")
 
+    # Verifies both endpoints of the permitted setup and turnaround minute range are accepted.
     def test_boundaries_are_accepted_on_create_and_update(self):
         for value in (0, 1440):
             with self.subTest(value=value):
@@ -852,6 +865,7 @@ class VenueUnavailabilityTests(unittest.TestCase):
         ) as query:
             return create_app().test_client().post(f"/api/venues/{VENUE_ID}/unavailability", json=body), query
 
+    # Verifies a new unavailable period returns both its block and affected booking information.
     def test_the_block_and_its_affected_bookings_are_returned(self):
         result = {"block": {"reason": "Burst pipe"}, "affected": [{"event_name": "Halloween"}]}
         response, query = self.post(self.BODY, result)
@@ -862,6 +876,7 @@ class VenueUnavailabilityTests(unittest.TestCase):
             "p_venue_id": VENUE_ID, "p_starts": "2026-11-01T09:00:00+08:00",
             "p_ends": "2026-11-01T17:00:00+08:00", "p_reason": "Burst pipe"})
 
+    # Ensures malformed unavailability requests are rejected before the block RPC is called.
     def test_invalid_requests_never_reach_the_database(self):
         for body in ({}, {**self.BODY, "starts_at": "2026-11-01T09:00"}, {**self.BODY, "reason": " "}):
             with self.subTest(body=body):
@@ -869,6 +884,7 @@ class VenueUnavailabilityTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 400)
                 query.assert_not_called()
 
+    # Ensures a database refusal to block a venue is returned to the caller.
     def test_a_database_refusal_is_passed_on(self):
         response, _ = self.post(self.BODY, {"error": "Only Venue Staff can mark a venue unavailable.", "status": 403})
         self.assertEqual(response.status_code, 403)
@@ -883,17 +899,20 @@ class RemoveUnavailabilityTests(unittest.TestCase):
         ) as query:
             return create_app().test_client().delete(f"/api/venues/{VENUE_ID}/unavailability/{block_id}"), query
 
+    # Verifies an existing unavailable period can be removed through the unblock RPC.
     def test_an_unavailable_period_can_be_removed(self):
         response, query = self.delete(self.BLOCK, {"block": {"block_id": self.BLOCK}})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(query.call_args.args[0], "/rest/v1/rpc/unblock_venue")
         self.assertEqual(query.call_args.kwargs["payload"], {"p_block_id": self.BLOCK})
 
+    # Ensures an invalid unavailable-period ID is rejected before the unblock RPC is called.
     def test_a_malformed_period_is_not_found(self):
         response, query = self.delete("not-a-uuid")
         self.assertEqual(response.status_code, 404)
         query.assert_not_called()
 
+    # Ensures a database refusal to remove an unavailable period reaches the caller.
     def test_a_refusal_is_passed_on(self):
         response, _ = self.delete(self.BLOCK, {"error": "Only Venue Staff can remove an unavailable period.", "status": 403})
         self.assertEqual(response.status_code, 403)
