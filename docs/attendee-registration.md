@@ -91,8 +91,9 @@ It refreshes on focus, every 30 seconds, and using Refresh.
 
 Apply `052_event_registration_roster.sql` after the withdrawal migration.
 Assigned Event Organisers and Event Coordinators open Events, select their event,
-and view Attendee registrations. Names, contact email/phone, registration dates
-and Confirmed/Waitlisted/Withdrawn statuses appear in the roster. Older records
+and view the Confirmed/Waitlisted/Withdrawn counts under Attendee registrations.
+View registration records opens `/events/<id>/registrations`, showing names,
+contact email/phone, registration dates and statuses. Older records
 without personal details show "Not provided". Counts distinguish confirmed places
 from waiting-list entries and withdrawals. The roster refreshes every 30 seconds,
 on focus, and through Refresh registrations; errors never appear as zero counts.
