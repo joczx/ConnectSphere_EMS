@@ -64,7 +64,7 @@ def attendee_details(**changes):
 
 @pytest.mark.parametrize('payload', [None, {}, [], attendee_details(full_name=' '),
     attendee_details(full_name=123), attendee_details(full_name='a' * 151),
-    attendee_details(full_name='Alex\nTan'), attendee_details(contact_email='bad'),
+    attendee_details(full_name='Alex\nTan'), attendee_details(contact_email=' '),
     attendee_details(contact_email='alex@example.com\r\nBcc: other@example.com'),
     attendee_details(contact_phone='letters'), attendee_details(contact_phone='-------')])
 def test_mandatory_personal_details_are_validated(payload):
@@ -76,6 +76,12 @@ def test_personal_details_are_trimmed():
     record, errors = parse_attendee(attendee_details(full_name=' Alex Tan '))
     assert not errors
     assert record == attendee_details()
+
+
+def test_contact_email_format_is_not_validated():
+    record, errors = parse_attendee(attendee_details(contact_email='not-an-email'))
+    assert not errors
+    assert record['contact_email'] == 'not-an-email'
 
 
 

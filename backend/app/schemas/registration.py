@@ -16,8 +16,8 @@ def parse_attendee(payload):
             record[field] = value.strip()
     if 'full_name' in record and any(ord(char) < 32 for char in record['full_name']):
         errors['full_name'] = 'Enter a valid full name.'
-    if 'contact_email' in record and not re.fullmatch(r'[A-Za-z0-9.!#$%&\x27*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+', record['contact_email']):
-        errors['contact_email'] = 'Enter a valid email address.'
+    if 'contact_email' in record and any(ord(char) < 32 for char in record['contact_email']):
+        errors['contact_email'] = 'Contact email must be a single line.'
     if 'contact_phone' in record and not re.fullmatch(r'\+?[0-9 ()-]{7,30}', record['contact_phone']):
         errors['contact_phone'] = 'Enter a valid phone number.'
     elif 'contact_phone' in record and len(re.sub(r'\D', '', record['contact_phone'])) < 7:

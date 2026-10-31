@@ -67,6 +67,7 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     await db.exec(await readFile(new URL('../../supabase/050_registration_before_event_start.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/051_my_registrations.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/052_event_registration_roster.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/054_remove_attendee_email_format_validation.sql', import.meta.url), 'utf8'));
     // Rerunning the roster migration updates the function without duplicate errors.
     await db.exec(await readFile(new URL('../../supabase/052_event_registration_roster.sql', import.meta.url), 'utf8'));
     // Install the actual updated lifecycle function as on the deployed database.
@@ -76,7 +77,7 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     const past = new Date(Date.now() - 86400000).toISOString();
     await actor(attendee);
     assert.deepEqual((await rpc('my_event_registrations')).registrations, []);
-    for (const details of [ ['', 'alex@example.com', '+65 8123 4567'], ['Alex', 'invalid', '+65 8123 4567'], ['Alex', 'alex@example.com', '-------'], ['Alex', 'alex@example.com', null] ]) {
+    for (const details of [ ['', 'alex@example.com', '+65 8123 4567'], ['Alex', ' ', '+65 8123 4567'], ['Alex', 'alex@example.com\r\nBcc: other@example.com', '+65 8123 4567'], ['Alex', 'alex@example.com', '-------'], ['Alex', 'alex@example.com', null] ]) {
       assert.equal((await rpc('register_for_event', [1, ...details])).status, 400);
     }
     assert.equal((await rpc('set_event_registration_period', [1, future, later, true])).status, 403);
@@ -140,7 +141,9 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     await db.exec('update public.registration_email_outbox set sent_at=now()');
     assert.equal((await rpc('register_for_event', [1])).notification, 'sent');
     await actor(nextAttendee);
-    assert.equal((await rpc('register_for_event', [1])).registration.status, 'waiting_list');
+    const unrestrictedEmail = await rpc('register_for_event', [1, 'Alex Tan', 'not-an-email', '+65 8123 4567']);
+    assert.equal(unrestrictedEmail.registration.status, 'waiting_list');
+    assert.equal(unrestrictedEmail.registration.contact_email, 'not-an-email');
     const queued = (await db.query('select * from public.registration_email_outbox order by id')).rows;
     assert.match(queued[0].body, /registration is confirmed/);
     assert.match(queued[1].body, /does not confirm a place/);
