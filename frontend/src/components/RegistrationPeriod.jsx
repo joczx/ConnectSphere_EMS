@@ -12,7 +12,7 @@ export default function RegistrationPeriod({ event, onSaved }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const editable = can('event.registrationPeriod', event)
-    && ['planning', 'pending_safety_checks', 'confirmed'].includes(event.status)
+    && event.status === 'confirmed'
     && (!event.end_datetime || Date.now() < Date.parse(event.end_datetime))
     && (!event.registration_closes_at || Date.now() < Date.parse(event.registration_closes_at));
   async function save(e) {
@@ -45,6 +45,7 @@ export default function RegistrationPeriod({ event, onSaved }) {
   }
   return <section className="panel event-detail-section">
     <h2>Registration period</h2>
+    {['planning', 'pending_safety_checks'].includes(event.status) && <p>Registration timing can be configured after the safety review is approved and the event is confirmed.</p>}
     <dl className="detail-grid">
       <div><dt>Opens</dt><dd>{registrationDate(event.registration_opens_at)}</dd></div>
       <div><dt>Closes</dt><dd>{registrationDate(event.registration_closes_at)}</dd></div>
@@ -55,7 +56,7 @@ export default function RegistrationPeriod({ event, onSaved }) {
     {editable && !form && <button type="button" className="secondary" onClick={() => {
       setError(''); setMessage(''); setForm({ opens: inputTime(event.registration_opens_at), closes: inputTime(event.registration_closes_at), waiting: !!event.waiting_list_enabled });
     }}>Set or update registration</button>}
-    {form && <form onSubmit={save}>
+    {editable && form && <form onSubmit={save}>
       <p>All times are in Singapore time (SGT). Registration must open before it closes, and both times must be before the event starts at {registrationDate(event.start_datetime)}. Settings can change before or during registration.</p>
       <fieldset disabled={busy}>
         <label>Registration opens<input required type="datetime-local" value={form.opens} onChange={e => setForm({ ...form, opens: e.target.value })} /></label>
