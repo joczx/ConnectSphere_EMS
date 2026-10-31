@@ -38,6 +38,7 @@ class LoginTests(unittest.TestCase):
             '/api/login', json={'email': 'user@example.com', 'password': 'password'},
         )
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {'access_token': 'access', 'refresh_token': 'refresh'})
         self.assertEqual(query.call_args.kwargs['method'], 'POST')
 
     @patch('app.routes.login.supabase_request', return_value={
