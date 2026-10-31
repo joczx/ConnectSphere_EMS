@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from flask import Flask
 
+from app.services import supabase_client
 from app.services.supabase_client import get_supabase
 
 
@@ -44,5 +45,30 @@ def test_client_without_bearer_token_uses_the_anonymous_key():
         "app.services.supabase_client.create_client", return_value=anonymous_client
     ) as create, app.test_request_context():
         assert get_supabase() is anonymous_client
+        assert get_supabase() is anonymous_client
 
     create.assert_called_once_with("https://example.supabase.co", "anon-key")
+
+
+# Rejects incomplete configuration before any client can authenticate with Supabase.
+def test_client_requires_supabase_credentials(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_ANON_KEY", raising=False)
+
+    try:
+        supabase_client._credentials()
+    except RuntimeError as error:
+        assert "SUPABASE_URL and SUPABASE_ANON_KEY" in str(error)
+    else:
+        raise AssertionError("Expected missing Supabase credentials to fail.")
+
+
+# Parses bearer tokens only from an active Flask request with the correct scheme.
+def test_bearer_token_parser_handles_context_and_header_variants():
+    app = Flask(__name__)
+
+    assert supabase_client._bearer_token() is None
+    with app.test_request_context(headers={"Authorization": "Basic token"}):
+        assert supabase_client._bearer_token() is None
+    with app.test_request_context(headers={"Authorization": "Bearer  verified-token  "}):
+        assert supabase_client._bearer_token() == "verified-token"
