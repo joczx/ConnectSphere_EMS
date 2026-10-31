@@ -40,7 +40,6 @@ def valid_payload(**overrides):
             {"equipment_type": "projector", "quantity": 2, "notes": "HDMI input"},
             {"equipment_type": "microphone", "quantity": 4},
         ],
-        "registration_needs": "Open registration two weeks before, cap at 120.",
     }
     payload.update(overrides)
     return payload
@@ -226,17 +225,7 @@ def test_equipment_quantity_must_be_a_number():
     assert "whole number" in errors["equipment_requirements"]
 
 
-# TC-CER-021: Asserts: Normalize blank registration needs to no registration.
-def test_blank_registration_needs_are_stored_as_none():
-    """No registration needed is recorded as null rather than an empty string."""
-    record, errors = schema.parse_payload(valid_payload(registration_needs="   "))
-
-    assert errors == {}
-    assert record["registration_needs"] is None
-
-
-# AC 2, 6, 7, 8: submission, database-generated ID, timestamp and status.
-# TC-CER-022: Asserts: Submit a complete request and return persisted ID, timestamp, and status.
+# TC-CER-022 | AC2, AC6, AC7, AC8 — Submit and persist a completed request.
 def test_service_submits_complete_request_and_returns_generated_id():
     record, errors = schema.parse_payload(valid_payload())
     assert not errors
@@ -266,7 +255,6 @@ def test_service_submits_complete_request_and_returns_generated_id():
 # TC-CER-029: Asserts: Block submission when room layout is missing.
 # TC-CER-030: Asserts: Block submission when facilities have not been answered.
 # TC-CER-031: Asserts: Block submission when equipment needs have not been answered.
-# TC-CER-032: Asserts: Block submission when registration needs have not been answered.
 # TC-CER-033: Asserts: Block submission when organiser ID is missing.
 @pytest.mark.parametrize(
     'field',
@@ -274,7 +262,7 @@ def test_service_submits_complete_request_and_returns_generated_id():
     ids=[
         'TC-CER-023', 'TC-CER-024', 'TC-CER-025', 'TC-CER-026',
         'TC-CER-027', 'TC-CER-028', 'TC-CER-029', 'TC-CER-030',
-        'TC-CER-031', 'TC-CER-032', 'TC-CER-033',
+        'TC-CER-031', 'TC-CER-033',
     ],
 )
 def test_service_blocks_each_missing_field(field):

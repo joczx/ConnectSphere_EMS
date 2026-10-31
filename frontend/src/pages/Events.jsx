@@ -10,7 +10,7 @@ import { useFeedback } from '../components/FeedbackProvider';
 import EquipmentRequestStatus from '../components/EquipmentRequestStatus';
 import EquipmentRequestForm from '../components/EquipmentRequestForm';
 import { useAuth } from '../auth/AuthContext';
-import { loadEvents } from '../services/eventLoading';
+import { loadEventWorkspace, eventWorkspaceItems } from '../services/eventLoading';
 import { statusLabel } from '../services/venueBookings';
 import {
   FACILITIES, LAYOUTS,
@@ -32,7 +32,6 @@ const formFrom = (event) => ({
   event_name: event.event_name ?? '',
   purpose: event.purpose ?? '',
   description: event.description ?? '',
-  registration_needs: event.registration_needs ?? '',
   start_datetime: toInput(event.start_datetime),
   end_datetime: toInput(event.end_datetime),
   capacity_needed: event.capacity_needed ?? '',
@@ -50,7 +49,6 @@ function changedFields(event, form) {
     event_name: form.event_name.trim(),
     purpose: form.purpose.trim(),
     description: form.description.trim(),
-    registration_needs: form.registration_needs.trim() || null,
     start_datetime: toIso(form.start_datetime),
     end_datetime: toIso(form.end_datetime),
     capacity_needed: form.capacity_needed === '' ? null : Number(form.capacity_needed),
@@ -75,7 +73,6 @@ function saved(event, field) {
   if (field === 'required_facilities') return event[field] ?? [];
   if (field.startsWith('need_')) return !!event[field];
   if (field === 'capacity_needed') return event[field] ?? null;
-  if (field === 'registration_needs') return event[field] ?? null;
   return event[field] ?? '';
 }
 
@@ -101,9 +98,9 @@ export default function Events() {
       setState((current) => ({ ...current, loading: true, error: null }));
       try {
         const path = '/api/events' + (eventId ? '/' + encodeURIComponent(eventId) : '');
-        const { data, statusWarning } = await loadEvents(api, path, { cache: 'no-store', signal: controller.signal,
-          feedback: showFeedback, successMessage: 'Event information refreshed.' });
-        if (!controller.signal.aborted) setState((current) => ({ ...current, data, key: eventId, loading: false, error: null, statusWarning }));
+        const { data, statusWarning, requestWarning } = await loadEventWorkspace(api, path, { cache: 'no-store', signal: controller.signal,
+          feedback: showFeedback, successMessage: 'Event information refreshed.' }, !eventId && can('event.create') ? userId : null);
+        if (!controller.signal.aborted) setState((current) => ({ ...current, data, key: eventId, loading: false, error: null, statusWarning, requestWarning }));
       } catch (err) {
         if (showFeedback && !controller.signal.aborted) notify(err.message || 'Unable to refresh event information.', 'error');
         if (!controller.signal.aborted) setState((current) => ({ ...current, loading: false, error: err.message || 'Unable to load event information.' }));
@@ -114,7 +111,7 @@ export default function Events() {
     const timer = setInterval(reload, 60000);
     window.addEventListener('focus', reload);
     return () => { controller.abort(); clearInterval(timer); window.removeEventListener('focus', reload); };
-  }, [api, eventId, refresh, notify]);
+  }, [api, eventId, refresh, notify, can, userId]);
 
   useEffect(() => {
     if (!eventId) return;
@@ -324,13 +321,18 @@ export default function Events() {
           {event && canCancel && <button type="button" className="secondary event-cancel-action" disabled={lifecycle.busy} onClick={() => updateLifecycle('cancel')}>Cancel event</button>}
           {!eventId && can('event.create') && <Link className="button-link" to="/event-requests/new">+ New event</Link>}
           <button className="secondary" onClick={() => { manualRefresh.current = true; setRefresh(value => value + 1); }} disabled={state.loading}>Refresh</button></div></div>
-      {!eventId && <p className="event-page-description">Track schedules, arrangements and progress in one place.</p>}
+      {!eventId && <p className="event-page-description">Track event requests and events in one place, from drafts and submission through planning and completion.</p>}
       <p className="metadata event-refresh-note">Singapore time (SGT) - Refreshes every minute and when you return to this window.</p>
       {state.loading && <p role="status">Loading latest information…</p>}
       {state.error && <div role="alert" className="panel error">{state.error} Use Refresh to try again.</div>}
       {state.statusWarning && <p role="status" className="panel">{state.statusWarning}</p>}
+      {state.requestWarning && <p role="alert" className="panel error">{state.requestWarning} Use Refresh to try again.</p>}
       {hiddenEvent && <div role="alert" className="panel error">Event not found or access unavailable.</div>}
-      {data?.events && <EventList events={data.events.filter(canViewEvent)} />}
+      {data?.events && <EventList events={eventWorkspaceItems(data.events.filter(canViewEvent), data.event_requests || [], userId)}
+        onRequestChanged={(requestId, updated) => setState(current => ({ ...current, data: { ...current.data,
+          event_requests: updated ? current.data.event_requests.map(item => item.event_request_id === requestId ? { ...item, ...updated } : item)
+            : current.data.event_requests.filter(item => item.event_request_id !== requestId),
+        } }))} />}
       {event && <>
         <div className="event-reference-identity"><span className={'event-stage event-stage-' + event.status}>{label(event.status)}</span><span>Event #{event.event_id}</span></div>
         {/* With the safety card, this row uses the same columns as the content
@@ -376,7 +378,6 @@ export default function Events() {
           <Detail label="Accessibility for blind attendees needed" value={event.need_blind_accessibility ? 'Yes' : 'No'} />
         </dl><h3>Equipment and registration requirements</h3><dl className="event-detail-grid">
           <Detail label="Equipment requirements" value={display('equipment_requirements', event.equipment_requirements)} />
-          <Detail label="Registration needs" value={event.registration_needs} />
         </dl></>}
 
         {edit.open && <form onSubmit={submitEdit} className="event-form">
@@ -408,7 +409,6 @@ export default function Events() {
             <EventFormSection title="4. Equipment and registration">
             <label>Equipment requirements (one per line: type, quantity, notes — or write "none")
               <textarea rows="3" placeholder="projector, 2, HDMI input" value={edit.values.equipment_requirements} onChange={e => setField('equipment_requirements', e.target.value)} /></label>
-            <label>Registration needs<textarea rows="3" value={edit.values.registration_needs} onChange={e => setField('registration_needs', e.target.value)} /></label>
             </EventFormSection>
           </fieldset>
           <div className="heading">
@@ -516,11 +516,6 @@ export default function Events() {
       </section>}
       {event && (can('event.registrationPeriod', event) || can('event.edit', event)) &&
         <EventRegistrationRoster key={event.event_id} eventId={event.event_id} summaryOnly />}
-      {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
-        <h2>Registration arrangements</h2>
-        {event.registration_needs && <p style={{ whiteSpace: 'pre-wrap' }}>{event.registration_needs}</p>}
-        {!event.registration_needs && <p>No registration requirements recorded.</p>}
-      </section>}
       </aside></div>}
     </main>
   </>;
