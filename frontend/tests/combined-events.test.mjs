@@ -40,7 +40,8 @@ test('combined events retain zero-count status filters and request links/actions
     assert.ok(document.querySelector('a[href="/event-requests/2"]').textContent.includes('Amend and resubmit'));
     assert.ok(document.querySelector('a[href="/events/3"]'));
     assert.ok(document.querySelector('[aria-label="Delete draft Draft workshop"]'));
-    assert.equal([...document.querySelectorAll('button')].filter(button => button.textContent === 'Cancel request').length, 2);
+    assert.equal([...document.querySelectorAll('button')].filter(button => button.textContent === 'Cancel request').length, 1);
+    assert.ok(!document.querySelector('[aria-label="Delete draft Draft workshop"]').closest('.event-request-card-actions').textContent.includes('Cancel request'));
     assert.equal(document.querySelector('a button'), null);
     const buttons = [...document.querySelectorAll('.events-status-pills button')];
     assert.ok(buttons.some(button => button.textContent === 'Draft 1'));

@@ -9,7 +9,7 @@ export default function EventRequestActions({ request, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const deletable = request.status === 'draft' && can('eventRequest.delete', request);
-  const cancellable = ['draft', 'submitted', 'rejected'].includes(request.status) && can('eventRequest.cancel', request);
+  const cancellable = ['submitted', 'rejected'].includes(request.status) && can('eventRequest.cancel', request);
   if (!deletable && !cancellable) return null;
   async function act(remove) {
     if (!(await confirm(`${remove ? 'Delete the draft' : 'Cancel'} "${request.event_name || 'Untitled request'}"? This cannot be undone.`, {
