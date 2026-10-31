@@ -26,7 +26,7 @@ export function FeedbackProvider({ children }) {
     const id = ++sequence.current;
     setMessages(current => [...current.slice(-4), { id, message, variant,
       title: title || (variant === 'error' ? 'Action could not be completed' : variant === 'info' ? 'Please note' : 'Action completed') }]);
-    if (variant !== 'error') timers.current.set(id, setTimeout(() => dismiss(id), 6000));
+    timers.current.set(id, setTimeout(() => dismiss(id), 10000));
   }, [dismiss]);
 
   const confirm = useCallback((message, options = {}) => new Promise(resolve => {

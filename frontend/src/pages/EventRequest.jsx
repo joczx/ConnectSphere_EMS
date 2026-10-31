@@ -1,4 +1,6 @@
 import EventFormSection from '../components/EventFormSection';
+import EquipmentRequirementsPicker from '../components/EquipmentRequirementsPicker';
+import RequiredFacilitiesPicker from '../components/RequiredFacilitiesPicker';
 import EventRequestPeople from '../components/EventRequestPeople';
 import RequiredIndicator from '../components/RequiredIndicator';
 import { useEffect, useRef, useState } from 'react';
@@ -6,7 +8,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext';
 import { eventRequestsApi, humanise, userId } from '../services/eventRequests';
-import { FACILITIES, LAYOUTS, toInput, toIso, toItems, toLines } from '../services/eventFields';
+import { LAYOUTS, toInput, toIso, toLines } from '../services/eventFields';
 
 export default function EventRequest() {
   const { api, token } = useAuth();
@@ -36,7 +38,10 @@ export default function EventRequest() {
     const facilities = form.getAll('required_facilities');
     const body = {
       ...values, start_datetime: toIso(values.start_datetime), end_datetime: toIso(values.end_datetime),
-      required_facilities: facilities.length ? facilities.filter(f => f !== 'none') : null, equipment_requirements: toItems(values.equipment_requirements),
+      required_facilities: facilities.length ? facilities.filter(f => f !== 'none') : null,
+      equipment_requirements: values.equipment_requirements ? JSON.parse(values.equipment_requirements) : null,
+      // Retain existing arrangements; new requests need no free-text registration input.
+      registration_needs: request.registration_needs || 'none',
       need_wheelchair_accessibility: values.need_wheelchair_accessibility === 'yes', need_blind_accessibility: values.need_blind_accessibility === 'yes',
     };
     if (submit) {
@@ -83,7 +88,7 @@ export default function EventRequest() {
         {state.details && <ul>{Object.values(state.details).map(message => <li key={message}>{message}</li>)}</ul>}</div>}
       {state.preview && <section className="panel" aria-labelledby="review-heading">
         <h2 id="review-heading">Review your event request</h2>
-        <dl>{Object.entries(state.preview).map(([name, entered]) => <div key={name}>
+        <dl>{Object.entries(state.preview).filter(([name]) => name !== 'registration_needs').map(([name, entered]) => <div key={name}>
           <dt>{humanise(name.replaceAll('_', ' '))}</dt>
           <dd style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{
             name.endsWith('_datetime') ? new Date(entered).toLocaleString() :
@@ -114,15 +119,12 @@ export default function EventRequest() {
           <label>Room layout<RequiredIndicator /><select name="room_layout" required defaultValue={value('room_layout')}>
             <option value="">Select a layout</option>{LAYOUTS.map(layout => <option key={layout} value={layout}>{humanise(layout)}</option>)}
           </select></label>
-          <label>Required facilities (hold Ctrl or ⌘ to select several)<RequiredIndicator /><select name="required_facilities" multiple required defaultValue={request.required_facilities?.length === 0 ? ['none'] : request.required_facilities || []}>
-            <option value="none">No facilities needed</option>{FACILITIES.map(facility => <option key={facility} value={facility}>{humanise(facility)}</option>)}
-          </select></label>
+          <RequiredFacilitiesPicker initialItems={request.required_facilities} />
           {[['need_wheelchair_accessibility', 'Wheelchair accessibility needed'], ['need_blind_accessibility', 'Accessibility for blind attendees needed']].map(([name, text]) =>
             <label key={name}>{text}<select name={name} defaultValue={request[name] ? 'yes' : 'no'}><option value="no">No</option><option value="yes">Yes</option></select></label>)}
           </EventFormSection>
-          <EventFormSection title="4. Equipment and registration" description="Record your initial requirements. The coordinator can submit equipment requests during planning.">
-          <label>Equipment requirements (one per line: type, quantity, notes — or write "none")<RequiredIndicator /><textarea name="equipment_requirements" rows="3" required placeholder="projector, 2, HDMI input" defaultValue={toLines(request.equipment_requirements)} /></label>
-          <label>Registration needs (write "none" if not needed)<RequiredIndicator /><textarea name="registration_needs" rows="3" required defaultValue={value('registration_needs')} /></label>
+          <EventFormSection title="4. Equipment requirements" description="Record your initial requirements. The coordinator can submit equipment requests during planning.">
+          <EquipmentRequirementsPicker initialItems={request.equipment_requirements} />
           </EventFormSection>
           {editable && <div className="heading event-form-actions">
             <button type="submit" value="draft" className="secondary" formNoValidate>{state.busy ? 'Saving…' : rejected ? 'Save changes' : 'Save draft'}</button>
