@@ -59,6 +59,9 @@ def set_registration_period(event_id):
     record, errors = parse_settings(request.get_json(silent=True))
     if errors:
         return jsonify(error='Check the registration settings.', errors=errors), 400
+    event = load_event(event_id, token)
+    if event.get('status') != 'confirmed':
+        raise EventError('Registration settings can only change after the event is confirmed.', 409)
     return jsonify(registration_call('set_event_registration_period', token,
         {'p_event_id': event_id, **{'p_' + key: value for key, value in record.items()}}))
 
