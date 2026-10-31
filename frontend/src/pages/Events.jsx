@@ -199,20 +199,18 @@ export default function Events() {
   const canSubmitSafety = !!event && event.status === 'planning' && can('event.submitSafety', event);
   const showSafetySubmission = canSubmitSafety || lifecycle.action === 'safety-checks';
 
-  async function updateLifecycle(action, ready) {
+  async function updateLifecycle(action) {
     if (action === 'cancel' && !(await confirm('Cancel this event? This cannot be undone.', { title: 'Cancel event', confirmLabel: 'Cancel event', destructive: true }))) return;
     if (action === 'safety-checks' && !(await confirm('Submit this event for safety checks? Event details cannot be edited while the Safety Officer reviews it.', { title: 'Submit for safety checks', confirmLabel: 'Submit' }))) return;
     setLifecycle({ busy: true, action, error: '', message: '' });
     try {
-      const posted = action === 'cancel' || action === 'safety-checks';
       const result = await api(`/api/events/${encodeURIComponent(eventId)}/${action}`, {
-        method: posted ? 'POST' : 'PATCH',
-        body: posted ? {} : { ready },
+        method: 'POST',
+        body: {},
       });
       setState(current => ({ ...current, data: { ...current.data, event: result.event } }));
       setLifecycle({ busy: false, action, error: '', message: action === 'cancel' ? 'Event cancelled.'
-        : action === 'safety-checks' ? result.message
-        : `Registration readiness saved. Event status: ${label(result.event.status)}.` });
+        : result.message });
       setRefresh(value => value + 1);
     } catch (error) {
       setLifecycle({ busy: false, action, error: error.message || 'Unable to update the event.', message: '' });
@@ -520,14 +518,7 @@ export default function Events() {
         <EventRegistrationRoster key={event.event_id} eventId={event.event_id} />}
       {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
         <h2>Registration arrangements</h2>
-        {event.registration_needs && <div style={{ marginBottom: '16px' }}>
-          <p>Registration arrangements: {event.registration_ready ? 'Ready' : 'Awaiting coordinator confirmation'}</p>
-          {can('event.registrationReady', event) && ['planning', 'confirmed'].includes(event.status) && <label>
-            <input type="checkbox" checked={!!event.registration_ready} disabled={lifecycle.busy}
-              onChange={e => updateLifecycle('registration-readiness', e.target.checked)} />
-            Registration arrangements are ready
-          </label>}
-        </div>}
+        {event.registration_needs && <p style={{ whiteSpace: 'pre-wrap' }}>{event.registration_needs}</p>}
         {!event.registration_needs && <p>No registration requirements recorded.</p>}
       </section>}
       </aside></div>}

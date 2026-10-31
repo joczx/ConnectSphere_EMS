@@ -119,6 +119,21 @@ def test_safety_officer_decision_is_sent_to_the_database_workflow(token, call):
 
 @patch('app.routes.operational_safety.lifecycle_call')
 @patch('app.routes.operational_safety.authenticated_token', return_value='safety-token')
+def test_safety_approval_returns_an_immediately_confirmed_event(token, call):
+    call.return_value = {
+        'message': 'Operational safety approved. The event is confirmed.',
+        'event': {'event_id': 8, 'status': 'confirmed'},
+        'decision': {'outcome': 'approved'},
+    }
+    response = client().post('/api/operational-safety-reviews/8/decision', headers=HEADERS, json={
+        'outcome': 'approved', 'remarks': '', 'affected_arrangements': [],
+    })
+    assert response.status_code == 200
+    assert response.json['event']['status'] == 'confirmed'
+
+
+@patch('app.routes.operational_safety.lifecycle_call')
+@patch('app.routes.operational_safety.authenticated_token', return_value='safety-token')
 def test_invalid_safety_decision_is_returned_from_the_database(token, call):
     from app.services.event_service import EventError
     call.side_effect = EventError('Remarks are required when rejecting or requesting changes.', status=400)
