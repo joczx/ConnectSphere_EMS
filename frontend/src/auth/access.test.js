@@ -25,6 +25,8 @@ test('role-specific pages reject other roles including nested URLs', () => {
   assert.equal(allowed('/review-event-requests/123', ['Event Coordinator']), true);
   assert.equal(allowed('/review-venue-bookings/123', ['Venue Staff']), true);
   assert.equal(allowed('/review-venue-bookings/123', ['Event Coordinator']), false);
+  assert.equal(allowed('/operational-safety-reviews', ['Safety Officer']), true);
+  assert.equal(allowed('/operational-safety-reviews', ['Event Coordinator']), false);
 });
 test('venue browsing is shared but editing requires venue staff', () => {
   assert.equal(allowed('/venues/123', ['Event Coordinator']), true);
