@@ -14,7 +14,8 @@ its **Planning** event automatically.
 | Submitted → Planning / Rejected | Matching recorded review by the assigned coordinator |
 | Rejected → Submitted | Amended request passes submission validation |
 | Planning request → Planning event | Approval trigger creates the linked event once |
-| Planning → Confirmed | Matching approved suitable venue; full equipment reservations; registration readiness |
+| Planning → Pending Safety Checks | Assigned coordinator submits after venue and equipment arrangements are complete |
+| Pending Safety Checks → Confirmed | Assigned Safety Officer approves while venue, equipment and safety arrangements remain valid |
 | Confirmed → Planning | A required arrangement becomes incomplete |
 | Confirmed → Completed | End time has passed |
 | Draft / Submitted / Rejected request → Cancelled | Organiser or assigned coordinator cancels |
@@ -31,10 +32,10 @@ additional equipment request also needs its own full linked reservation; partial
 and rejected requests do not count as fulfilled. Unknown equipment requirements
 (`null`) block confirmation; set an empty list when no equipment is needed.
 
-Registration readiness defaults to false. Only the assigned coordinator can
-acknowledge it, from the event detail page. No acknowledgement is needed when
-there are no registration requirements. Changing those requirements clears the
-acknowledgement. This acknowledgement confirms arrangements, not attendee counts.
+Registration requirements and registration-period settings are independent of
+the operational safety lifecycle. They do not block submission for safety checks
+or confirmation. Attendee registration, waiting lists and rosters remain part of
+the registration workflow.
 
 Venue decisions, reservation changes, equipment request changes, venue edits,
 and event edits re-evaluate confirmation in the writing transaction. The event
@@ -57,6 +58,15 @@ must still be checked in staging, because their full deployed definitions are
 not available in this repo. Cancellation retains booking and equipment history;
 releasing allocations is outside this status-management change.
 
+For an existing deployment, deploy the updated frontend and backend first, then
+apply `supabase/053_remove_registration_readiness.sql`. The updated application
+is compatible with the old schema, while the old application could still call
+the RPC that this migration removes. The migration replaces the blocker and
+lifecycle functions, removes the obsolete RPC and column, and promotes any
+already safety-approved event that was waiting only on the removed gate.
+PostgREST receives a schema reload notification from the migration; no dashboard
+edits or other manual Supabase steps are required.
+
 ## Verification
 
 ```powershell
@@ -70,6 +80,7 @@ ignored frontend dependency directory, then execute the actual migrations:
 ```powershell
 npm install --prefix frontend/node_modules/.event-status-qa @electric-sql/pglite --no-save --package-lock=false
 node --test frontend/tests/event-status-db.mjs
+node --test frontend/tests/registration-readiness-removal-db.test.mjs
 ```
 
 The database tests cover transitions, required arrangements, quantities,

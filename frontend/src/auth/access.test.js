@@ -76,7 +76,7 @@ const event = {
 };
 
 test('only the assigned coordinator edits, cancels and requests for an event', () => {
-  for (const action of ['event.edit', 'event.cancel', 'event.registrationReady', 'event.findVenue', 'equipment.request']) {
+  for (const action of ['event.edit', 'event.cancel', 'event.findVenue', 'equipment.request']) {
     assert.equal(can(['Event Coordinator'], 'coord', action, event), true, action);
     assert.equal(can(['Event Coordinator'], 'someone-else', action, event), false, action);
     // Linked to the event, but in another role.

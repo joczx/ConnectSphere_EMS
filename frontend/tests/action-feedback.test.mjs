@@ -11,11 +11,10 @@ test('user writes receive feedback while background reads and status refreshes s
   assert.equal(shouldNotify('/api/event-requests/1', { method: 'PATCH', successFeedback: false }), true, 'intermediate saves must still show errors');
 });
 
-test('fallback messages distinguish reservation, cancellation, review and registration actions', () => {
+test('fallback messages distinguish reservation, cancellation and review actions', () => {
   assert.equal(actionMessage('/api/equipment/reservations', 'POST', {}), 'Equipment reserved successfully.');
   assert.equal(actionMessage('/api/equipment/reservations/1', 'DELETE', {}), 'Equipment reservation cancelled.');
   assert.equal(actionMessage('/api/events/1/cancel', 'POST', {}), 'Cancellation recorded successfully.');
   assert.equal(actionMessage('/api/venue-bookings/1/review', 'POST', {}), 'Review decision recorded successfully.');
-  assert.match(actionMessage('/api/events/1/registration-readiness', 'PATCH', { event: { status: 'confirmed' } }), /confirmed/);
   assert.equal(actionMessage('/api/event-requests', 'POST', { message: 'Draft event request saved.' }), 'Draft event request saved.');
 });
