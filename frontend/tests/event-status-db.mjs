@@ -50,7 +50,7 @@ test('PostgreSQL lifecycle migrations enforce and automatically advance event st
       create table public.equipment (equipment_id serial primary key, equipment_type text);
       create table public.equipment_request (equipment_request_id serial primary key, event_id integer, quantity integer);
       create table public.equipment_reservations (
-        reservation_id serial primary key, event_id text, equipment_id integer,
+        reservation_id serial primary key, event_id integer, equipment_id integer,
         quantity integer, starts_at timestamptz, ends_at timestamptz, equipment_request_id integer
       );
       create table public.event_activity (
@@ -87,7 +87,7 @@ test('PostgreSQL lifecycle migrations enforce and automatically advance event st
       select event_id, $2, 'approved', start_datetime, end_datetime, capacity_needed from events where event_id=$1`, [id, venue]);
     const reserve = (id, qty, model = 1, requestId = null) => db.query(`insert into equipment_reservations
       (event_id, equipment_id, quantity, starts_at, ends_at, equipment_request_id)
-      select event_id::text, $2, $3, start_datetime, end_datetime, $4 from events where event_id=$1`, [id, model, qty, requestId]);
+      select event_id, $2, $3, start_datetime, end_datetime, $4 from events where event_id=$1`, [id, model, qty, requestId]);
 
     await t.test('only the seven requested statuses exist', async () => {
       const values = (await db.query("select unnest(enum_range(null::event_status))::text as status")).rows.map(r => r.status);
@@ -108,17 +108,12 @@ test('PostgreSQL lifecycle migrations enforce and automatically advance event st
       assert.equal((await db.query('select status from events where event_request_id=$1', [id])).rows[0].status, 'planning');
       await assert.rejects(db.query("update event_request set status='submitted' where event_request_id=$1", [id]), /Invalid request/);
     });
-    await t.test('venue, full equipment quantity and coordinator registration acknowledgement are all required', async () => {
-      const id = await createEvent([{ equipment_type: 'microphone', quantity: 3 }], 'Attendee sign-up');
+    await t.test('venue and full equipment quantity are required', async () => {
+      const id = await createEvent([{ equipment_type: 'microphone', quantity: 3 }]);
       await assert.rejects(db.query("update events set status='confirmed' where event_id=$1", [id]), /approved venue/);
       await book(id); assert.equal(await status(id), 'planning');
       await reserve(id, 1); assert.equal(await status(id), 'planning');
-      await reserve(id, 2, 2); assert.equal(await status(id), 'planning');
-      await db.query('select set_config($1,$2,false)', ['request.jwt.claim.sub', organiser]);
-      assert.equal((await db.query('select set_event_registration_ready($1,true) as result', [id])).rows[0].result.status, 403);
-      await assert.rejects(db.query('update events set registration_ready=true where event_id=$1', [id]), /assigned coordinator/);
-      await db.query('select set_config($1,$2,false)', ['request.jwt.claim.sub', coordinator]);
-      assert.equal((await db.query('select set_event_registration_ready($1,true) as result', [id])).rows[0].result.event.status, 'confirmed');
+      await reserve(id, 2, 2);
       assert.equal(await status(id), 'confirmed');
       await assert.rejects(db.query("update events set status='completed' where event_id=$1", [id]), /end time/);
       await db.query('delete from equipment_reservations where event_id=$1 and equipment_id=2', [String(id)]);
@@ -186,12 +181,11 @@ test('PostgreSQL lifecycle migrations enforce and automatically advance event st
       await assert.rejects(db.query("update event_request set status='rejected' where event_request_id=$1", [id]), /matching coordinator review/);
       const eventId = await createEvent([]);
       await assert.rejects(db.query("update events set status='completed' where event_id=$1", [eventId]), /Invalid event/);
-      await db.query("update events set registration_ready=true where event_id=$1", [eventId]);
-      await db.query("update events set registration_needs='Changed requirements' where event_id=$1", [eventId]);
-      assert.equal((await db.query('select registration_ready from events where event_id=$1', [eventId])).rows[0].registration_ready, false);
     });
     await t.test('direct equipment reservations require both Technical Support role and event assignment', async () => {
       await db.exec(`
+        alter table public.equipment_reservations alter column event_id type text using event_id::text;
+        discard plans;
         create table public.roles (role_id serial primary key, role_name text);
         create table public.user_roles (user_id uuid, role_id integer);
         alter table public.equipment add column equipment_model text default 'Test';

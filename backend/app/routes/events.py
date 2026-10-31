@@ -53,16 +53,6 @@ def refresh_statuses():
     return jsonify(lifecycle_call('refresh_visible_event_statuses', token, {}))
 
 
-@events.patch('/events/<int:event_id>/registration-readiness')
-def registration_readiness(event_id):
-    token = authenticated_token(supabase_request)
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict) or set(payload) != {'ready'} or type(payload['ready']) is not bool:
-        return jsonify(error='Send ready as true or false.'), 400
-    return jsonify(lifecycle_call('set_event_registration_ready', token,
-                                 {'p_event_id': event_id, 'p_ready': payload['ready']}))
-
-
 @events.patch('/events/<int:event_id>/registration-period')
 def set_registration_period(event_id):
     token = authenticated_token(supabase_request)
