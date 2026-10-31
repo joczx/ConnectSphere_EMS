@@ -81,6 +81,14 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     }
     assert.equal((await rpc('set_event_registration_period', [1, future, later, true])).status, 403);
     await actor(organiser);
+    // Reproduce 048 replacing the registration-aware guard from 046.
+    const safetySubmission = await readFile(new URL('../../supabase/048_submit_for_safety_checks.sql', import.meta.url), 'utf8');
+    const oldGuard = safetySubmission.slice(safetySubmission.indexOf('create or replace function public.guard_event_lifecycle()'),
+      safetySubmission.indexOf('create or replace function public.submit_event_for_safety_checks'));
+    await db.exec(oldGuard);
+    await assert.rejects(rpc('set_event_registration_period', [1, future, later, true]), /Confirmed event arrangements cannot be edited/);
+    await db.exec(await readFile(new URL('../../supabase/053_fix_registration_lifecycle.sql', import.meta.url), 'utf8'));
+    await assert.rejects(db.query("update public.events set description='Changed arrangements' where event_id=1"), /Confirmed event arrangements cannot be edited/);
     assert.equal((await rpc('my_event_registrations')).status, 403);
     assert.equal((await rpc('attendee_registration_events')).status, 403);
     assert.equal((await rpc('register_for_event', [1])).status, 403);
@@ -108,6 +116,11 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     await db.exec('alter table public.events enable trigger guard_event_lifecycle');
     assert.equal(result.event.status, 'confirmed');
     assert.ok(result.event.safety_approved_at, 'registration edits preserve safety approval');
+    await db.exec(`insert into public.events(event_id,event_name,event_organiser_id,status,start_datetime,end_datetime)
+      values (7,'Planning test','${organiser}','planning',now()+interval '12 days',now()+interval '13 days')`);
+    const planningSettings = await rpc('set_event_registration_period', [7, future, later, true]);
+    assert.equal(planningSettings.event.status, 'planning', 'registration edits do not submit an event for safety checks');
+    await assert.rejects(db.query("update public.events set status='pending_safety_checks' where event_id=7"), /Invalid event status transition/);
     await actor(attendee);
     assert.match((await rpc('register_for_event', [1])).error, /not yet open/);
     assert.equal((await rpc('attendee_registration_events')).events[0].registration_status, 'not_open');

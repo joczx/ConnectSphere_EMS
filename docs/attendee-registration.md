@@ -101,3 +101,17 @@ on focus, and through Refresh registrations; errors never appear as zero counts.
 to `event_registration_roster()`. The database requires both the appropriate role
 and its matching event assignment. Unassigned managers receive 404 without attendee
 data; other roles receive 403. The read does not grant broader direct table access.
+
+## Registration update returns 409 on a confirmed event
+
+Apply `053_fix_registration_lifecycle.sql` after 052. Migration
+`048_submit_for_safety_checks.sql` replaced the lifecycle guard from 046 without
+excluding registration opening/closing times and the waiting-list preference from
+arrangement comparisons. Changing registration settings could therefore be
+rejected as "Confirmed event arrangements cannot be edited", or invalidate safety
+approval on an event still in planning.
+
+053 restores those exclusions while retaining explicit safety submission,
+change-request handling and protection of confirmed event arrangements. The
+organiser permissions, closed-period restrictions and opening < closing < event
+start rule still apply. The migration does not modify existing event data.
