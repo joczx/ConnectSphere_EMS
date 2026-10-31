@@ -406,6 +406,18 @@ button.feedback-danger { background: var(--cs-color-danger); color: white; borde
 .dashboard-statuses dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .dashboard-open { display: inline-block; margin-top: 8px; font-size: 13px; }
 .dashboard-details { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+.organiser-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.organiser-status-card { margin: 0; padding: 16px; }
+.organiser-status-card h2 { margin: 0 0 12px; color: #64748b; font-size: 12px; font-weight: 500; }
+.organiser-status-card strong { font-size: 26px; color: #0f172a; font-variant-numeric: tabular-nums; }
+.organiser-status-card strong.is-unavailable { font-size: 14px; }
+.organiser-event-list, .organiser-updates { list-style: none; margin: 0; padding: 0; }
+.organiser-event-list li { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px 0; border-bottom: 1px solid #e2e8f0; }
+.organiser-event-list li:last-child, .organiser-updates li:last-child { border-bottom: 0; }
+.organiser-event-list p, .organiser-updates p { font-size: 13px; color: #64748b; margin: 6px 0; }
+.organiser-updates li { padding: 12px 0; border-bottom: 1px solid #e2e8f0; }
+.organiser-updates span { color: #94a3b8; font-size: 11px; }
+.organiser-updates strong { font-size: 13px; }
 .dashboard-details > .panel { margin: 0; min-width: 0; }
 .dashboard-details h2 { font-size: 17px; }
 .dashboard-action-list, .dashboard-upcoming { list-style: none; padding: 0; }
