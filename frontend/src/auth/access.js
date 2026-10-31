@@ -27,7 +27,6 @@ export const PAGE_ROLES = {
   '/reserved-equipment': technical,
   '/equipment-availability': [...coordinator, ...technical],
   '/venue-search': coordinator,
-  '/venue-suitability': coordinator,
   '/operational-safety-reviews': safetyOfficer,
 };
 export function rolesForPath(path) {
