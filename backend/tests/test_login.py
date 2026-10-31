@@ -9,6 +9,7 @@ class LoginTests(unittest.TestCase):
     def setUp(self):
         self.client = create_app().test_client()
 
+    # Rejects missing, blank, malformed, or non-text login credentials.
     def test_login_requires_credentials(self):
         for body in [
             {},
@@ -23,6 +24,7 @@ class LoginTests(unittest.TestCase):
             self.assertEqual(response.json['error'], 'Email and password are required.')
 
     @patch('app.routes.login.supabase_request')
+    # Uses one generic error for malformed email formats without querying Supabase.
     def test_login_invalid_email_uses_generic_credentials_error(self, query):
         for email in ['username', 'user@', 'user@example', 'user name@example.com']:
             response = self.client.post('/api/login', json={'email': email, 'password': 'password'})
@@ -33,6 +35,7 @@ class LoginTests(unittest.TestCase):
     @patch('app.routes.login.supabase_request', return_value={
         'access_token': 'access', 'refresh_token': 'refresh',
     })
+    # Sends valid credentials to Supabase with POST and returns its session tokens.
     def test_login_uses_post_for_supabase_auth(self, query):
         response = self.client.post(
             '/api/login', json={'email': 'user@example.com', 'password': 'password'},
@@ -44,18 +47,21 @@ class LoginTests(unittest.TestCase):
     @patch('app.routes.login.supabase_request', return_value={
         'access_token': 'access', 'refresh_token': 'refresh',
     })
+    # Uses POST when exchanging a refresh token for a new session.
     def test_refresh_uses_post_for_supabase_auth(self, query):
         response = self.client.post('/api/refresh', json={'refresh_token': 'refresh'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(query.call_args.kwargs['method'], 'POST')
 
     @patch('app.routes.login.supabase_request', side_effect=StoreError(401))
+    # Returns a readable generic error when a password is incorrect.
     def test_login_wrong_password_returns_readable_error(self, query):
         response = self.client.post('/api/login', json={'email': 'user@example.com', 'password': 'wrong'})
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json['error'], 'Incorrect email or password. Please try again.')
 
     @patch('app.routes.login.supabase_request', side_effect=StoreError(503))
+    # Returns a safe JSON error when the authentication service is unavailable.
     def test_login_service_failure_returns_json(self, query):
         response = self.client.post('/api/login', json={'email': 'user@example.com', 'password': 'password'})
         self.assertEqual(response.status_code, 503)
