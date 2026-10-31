@@ -193,7 +193,7 @@ export default function Events() {
     && [event.event_organiser_id, event.technical_support_id, event.safety_officer_id].includes(userId);
   // Who sees which button: ACTIONS in auth/access.js. The status rules stay here.
   const canRequestChange = !!event && can('changeRequest.create', event)
-    && ['planning', 'pending_safety_checks', 'confirmed'].includes(event.status);
+    && event.status === 'planning';
   const canCancel = !!event && ['planning', 'confirmed'].includes(event.status) && can('event.cancel', event);
   // The database refuses while arrangements are incomplete and says which.
   const canSubmitSafety = !!event && event.status === 'planning' && can('event.submitSafety', event);
@@ -515,7 +515,7 @@ export default function Events() {
           : can('equipment.review', event) && <Link className="button-link" to={`/equipment?event_id=${encodeURIComponent(eventId)}`}>Review equipment requests for this event</Link>}
       </section>}
       {event && (can('event.registrationPeriod', event) || can('event.edit', event)) &&
-        <EventRegistrationRoster key={event.event_id} eventId={event.event_id} />}
+        <EventRegistrationRoster key={event.event_id} eventId={event.event_id} summaryOnly />}
       {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
         <h2>Registration arrangements</h2>
         {event.registration_needs && <p style={{ whiteSpace: 'pre-wrap' }}>{event.registration_needs}</p>}

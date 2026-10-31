@@ -28,6 +28,20 @@ body {
 select { display: block; width: 100%; padding: 12px; margin-top: 8px; border: 1px solid var(--cs-color-border-strong); border-radius: var(--cs-radius-control); background: var(--cs-color-surface); color: var(--cs-color-heading); }
 .equipment-table { overflow-x: auto; }
 .equipment-table table { width: 100%; border-collapse: collapse; text-align: left; }
+.registration-records-table { width: 100%; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; margin-top: 20px; }
+.registration-records-table table { width: 100%; min-width: 760px; border-collapse: collapse; text-align: left; font-size: 13px; }
+.registration-records-table th { padding: 14px 18px; background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid #e2e8f0; }
+.registration-records-table td { padding: 18px; vertical-align: middle; color: #334155; line-height: 1.6; border-bottom: 1px solid #f1f5f9; }
+.registration-records-table tbody tr:last-child td { border-bottom: 0; }
+.registration-records-table tbody tr:hover { background: #f8fafc; }
+.registration-records-table .registration-attendee-name { min-width: 140px; color: #0f172a; font-weight: 600; }
+.registration-contact-email { overflow-wrap: anywhere; min-width: 180px; max-width: 300px; }
+.registration-contact-phone { white-space: nowrap; }
+.registration-records-table .registration-record-date { min-width: 170px; color: #64748b; font-size: 12px; }
+.registration-status { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: #f1f5f9; color: #475569; }
+.registration-status-registered { background: #ecfdf5; color: #047857; }
+.registration-status-waiting_list { background: #fffbeb; color: #92400e; }
+.registration-status-withdrawn { background: #f1f5f9; color: #64748b; }
 .equipment-table th, .equipment-table td { padding: 12px; border-bottom: 1px solid var(--cs-color-border); }
 
 * { box-sizing: border-box; }
@@ -282,6 +296,8 @@ body { font-size: 14px; color: #0f172a; }
 .sidebar-brand span { color: #ffffff66; font-family: monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; }
 .sidebar-brand strong { font-size: 14px; font-weight: 600; }
 .portal-sidebar nav { flex: 1; overflow-y: auto; padding: 12px 0; }
+.sidebar-group { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ffffff14; }
+.sidebar-group-heading { margin: 0; padding: 3px 16px 7px; color: #ffffff80; font-size: 10px; font-weight: 600; line-height: 1.5; letter-spacing: .1em; text-transform: uppercase; }
 .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 11px 16px; color: #ffffff99; text-decoration: none; font-size: 13px; line-height: 1.4; transition: background .15s, color .15s; }
 .sidebar-link svg { flex-shrink: 0; width: 17px; height: 17px; }
 .sidebar-link:hover { color: white; background: #ffffff0d; }
