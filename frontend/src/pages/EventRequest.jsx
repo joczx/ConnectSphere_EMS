@@ -40,8 +40,6 @@ export default function EventRequest() {
       ...values, start_datetime: toIso(values.start_datetime), end_datetime: toIso(values.end_datetime),
       required_facilities: facilities.length ? facilities.filter(f => f !== 'none') : null,
       equipment_requirements: values.equipment_requirements ? JSON.parse(values.equipment_requirements) : null,
-      // Retain existing arrangements; new requests need no free-text registration input.
-      registration_needs: request.registration_needs || 'none',
       need_wheelchair_accessibility: values.need_wheelchair_accessibility === 'yes', need_blind_accessibility: values.need_blind_accessibility === 'yes',
     };
     if (submit) {
@@ -88,7 +86,7 @@ export default function EventRequest() {
         {state.details && <ul>{Object.values(state.details).map(message => <li key={message}>{message}</li>)}</ul>}</div>}
       {state.preview && <section className="panel" aria-labelledby="review-heading">
         <h2 id="review-heading">Review your event request</h2>
-        <dl>{Object.entries(state.preview).filter(([name]) => name !== 'registration_needs').map(([name, entered]) => <div key={name}>
+        <dl>{Object.entries(state.preview).map(([name, entered]) => <div key={name}>
           <dt>{humanise(name.replaceAll('_', ' '))}</dt>
           <dd style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{
             name.endsWith('_datetime') ? new Date(entered).toLocaleString() :

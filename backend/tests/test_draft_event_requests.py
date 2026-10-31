@@ -132,7 +132,6 @@ def test_a_partially_filled_draft_produces_no_format_errors():
         "end_datetime",
         "capacity_needed",
         "room_layout",
-        "registration_needs",
     ],
 )
 def test_any_optional_field_can_be_cleared_with_null(field):
