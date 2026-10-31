@@ -515,7 +515,7 @@ export default function Events() {
           : can('equipment.review', event) && <Link className="button-link" to={`/equipment?event_id=${encodeURIComponent(eventId)}`}>Review equipment requests for this event</Link>}
       </section>}
       {event && (can('event.registrationPeriod', event) || can('event.edit', event)) &&
-        <EventRegistrationRoster key={event.event_id} eventId={event.event_id} />}
+        <EventRegistrationRoster key={event.event_id} eventId={event.event_id} summaryOnly />}
       {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
         <h2>Registration arrangements</h2>
         {event.registration_needs && <p style={{ whiteSpace: 'pre-wrap' }}>{event.registration_needs}</p>}

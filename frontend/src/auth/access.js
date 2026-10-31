@@ -31,6 +31,7 @@ export const PAGE_ROLES = {
   '/operational-safety-reviews': safetyOfficer,
 };
 export function rolesForPath(path) {
+  if (/^\/events\/[^/]+\/registrations$/.test(path)) return [...organiser, ...coordinator];
   if (/^\/venues\/(new|[^/]+\/(edit|delete))$/.test(path)) return venueStaff;
   return Object.entries(PAGE_ROLES).find(([prefix]) => path === prefix || path.startsWith(prefix + '/'))?.[1] || [];
 }

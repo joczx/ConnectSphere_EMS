@@ -14,6 +14,11 @@ test('only attendees can browse registration events, including direct URLs', () 
   }
 });
 test('role-specific pages reject other roles including nested URLs', () => {
+  assert.equal(allowed('/events/24/registrations', ['Event Organiser']), true);
+  assert.equal(allowed('/events/24/registrations', ['Event Coordinator']), true);
+  for (const role of ['Attendee', 'Venue Staff', 'Safety Officer', 'Technical Support Staff', 'Event Coordinator Lead']) {
+    assert.equal(allowed('/events/24/registrations', [role]), false);
+  }
   assert.equal(allowed('/equipment', ['Event Organiser']), false);
   assert.equal(allowed('/equipment', ['technical_support_staff']), true);
   assert.equal(allowed('/review-event-requests/123', ['Event Organiser']), false);
