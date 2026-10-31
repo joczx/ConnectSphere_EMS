@@ -43,7 +43,7 @@ credentials and a verified sender; automated tests use a mocked SMTP connection.
 From `backend`:
 
 ```powershell
-python -m coverage run --branch --source=app.schemas.registration,app.services.registration_service,app.services.registration_email_service -m pytest tests/test_registration.py tests/test_registration_email.py -p no:cacheprovider
+python -m coverage run --branch --source=app.schemas.registration,app.services.registration_service,app.services.registration_email_service -m pytest tests/test_registration_period.py tests/test_register_for_event.py -p no:cacheprovider
 python -m coverage report --fail-under=100 -m
 ```
 
