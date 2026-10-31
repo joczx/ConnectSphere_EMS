@@ -35,12 +35,12 @@ def create_equipment_request(event_id, payload, token):
     if event.get('status') != 'planning':
         raise EquipmentRequestError('Equipment can only be requested while the event is in planning.', 409)
 
-    # assigned_coordinator = event.get('event_coordinator_id')
-    # if not assigned_coordinator or current_user != assigned_coordinator:
-    #     raise EquipmentRequestError(
-    #         'Only the assigned Event Coordinator can create equipment requests for this event.',
-    #         403,
-    #     )
+    assigned_coordinator = event.get('event_coordinator_id')
+    if not assigned_coordinator or current_user != assigned_coordinator:
+        raise EquipmentRequestError(
+            'Only the assigned Event Coordinator can create equipment requests for this event.',
+            403,
+        )
 
     equipment_type = _clean_text(payload.get('equipment_type'), 'equipment_type', 'Equipment type is required.')
     quantity = payload.get('quantity')

@@ -14,9 +14,11 @@ class EquipmentAvailabilityTests(unittest.TestCase):
         self.headers = {'Authorization': 'Bearer user-token'}
 
     @patch('app.services.equipment_availability_service.supabase_request')
-    def test_check_equipment_availability_allows_any_authenticated_user(self, query): #change to only technical support staff in the future.
+    # Returns available equipment when an authorized Technical Support user supplies valid criteria.
+    def test_technical_support_can_check_equipment_availability(self, query):
         query.side_effect = [
             {'id': 'tech-user'},
+            True,
             [{
                 'equipment_id': 10,
                 'equipment_type': 'Projector',
@@ -37,9 +39,11 @@ class EquipmentAvailabilityTests(unittest.TestCase):
         self.assertEqual(response.json['results'][0]['requested_quantity'], 2)
 
     @patch('app.services.equipment_availability_service.supabase_request')
+    # Marks equipment as partially available when stock is below the requested quantity.
     def test_partial_availability_uses_shared_database_calculation(self, query):
         query.side_effect = [
             {'id': 'tech-user'},
+            True,
             [{
                 'equipment_id': 10,
                 'equipment_type': 'Projector',
@@ -62,9 +66,11 @@ class EquipmentAvailabilityTests(unittest.TestCase):
         self.assertEqual(query.call_args.kwargs['payload']['p_end'], '2026-10-01T12:00:00+00:00')
 
     @patch('app.services.equipment_availability_service.supabase_request')
+    # Returns a clear no-results message when no matching equipment is available.
     def test_check_equipment_availability_returns_no_suitable_equipment_message(self, query):
         query.side_effect = [
             {'id': 'tech-user'},
+            True,
             [{
                 'equipment_id': 11,
                 'equipment_type': 'Microphone',
@@ -84,6 +90,7 @@ class EquipmentAvailabilityTests(unittest.TestCase):
         self.assertEqual(response.json['message'], 'No suitable equipment is available for the selected criteria.')
 
     @patch('app.services.equipment_availability_service.supabase_request')
+    # Rejects a zero quantity before querying equipment availability.
     def test_rejects_invalid_quantity(self, query):
         response = self.client.get(
             '/api/equipment-availability?equipment_type=Projector&quantity=0&start_datetime=2026-10-01T09:00:00Z&end_datetime=2026-10-01T12:00:00Z',
@@ -95,6 +102,7 @@ class EquipmentAvailabilityTests(unittest.TestCase):
         query.assert_not_called()
 
     @patch('app.services.equipment_availability_service.supabase_request')
+    # Rejects availability periods whose end is not later than their start.
     def test_rejects_end_before_start(self, query):
         response = self.client.get(
             '/api/equipment-availability?equipment_type=Projector&quantity=2&start_datetime=2026-10-01T13:00:00Z&end_datetime=2026-10-01T12:00:00Z',
@@ -106,6 +114,7 @@ class EquipmentAvailabilityTests(unittest.TestCase):
         query.assert_not_called()
 
     @patch('app.services.equipment_availability_service.supabase_request')
+    # Requires a verified user identity before checking availability.
     def test_requires_authenticated_user(self, query):
         query.return_value = {}
 
@@ -117,12 +126,28 @@ class EquipmentAvailabilityTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json['error'], 'Authentication required.')
 
+    @patch('app.services.equipment_availability_service.supabase_request')
+    # Prevents a non-Technical Support user from checking the equipment catalogue.
+    def test_non_technical_user_cannot_check_equipment_availability(self, query):
+        query.side_effect = [{'id': 'coordinator-user'}, False]
+
+        response = self.client.get(
+            '/api/equipment-availability?equipment_type=Projector&quantity=2&start_datetime=2026-10-01T09:00:00Z&end_datetime=2026-10-01T12:00:00Z',
+            headers=self.headers,
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('Only Technical Support Staff', response.json['error'])
+        self.assertEqual(query.call_count, 2)
+
+    # Rejects non-object requests and missing or blank equipment types.
     def test_availability_rejects_non_object_or_missing_equipment_type(self):
         for payload in (None, [], {'equipment_type': None}, {'equipment_type': '  '}):
             with self.subTest(payload=payload):
                 with self.assertRaises(EquipmentAvailabilityError):
                     check_equipment_availability(payload, 'token')
 
+    # Rejects malformed quantities and date-time values during availability validation.
     def test_availability_rejects_invalid_quantities_and_datetimes(self):
         valid = {
             'equipment_type': 'Projector', 'quantity': 1,
@@ -142,9 +167,11 @@ class EquipmentAvailabilityTests(unittest.TestCase):
                     check_equipment_availability(payload, 'token')
 
     @patch('app.services.equipment_availability_service.supabase_request')
+    # Ignores malformed, different-type, and zero-stock catalogue records.
     def test_skips_malformed_unmatched_and_unavailable_catalogue_items(self, query):
         query.side_effect = [
             {'id': 'user'},
+            True,
             [None, {'equipment_type': '  '}, {'equipment_type': 'Microphone'}, {
                 'equipment_id': 10, 'equipment_type': 'Projector', 'available_quantity': 0,
             }],
