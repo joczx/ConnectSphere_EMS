@@ -14,6 +14,7 @@ from app.routes import event_requests as routes
 from flask import Flask
 
 
+# TC-DER-001: Check that a draft with only an organiser ID can be saved.
 def test_draft_with_no_event_details_can_be_saved():
     organiser = valid_payload()['event_organiser_id']
     table = Mock()
@@ -27,6 +28,7 @@ def test_draft_with_no_event_details_can_be_saved():
 
 
 # AC 2: retrieve saved drafts, then edit only the fields supplied.
+# TC-DER-002: Check that draft requests are filtered by organiser and draft status.
 def test_list_drafts_filters_by_organiser_and_draft_status():
     organiser = valid_payload()['event_organiser_id']
     stored = [{'event_request_id': 42, 'status': 'draft', 'event_name': 'Draft'}]
@@ -42,6 +44,7 @@ def test_list_drafts_filters_by_organiser_and_draft_status():
     table.order.assert_called_once_with('updated_at', desc=True)
 
 
+# TC-DER-003: Check that a partial edit changes or clears only the selected draft field.
 @pytest.mark.parametrize('new_value', ['New name', None])
 def test_saving_partial_edit_does_not_overwrite_other_draft_fields(new_value):
     existing = {**valid_payload(), 'event_request_id': 42, 'status': 'draft'}
@@ -61,6 +64,7 @@ def test_saving_partial_edit_does_not_overwrite_other_draft_fields(new_value):
     table.update.return_value.eq.assert_called_once_with('event_request_id', 42)
 
 
+# TC-DER-004: Check that an invalid draft edit gives an error before saving.
 def test_invalid_draft_edit_never_writes():
     with patch.object(service, '_execute') as write, \
          pytest.raises(service.EventRequestError) as caught:
@@ -69,6 +73,7 @@ def test_invalid_draft_edit_never_writes():
     write.assert_not_called()
 
 
+# TC-DER-005: Check that a completed draft can be submitted.
 def test_completed_draft_can_proceed_to_submission():
     draft = {**valid_payload(), 'event_request_id': 42, 'status': 'draft'}
     assert service.find_blocking_errors(draft) == {}
@@ -81,6 +86,7 @@ def test_completed_draft_can_proceed_to_submission():
 
 
 # AC 4: route handlers return a draft-specific confirmation after saving.
+# TC-DER-006: Check that creating a draft returns a confirmation message.
 def test_create_draft_handler_returns_confirmation():
     payload = {'event_name': 'Draft', 'save_as_draft': True}
     saved = {'event_request_id': 42, 'event_name': 'Draft', 'status': 'draft'}
@@ -92,6 +98,7 @@ def test_create_draft_handler_returns_confirmation():
     create.assert_called_once_with({'event_name': 'Draft'}, submit=False)
 
 
+# TC-DER-007: Check that editing a draft returns a confirmation message.
 def test_edit_draft_handler_returns_confirmation():
     saved = {'event_request_id': 42, 'event_name': 'Updated', 'status': 'draft'}
     with Flask(__name__).test_request_context(json={'event_name': 'Updated'}), \
@@ -101,6 +108,7 @@ def test_edit_draft_handler_returns_confirmation():
     edit.assert_called_once_with(42, {'event_name': 'Updated'})
 
 
+# TC-DER-008: Check that failed draft creation does not return a success message.
 def test_failed_draft_creation_does_not_return_success():
     error = service.EventRequestError('Draft could not be saved.', 502)
     with Flask(__name__).test_request_context(json={'save_as_draft': True}), \
@@ -110,6 +118,7 @@ def test_failed_draft_creation_does_not_return_success():
     assert caught.value is error
 
 
+# TC-DER-009: Check that an incomplete draft can be saved without format errors.
 def test_a_partially_filled_draft_produces_no_format_errors():
     """Saving a draft should not complain about fields the user has not reached yet."""
     record, errors = schema.parse_payload({"event_name": "Untitled", "purpose": ""})
@@ -122,6 +131,7 @@ def test_a_partially_filled_draft_produces_no_format_errors():
 # AC: The system allows users to return to and edit their saved drafts.
 
 
+# TC-DER-010: Check that each optional draft field can be set to null.
 @pytest.mark.parametrize(
     "field",
     [
@@ -143,6 +153,7 @@ def test_any_optional_field_can_be_cleared_with_null(field):
     assert record[field] is None
 
 
+# TC-DER-011: Check that an empty room layout is stored as null.
 def test_clearing_the_room_layout_produces_null_not_an_empty_string():
     """room_layout is a PostgreSQL enum, which would reject ""."""
     record, errors = schema.parse_payload({"room_layout": ""})
@@ -151,12 +162,14 @@ def test_clearing_the_room_layout_produces_null_not_an_empty_string():
     assert record["room_layout"] is None
 
 
+# TC-DER-012: Check that a null event name prevents submission.
 def test_a_cleared_field_still_counts_as_missing_at_submission():
     record, _ = schema.parse_payload(valid_payload(event_name=None))
 
     assert "event_name" in schema.find_missing(record)
 
 
+# TC-DER-013: Check that a null organiser identity gives an error.
 def test_the_organiser_cannot_be_cleared():
     """event_organiser_id is NOT NULL in the database."""
     _, errors = schema.parse_payload({"event_organiser_id": None})
@@ -164,6 +177,7 @@ def test_the_organiser_cannot_be_cleared():
     assert "event_organiser_id" in errors
 
 
+# TC-DER-014: Check that null accessibility values give errors.
 @pytest.mark.parametrize(
     "field", ["need_wheelchair_accessibility", "need_blind_accessibility"]
 )

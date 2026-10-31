@@ -33,6 +33,7 @@ def review_http():
         yield app.test_client(), table
 
 
+# TC-RER-001: Check that coordinators can list submitted event requests.
 def test_ac1_http_lists_submitted_requests(review_http):
     http, table = review_http
     row = {**valid_payload(), 'event_request_id': 42, 'status': 'submitted'}
@@ -43,6 +44,7 @@ def test_ac1_http_lists_submitted_requests(review_http):
     table.eq.assert_called_with('status', 'submitted')
 
 
+# TC-RER-002: Check that all saved event details and requirements are returned.
 def test_ac2_http_returns_every_event_detail_and_requirement(review_http):
     http, table = review_http
     row = {**valid_payload(), 'event_request_id': 42, 'status': 'submitted'}
@@ -53,6 +55,7 @@ def test_ac2_http_returns_every_event_detail_and_requirement(review_http):
     table.eq.assert_called_with('event_request_id', 42)
 
 
+# TC-RER-003: Check that approval and rejection save the review and update the request status.
 @pytest.mark.parametrize('outcome', ['approved', 'rejected'])
 def test_ac3_ac4_ac5_review_persists_decision(review_http, outcome):
     http, table = review_http
@@ -73,6 +76,7 @@ def test_ac3_ac4_ac5_review_persists_decision(review_http, outcome):
     assert http.get('/api/event-requests/42/reviews').json['reviews'] == [recorded]
 
 
+# TC-RER-004: Check that rejection without a reason gives an error before saving.
 @pytest.mark.parametrize('comments', [None, '', '   '])
 def test_ac4_rejection_requires_reason_before_any_write(review_http, comments):
     http, table = review_http
@@ -83,6 +87,7 @@ def test_ac4_rejection_requires_reason_before_any_write(review_http, comments):
     table.execute.assert_not_called()
 
 
+# TC-RER-005: Check that a failed review insert does not return confirmation.
 def test_ac5_failed_review_insert_has_error_and_no_confirmation(review_http):
     http, table = review_http
     table.execute.side_effect = [Mock(data=[{'status': 'submitted', 'event_coordinator_id': COORDINATOR}]), Mock(data=[])]
@@ -92,6 +97,7 @@ def test_ac5_failed_review_insert_has_error_and_no_confirmation(review_http):
     table.update.assert_not_called()
 
 
+# TC-RER-006: Check that a failed status update does not return confirmation.
 def test_ac5_empty_status_update_must_not_confirm_success(review_http):
     http, table = review_http
     old = {'event_request_id': 42, 'status': 'submitted', 'event_coordinator_id': COORDINATOR}
