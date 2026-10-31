@@ -523,9 +523,13 @@ button.event-stage-filter.selected { color: #1d4ed8; border-color: #2563eb; back
 .events-result-count { padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; }
 .events-result-count p { margin: 0; font-size: 12px; color: #64748b; }
 .events-result-count button, button.event-text-action { padding: 0; border: 0; background: none; color: #2563eb; font-size: 12px; }
-.events-reference-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; background: #f8fafc; padding: 18px; }
+.events-reference-cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; background: #f8fafc; padding: 18px; }
 .events-reference-card { display: flex; align-items: flex-start; gap: 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: white; padding: 18px; text-decoration: none; color: inherit; transition: border-color .15s, box-shadow .15s; }
 .events-reference-card:hover { border-color: #93c5fd; box-shadow: 0 4px 12px #0f172a0a; }
+.event-request-workspace-card { min-width: 0; display: flex; flex-direction: column; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: white; }
+.event-request-workspace-card > .events-reference-card { flex: 1; border: 0; border-radius: 0; }
+.event-request-card-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 18px; border-top: 1px solid #f1f5f9; }
+.event-request-card-actions button { font-size: 12px; padding: 7px 10px; }
 .event-date-tile { width: 50px; flex-shrink: 0; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center; overflow: hidden; }
 .event-date-tile > span { display: block; background: #2563eb; color: white; text-transform: uppercase; font-size: 11px; font-weight: 600; padding: 4px; }
 .event-date-tile > strong { display: block; background: #f8fafc; font-size: 22px; padding: 5px; }
@@ -570,7 +574,6 @@ button.event-stage-filter.selected { color: #1d4ed8; border-color: #2563eb; back
 .event-sidebar-equipment li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; font-size: 12px; border-bottom: 1px solid #f1f5f9; }
 .event-sidebar-equipment .event-stage { font-size: 10px; }
 .event-reference-sidebar #event-venue > p { font-size: 12px; }
-@media (max-width: 1000px) { .events-reference-cards { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) { .event-reference-columns { grid-template-columns: minmax(0, 1fr); } .event-reference-info-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .event-reference-info-row { grid-template-columns: minmax(0, 1fr); } .events-stat-cards { grid-template-columns: minmax(0, 1fr); } .event-reference-actions { justify-content: flex-start; } .events-sort { white-space: normal; } }
 @media (max-width: 430px) { .event-reference-card-heading { flex-direction: column; } .events-reference-card { padding: 12px; gap: 10px; } .events-results-toolbar, .events-reference-cards { padding: 12px; } }
 

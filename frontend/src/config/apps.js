@@ -67,14 +67,7 @@ const apps = [
     icon: '📅',
     roles: [],
   },
-  {
-    id: 'event-requests', category: 'events',
-    label: 'Event Requests',
-    description: 'Open Event Requests',
-    path: '/event-requests',
-    icon: '📝',
-    roles: [],
-  },
+
   {
     id: 'event-change-requests', category: 'events',
     label: 'Request Event Changes',
