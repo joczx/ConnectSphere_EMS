@@ -43,7 +43,7 @@ def call_change_request_rpc(name, token, payload):
 
 
 def list_eligible_events(token):
-    """List non-terminal events submitted by the signed-in organiser."""
+    """List the signed-in organiser's Planning events eligible for a request."""
     return call_change_request_rpc("eligible_event_change_request_events", token, {}).get("events", [])
 
 

@@ -193,7 +193,7 @@ export default function Events() {
     && [event.event_organiser_id, event.technical_support_id, event.safety_officer_id].includes(userId);
   // Who sees which button: ACTIONS in auth/access.js. The status rules stay here.
   const canRequestChange = !!event && can('changeRequest.create', event)
-    && ['planning', 'pending_safety_checks', 'confirmed'].includes(event.status);
+    && event.status === 'planning';
   const canCancel = !!event && ['planning', 'confirmed'].includes(event.status) && can('event.cancel', event);
   // The database refuses while arrangements are incomplete and says which.
   const canSubmitSafety = !!event && event.status === 'planning' && can('event.submitSafety', event);
