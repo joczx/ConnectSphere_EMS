@@ -43,7 +43,7 @@ credentials and a verified sender; automated tests use a mocked SMTP connection.
 From `backend`:
 
 ```powershell
-python -m coverage run --branch --source=app.schemas.registration,app.services.registration_service,app.services.registration_email_service -m pytest tests/test_registration.py tests/test_registration_email.py -p no:cacheprovider
+python -m coverage run --branch --source=app.schemas.registration,app.services.registration_service,app.services.registration_email_service -m pytest tests/test_registration_period.py tests/test_register_for_event.py -p no:cacheprovider
 python -m coverage report --fail-under=100 -m
 ```
 
@@ -116,3 +116,10 @@ approval on an event still in planning.
 change-request handling and protection of confirmed event arrangements. The
 organiser permissions, closed-period restrictions and opening < closing < event
 start rule still apply. The migration does not modify existing event data.
+
+## Contact email format
+
+Apply `054_remove_attendee_email_format_validation.sql` after 053 to accept
+contact email text without checking address syntax. Contact email remains required,
+limited to 254 characters and a single line. No mailbox ownership or deliverability
+check is performed. Confirmation delivery still requires a usable recipient address.

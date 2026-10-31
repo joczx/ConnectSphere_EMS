@@ -74,7 +74,7 @@ export default function AttendeeEvents() {
             <fieldset disabled={busy}>
               <legend>Registration details</legend>
               <label>Full name<input name="full_name" autoComplete="name" required maxLength={150} value={details.full_name} onChange={e => setDetails({ ...details, full_name: e.target.value })} /></label>
-              <label>Contact email<input name="contact_email" type="email" autoComplete="email" required maxLength={254} value={details.contact_email} onChange={e => setDetails({ ...details, contact_email: e.target.value })} /></label>
+              <label>Contact email<input name="contact_email" type="text" inputMode="email" autoComplete="email" required maxLength={254} value={details.contact_email} onChange={e => setDetails({ ...details, contact_email: e.target.value })} /></label>
               <label>Contact phone<input name="contact_phone" type="tel" autoComplete="tel" required maxLength={30} value={details.contact_phone} onChange={e => setDetails({ ...details, contact_phone: e.target.value })} /></label>
               {event.waiting_list_enabled && <p>If the event is full, you will join the waiting list rather than receive a confirmed place.</p>}
               <button type="submit" disabled={status !== 'open'}>{busy ? 'Submitting…' : 'Submit registration'}</button>
