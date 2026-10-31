@@ -133,14 +133,6 @@ const apps = [
     roles: [],
   },
   {
-    id: 'venue-suitability', category: 'venues',
-    label: 'Venue Suitability',
-    description: 'Check venue suitability for an event',
-    path: '/venue-suitability',
-    icon: '✅',
-    roles: [],
-  },
-  {
     id: 'operational-safety-reviews', category: 'safety',
     label: 'Safety Reviews',
     description: 'Review operational safety arrangements for planned events',

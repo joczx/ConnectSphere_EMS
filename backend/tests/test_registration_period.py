@@ -51,6 +51,7 @@ def test_registration_requires_authentication(method, path):
 def test_settings_pass_verified_token_and_not_client_identity():
     client = create_app().test_client()
     with patch('app.routes.events.supabase_request', return_value={'id': 'organiser'}), \
+         patch('app.routes.events.load_event', return_value={'status': 'confirmed'}), \
          patch('app.services.registration_service.supabase_request', return_value={'event': {'event_id': 1}}) as rpc:
         response = client.patch('/api/events/1/registration-period', json=settings(),
                                 headers={'Authorization': 'Bearer verified'})
@@ -72,6 +73,7 @@ def test_registration_period_field_errors_are_returned_to_the_organiser():
     error = {'error': 'Registration must close before the event starts.', 'status': 400,
              'errors': {'registration_closes_at': 'Registration must close before the event starts.'}}
     with patch('app.routes.events.supabase_request', return_value={'id': 'organiser'}), \
+         patch('app.routes.events.load_event', return_value={'status': 'confirmed'}), \
          patch('app.services.registration_service.supabase_request', return_value=error):
         response = client.patch('/api/events/1/registration-period', json=settings(),
                                 headers={'Authorization': 'Bearer verified'})
@@ -88,4 +90,18 @@ def test_invalid_period_is_rejected_before_database_call():
                                 headers={'Authorization': 'Bearer verified'})
     assert response.status_code == 400
     assert 'registration_closes_at' in response.json['errors']
+    rpc.assert_not_called()
+
+
+@pytest.mark.parametrize('status', ['planning', 'pending_safety_checks', 'completed', 'cancelled', None])
+def test_registration_settings_require_confirmed_event(status):
+    client = create_app().test_client()
+    with patch('app.routes.events.supabase_request', return_value={'id': 'organiser'}), \
+         patch('app.routes.events.load_event', return_value={'status': status}) as load, \
+         patch('app.services.registration_service.supabase_request') as rpc:
+        response = client.patch('/api/events/1/registration-period', json=settings(),
+                                headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 409
+    assert 'confirmed' in response.json['error']
+    load.assert_called_once_with(1, 'verified')
     rpc.assert_not_called()

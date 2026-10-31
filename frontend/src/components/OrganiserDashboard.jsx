@@ -32,9 +32,14 @@ export default function OrganiserDashboard() {
     {state.error && <p role="alert" className="panel error">{state.error}</p>}
     {state.warnings?.map(warning => <p role="alert" className="panel error" key={warning}>{warning} Refresh to retry.</p>)}
     {!state.loading && !state.error && <>
-      <div className="organiser-status-grid">{statuses.map(([status, label]) => <article className="panel organiser-status-card" key={status}>
-        <h2>{label}</h2><strong className={state.counts ? undefined : 'is-unavailable'}>{state.counts ? state.counts[status] || 0 : 'Unavailable'}</strong>
-      </article>)}</div>
+      <section className="panel organiser-status-summary" aria-label="Events by status">
+        <div className="organiser-status-heading"><h2>Events by status</h2><span>Your requests and events</span></div>
+        <div className="organiser-status-grid">{statuses.map(([status, label]) => <article
+          className={`organiser-status-card organiser-status-${status}${state.counts && !state.counts[status] ? ' is-empty' : ''}`} key={status}>
+          <h3><span className="organiser-status-dot" aria-hidden="true" />{label}</h3>
+          <strong className={state.counts ? undefined : 'is-unavailable'}>{state.counts ? state.counts[status] || 0 : 'Unavailable'}</strong>
+        </article>)}</div>
+      </section>
       <div className="dashboard-details">
         <section className="panel"><h2>Needs attention</h2>
           {!state.attention.length ? <p>{state.counts ? 'No outstanding actions for your events.' : 'Actions may be incomplete. Refresh to retry.'}</p>

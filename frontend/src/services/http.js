@@ -1,4 +1,5 @@
 export async function readApiResponse(response) {
+  if (response.status === 204 && response.ok) return null;
   const text = await response.text();
   let data;
   try {
