@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 from app import create_app
+from app.services.event_store import StoreError
 
 
 @pytest.fixture
@@ -15,11 +16,13 @@ def auth():
         yield
 
 
+# Requires authentication before viewing or deciding equipment requests.
 def test_review_requires_auth(client):
     assert client.post('/api/equipment-request-reviews/1', json={}).status_code == 401
     assert client.get('/api/equipment-request-reviews').status_code == 401
 
 
+# Rejects invalid review decisions before the review RPC is called.
 @pytest.mark.parametrize('body', [None, {}, {'outcome': 'unknown'}, {'outcome': 'partially_accepted', 'equipment_id': 1, 'accepted_quantity': 1},
     {'outcome': 'accepted', 'equipment_id': True},
     {'outcome': 'partially_accepted', 'equipment_id': 1, 'accepted_quantity': 0},
@@ -33,6 +36,7 @@ def test_invalid_decision_does_not_write(client, auth, body):
         query.assert_not_called()
 
 
+# Sends full acceptance and rejection decisions to the atomic review RPC.
 @pytest.mark.parametrize('outcome, amount', [('accepted', None), ('rejected', None)])
 def test_review_uses_atomic_rpc(client, auth, outcome, amount):
     row = {'equipment_request_id': 1, 'status': outcome, 'quantity': 5, 'accepted_quantity': amount}
@@ -47,6 +51,7 @@ def test_review_uses_atomic_rpc(client, auth, outcome, amount):
         assert query.call_args.kwargs['token'] == 'user-token'
 
 
+# Preserves authorization, missing-request, and conflict errors from the review RPC.
 @pytest.mark.parametrize('status', [403, 404, 409])
 def test_database_rejection_is_preserved(client, auth, status):
     with patch('app.services.equipment_review_service.supabase_request', return_value={'error': 'Cannot review', 'status': status}):
@@ -55,6 +60,7 @@ def test_database_rejection_is_preserved(client, auth, status):
         assert response.json['error'] == 'Cannot review'
 
 
+# Loads the assigned review queue and includes assigned events without requests.
 def test_queue_uses_account_scoped_events_including_empty_events(client, auth):
     with patch('app.routes.equipment.supabase_request', side_effect=[[{'event_id': 2, 'event_name': 'Workshop'}], [], [{'event_id': '2', 'event_name': 'Workshop'}, {'event_id': '3', 'event_name': 'Empty event'}]]) as query:
         response = client.get('/api/equipment-request-reviews')
@@ -66,6 +72,7 @@ def test_queue_uses_account_scoped_events_including_empty_events(client, auth):
         assert query.call_args_list[0].kwargs['token'] == 'user-token'
 
 
+# Validates reservation details before creating a reservation for a request.
 @pytest.mark.parametrize('body', [None, {}, {'equipment_id': True, 'quantity': 1}, {'equipment_id': 1, 'quantity': 0}, {'equipment_id': 1, 'quantity': 1, 'status': 'accepted'}])
 def test_request_reservation_validates_before_writing(client, auth, body):
     with patch('app.routes.equipment.supabase_request') as query:
@@ -74,6 +81,7 @@ def test_request_reservation_validates_before_writing(client, auth, body):
     query.assert_not_called()
 
 
+# Creates a linked reservation without prematurely accepting the equipment request.
 def test_request_reservation_is_separate_from_acceptance(client, auth):
     result = {'equipment_request': {'status': 'pending'}, 'reservation': {'equipment_request_id': 8}}
     with patch('app.routes.equipment.supabase_request', return_value=result) as query:
@@ -83,5 +91,30 @@ def test_request_reservation_is_separate_from_acceptance(client, auth):
     query.assert_called_once_with('/rest/v1/rpc/reserve_equipment_for_request', token='user-token', payload={'p_request_id': 8, 'p_equipment_id': 1, 'p_quantity': 2})
 
 
+# Requires authentication before reserving equipment for a request.
 def test_request_reservation_requires_authentication(client):
     assert client.post('/api/equipment-request-reviews/8/reservation', json={'equipment_id': 1, 'quantity': 2}).status_code == 401
+
+
+# Explains that a matching linked reservation is required before acceptance.
+def test_reservation_constraint_error_explains_that_matching_equipment_is_required(client, auth):
+    with patch('app.routes.equipment.supabase_request', side_effect=StoreError(503, code='23514')):
+        response = client.post('/api/equipment-request-reviews/8/reservation', json={'equipment_id': 1, 'quantity': 2})
+    assert response.status_code == 409
+    assert 'Reserve matching equipment' in response.json['error']
+
+
+# Provides the required migration when the request-reservation RPC is unavailable.
+def test_missing_reservation_function_explains_how_to_fix_the_database(client, auth):
+    with patch('app.routes.equipment.supabase_request', side_effect=StoreError(503, code='PGRST202')):
+        response = client.post('/api/equipment-request-reviews/8/reservation', json={'equipment_id': 1, 'quantity': 2})
+    assert response.status_code == 503
+    assert '036_reserve_before_equipment_acceptance.sql' in response.json['error']
+
+
+# Returns a safe permission message when the database rejects equipment access.
+def test_database_permission_error_has_a_safe_equipment_message(client, auth):
+    with patch('app.routes.equipment.supabase_request', side_effect=StoreError(403)):
+        response = client.get('/api/equipment-request-reviews')
+    assert response.status_code == 403
+    assert response.json['error'] == 'You do not have permission to access this equipment action.'

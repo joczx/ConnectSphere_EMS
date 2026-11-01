@@ -42,6 +42,17 @@ def _current_user_id(token):
     return user_id
 
 
+def _require_technical_support(token):
+    """Use the database role guard shared by equipment reservation actions."""
+    is_technical_support = supabase_request(
+        '/rest/v1/rpc/can_reserve_equipment', token=token, payload={},
+    )
+    if is_technical_support is not True:
+        raise EquipmentAvailabilityError(
+            'Only Technical Support Staff can check equipment availability.', 403,
+        )
+
+
 def check_equipment_availability(payload, token):
     if not isinstance(payload, dict):
         raise EquipmentAvailabilityError('Equipment availability request details must be provided as JSON.', 400)
@@ -65,6 +76,7 @@ def check_equipment_availability(payload, token):
         raise EquipmentAvailabilityError('Required end date and time must be later than the start date and time.', 400, {'end_datetime': 'Required end date and time must be later than the start date and time.'})
 
     _current_user_id(token)
+    _require_technical_support(token)
 
     equipment_rows = supabase_request('/rest/v1/rpc/equipment_window_availability', token=token, payload={
         'p_start': required_start.isoformat(), 'p_end': required_end.isoformat(),

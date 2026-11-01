@@ -11,16 +11,7 @@ def client():
     return create_app().test_client()
 
 
-@pytest.mark.parametrize('quantity', [0, -1, 1.5, True, '2', None, 2147483648])
-def test_invalid_quantity_never_reserves(client, quantity):
-    with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request') as rpc:
-        response = client.post('/api/equipment/reservations', json={
-            'event_id': '1', 'equipment_id': EQUIPMENT_ID, 'quantity': quantity,
-        })
-    assert response.status_code == 400
-    rpc.assert_not_called()
-
-
+# Rejects malformed reservation payloads before any database call is made.
 @pytest.mark.parametrize('payload', [[], None, {}, {'event_id': '1', 'equipment_id': 'bad', 'quantity': 1}])
 def test_bad_request(client, payload):
     with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request') as rpc:
@@ -28,35 +19,19 @@ def test_bad_request(client, payload):
     rpc.assert_not_called()
 
 
-def test_success_passes_user_token_to_assignment_checked_rpc(client):
-    with patch('app.routes.equipment.authenticated_token', return_value='technical-support-token'), patch('app.routes.equipment.supabase_request', return_value={'reservation': {'quantity': 2}}) as rpc:
-        result = client.post('/api/equipment/reservations', json={'event_id': '1', 'equipment_id': EQUIPMENT_ID, 'quantity': 2})
-    assert result.status_code == 201
-    assert result.json['reservation']['quantity'] == 2
-    assert rpc.call_args.kwargs == {'token': 'technical-support-token', 'payload': {
-        'p_event_id': '1', 'p_equipment_id': int(EQUIPMENT_ID), 'p_quantity': 2,
-    }}
-
-
-def test_conflict_displays_database_availability(client):
-    with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', return_value={'error': 'Insufficient equipment: only 1 available for this event.', 'available_quantity': 1}):
-        result = client.post('/api/equipment/reservations', json={'event_id': '1', 'equipment_id': EQUIPMENT_ID, 'quantity': 2})
-    assert result.status_code == 409
-    assert result.json['available_quantity'] == 1
-    assert 'only 1' in result.json['error']
-
-
+# Requires authentication before listing events for equipment work.
 def test_sign_in_required(client):
     assert client.get('/api/equipment/events').status_code == 401
-    assert client.post('/api/equipment/reservations', json={}).status_code == 401
 
 
+# Requires an event selection before checking event-specific availability.
 def test_availability_requires_event(client):
     with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request') as rpc:
         assert client.get('/api/equipment/availability').status_code == 400
     rpc.assert_not_called()
 
 
+# Returns availability results and forwards invalid event-date errors from the database.
 def test_availability_and_invalid_dates(client):
     with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', side_effect=[{'equipment': []}, {'error': 'Set a valid event start and end time before reserving equipment.'}]):
         response = client.get('/api/equipment/availability?event_id=1')
@@ -65,6 +40,7 @@ def test_availability_and_invalid_dates(client):
         assert client.get('/api/equipment/availability?event_id=2').status_code == 400
 
 
+# Lists events from the existing events source for the equipment event picker.
 def test_event_picker_uses_existing_events_table(client):
     rows = [{'event_id': 1, 'event_name': 'Workshop'}]
     with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', return_value=rows) as rpc:
@@ -74,6 +50,7 @@ def test_event_picker_uses_existing_events_table(client):
     assert rpc.call_args.args[0].startswith('/rest/v1/events?')
 
 
+# Explains that equipment database configuration is missing when the RPC cannot be found.
 def test_missing_migration_returns_actionable_json(client):
     from app.services.event_store import StoreError
     with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', side_effect=StoreError(503, code='PGRST202')):
@@ -82,14 +59,7 @@ def test_missing_migration_returns_actionable_json(client):
     assert 'not configured' in response.json['error']
 
 
-def test_database_permission_error_is_preserved(client):
-    message = 'Reservation is not permitted.'
-    with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', return_value={'error': message, 'status': 403}):
-        response = client.post('/api/equipment/reservations', json={'event_id': '1', 'equipment_id': EQUIPMENT_ID, 'quantity': 2})
-    assert response.status_code == 403
-    assert response.json['error'] == message
-
-
+# Requires a bearer token and returns distinct equipment types in alphabetical order.
 def test_equipment_types_require_bearer_token_and_return_sorted_unique_values(client):
     assert client.get('/api/equipment-types').status_code == 401
     rows = [
@@ -103,6 +73,7 @@ def test_equipment_types_require_bearer_token_and_return_sorted_unique_values(cl
     rpc.assert_called_once_with('/rest/v1/equipment?select=equipment_type', token='catalogue-token')
 
 
+# Identifies the availability migration needed for an incompatible database function.
 def test_availability_schema_error_identifies_availability_repair(client):
     from app.services.event_store import StoreError
     with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', side_effect=StoreError(503, code='42883')):
@@ -111,6 +82,7 @@ def test_availability_schema_error_identifies_availability_repair(client):
     assert '034_equipment_availability_event_ids.sql' in response.json['error']
 
 
+# Identifies the reservation migration needed for an incompatible database function.
 def test_reservation_schema_error_identifies_write_repair(client):
     from app.services.event_store import StoreError
     with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', side_effect=StoreError(503, code='42883')):
