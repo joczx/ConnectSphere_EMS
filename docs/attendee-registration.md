@@ -123,3 +123,18 @@ Apply `054_remove_attendee_email_format_validation.sql` after 053 to accept
 contact email text without checking address syntax. Contact email remains required,
 limited to 254 characters and a single line. No mailbox ownership or deliverability
 check is performed. Confirmation delivery still requires a usable recipient address.
+
+## Remove obsolete registration-arrangement text
+
+`registration_needs` is no longer collected, displayed, accepted by the API or
+required for submitting an event request. Registration dates, waiting lists,
+attendee records and email notifications remain separate supported features.
+
+Apply `055_remove_registration_needs.sql` after
+`053_remove_registration_readiness.sql`. It replaces the lifecycle guard and the
+approved-request creation trigger before dropping `registration_needs` from both
+`public.events` and `public.event_request`. Existing values in those columns are
+permanently removed. No CASCADE is used and unrelated event data is preserved.
+The migration may be rerun safely. Historical migrations and the remote-schema
+snapshot still describe the earlier schema; apply the forward migration rather
+than editing that history.

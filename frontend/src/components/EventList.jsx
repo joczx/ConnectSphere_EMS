@@ -1,11 +1,12 @@
 import { useAuth } from '../auth/AuthContext';
 import UiIcon from './UiIcon';
+import EventRequestActions from './EventRequestActions';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-const stages = ['planning', 'confirmed', 'completed', 'cancelled'];
+const stages = ['draft', 'submitted', 'planning', 'pending_safety_checks', 'confirmed', 'completed', 'rejected', 'cancelled'];
 const title = value => value ? value.charAt(0).toUpperCase() + value.slice(1).replaceAll('_', ' ') : 'Not specified';
 const date = value => value ? new Intl.DateTimeFormat('en-SG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Singapore' }).format(new Date(value)) : 'Date not set';
-export default function EventList({ events }) {
+export default function EventList({ events, onRequestChanged }) {
   const { api } = useAuth();
   const [names, setNames] = useState({});
   const organiserIds = [...new Set(events.map(event => event.event_organiser_id).filter(Boolean))].sort().join(',');
@@ -27,10 +28,9 @@ export default function EventList({ events }) {
     if (left === Infinity || right === Infinity) return left === right ? 0 : left === Infinity ? 1 : -1;
     return order === 'soonest' ? left - right : right - left;
   });
-  const counts = Object.fromEntries(stages.map(status => [status, events.filter(event => event.status === status).length]));
-  const statuses = [...new Set([...stages.filter(status => counts[status]), ...events.map(event => event.status).filter(Boolean)])];
+  const statuses = [...new Set([...stages, ...events.map(event => event.status).filter(status => status && status !== 'under_review')])];
   const active = events.filter(event => !['completed', 'cancelled', 'rejected'].includes(event.status)).length;
-  const attention = events.filter(event => ['planning', 'pending_safety_checks', 'safety_changes_required'].includes(event.status)).length;
+  const attention = events.filter(event => ['draft', 'rejected', 'planning', 'pending_safety_checks', 'safety_changes_required'].includes(event.status)).length;
   return <section className="events-reference-list" aria-label="Your events">
     <div className="events-stat-cards">
       {[['Total events', events.length, 'In your workspace', 'events'], ['Active', active, 'Currently in progress', 'check'], ['Needs attention', attention, 'Planning or checks pending', 'requests']].map(([text, number, detail, icon], index) => <div className="events-stat-card" key={text}>
@@ -49,13 +49,16 @@ export default function EventList({ events }) {
       </div>
       <div className="events-result-count"><p role="status">Showing <strong>{filtered.length}</strong> of {events.length} events</p>{(query || stage !== 'all') && <button type="button" onClick={() => { setQuery(''); setStage('all'); }}>Clear filters</button>}</div>
       {!filtered.length ? <div className="events-empty"><UiIcon name="events" /><h2>{events.length ? 'No matching events' : 'No events yet'}</h2><p>{events.length ? 'Try a different search term or clear your filters.' : 'Events available to you will appear here.'}</p></div> :
-        <div className="events-reference-cards">{filtered.map(event => <Link className="events-reference-card" key={event.event_id} to={'/events/' + event.event_id}>
+        <div className="events-reference-cards">{filtered.map(event => <article key={event.workspace_key || event.event_id} className={event.workspace_type === 'request' ? 'event-request-workspace-card' : undefined}>
+          <Link className="events-reference-card" to={event.workspace_path || '/events/' + event.event_id}>
           <div className="event-date-tile"><span>{event.start_datetime ? new Intl.DateTimeFormat('en-SG', { month: 'short', timeZone: 'Asia/Singapore' }).format(new Date(event.start_datetime)) : 'TBC'}</span><strong>{event.start_datetime ? new Intl.DateTimeFormat('en-SG', { day: 'numeric', timeZone: 'Asia/Singapore' }).format(new Date(event.start_datetime)) : '-'}</strong></div>
           <div className="event-reference-card-content"><div className="event-reference-card-heading"><div><p className="event-purpose">{event.purpose || 'Event'}</p><h2>{event.event_name || 'Untitled event'}</h2></div><span className={'event-stage event-stage-' + event.status}>{title(event.status)}</span></div>
             <div className="event-reference-meta"><span>{date(event.start_datetime)}</span><span>{event.capacity_needed ?? '-'} attendees</span></div>
-            <div className="event-reference-footer"><span>Organised by <strong>{names[event.event_organiser_id] || '-'}</strong></span><span aria-hidden="true">&rarr;</span></div>
+            <div className="event-reference-footer"><span>{event.workspace_type === 'request'
+              ? event.status === 'draft' ? 'Continue editing draft' : event.status === 'rejected' ? 'Amend and resubmit' : 'View event request'
+              : <>Organised by <strong>{names[event.event_organiser_id] || '-'}</strong></>}</span><span aria-hidden="true">&rarr;</span></div>
           </div>
-        </Link>)}</div>}
+        </Link>{event.workspace_type === 'request' && <EventRequestActions request={event} onChanged={onRequestChanged} />}</article>)}</div>}
     </div>
   </section>;
 }
