@@ -74,6 +74,7 @@ WRITABLE_FIELDS = (
     "need_wheelchair_accessibility",
     "need_blind_accessibility",
     "equipment_requirements",
+    "registration_needs",
 )
 
 # Must be filled in before a request may leave draft. For facilities and
@@ -90,6 +91,7 @@ MANDATORY_FOR_SUBMISSION = (
     "room_layout",
     "required_facilities",
     "equipment_requirements",
+    "registration_needs",
 )
 
 _LABELS = {
@@ -103,6 +105,7 @@ _LABELS = {
     "room_layout": "Room layout",
     "required_facilities": "Required facilities",
     "equipment_requirements": "Equipment requirements",
+    "registration_needs": "Registration needs",
 }
 
 
@@ -193,6 +196,14 @@ def parse_payload(payload):
             errors["equipment_requirements"] = problem
         else:
             record["equipment_requirements"] = equipment
+
+    if "registration_needs" in payload:
+        needs = payload["registration_needs"]
+        if needs is None:
+            record["registration_needs"] = None
+        else:
+            # Blank is stored as null: the event simply needs no registration.
+            record["registration_needs"] = needs.strip() or None
 
     if not errors:
         errors.update(check_timing(record))

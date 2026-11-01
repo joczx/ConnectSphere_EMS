@@ -1,6 +1,6 @@
 export async function readApiResponse(response) {
-  // Successful deletion returns no JSON body.
-  if (response.status === 204 && response.ok) return null;
+  // 204 No Content (e.g. deleting a draft) succeeds with no body to parse.
+  if (response.status === 204) return {};
   const text = await response.text();
   let data;
   try {
