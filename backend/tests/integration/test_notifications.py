@@ -68,6 +68,33 @@ USER STORIES AND ACCEPTANCE CRITERIA (ACs as written in each story)
      AC2 The notification includes the venue, event name and hold expiry.
      AC3 A reminder is sent before the hold expires, and a separate
          notification when it has expired.
+  S9 As an Event Organiser, I want to receive notifications about event change
+     requests and their outcomes.
+     AC1 The Organiser is told when a change request is successfully submitted.
+     AC2 The assigned Event Coordinator is notified when one is submitted.
+     AC3 The notification includes the details of the requested changes.
+     AC4 The Organiser is notified when it is approved or rejected.
+     AC5 If approved, the relevant users are notified of the approved changes.
+  S10 As an Event Coordinator, I want to receive notifications when my equipment
+     request is submitted and when its status changes.
+     AC1 The Coordinator is told when an equipment request is successfully submitted.
+     AC2 The relevant Technical Support Staff is notified of a new request.
+     AC3 The notification includes the equipment request's details.
+     AC4 The Coordinator is notified when the status changes to Rejected or Accepted.
+  S11 As a Safety Officer, I want to receive a notification when an event is
+     submitted for safety review.
+     AC1 The Safety Officer is notified when an event is submitted for safety review.
+     AC2 It shows the event name, the event date and a link to the event.
+     AC3 The event's Coordinator is notified once its safety review is approved or
+         rejected, or when it sends the event back to Planning.
+  S12 As an Attendee, I want to receive notifications about my event registration
+     and withdrawal.
+     AC1 A confirmation is sent when the Attendee successfully registers.
+     AC2 It includes the event name, date, time, and venue when available.
+     AC3 If the event is full and has a waiting list, the Attendee is told they
+         were added to the waiting list instead of a confirmed registration.
+     AC4 A notification is sent if the event is cancelled.
+     AC5 A confirmation is sent when the registration is successfully withdrawn.
 
 COVERAGE (every notification function, and every branch in it, is run here)
   app/routes/notifications.py: index popup, page and bad-page branches
@@ -85,6 +112,16 @@ COVERAGE (every notification function, and every branch in it, is run here)
       021, cancelled by unavailability (approved 023, pending 025), hold placed
       026, expired 029.
   expire_venue_holds (051): too early, reminder once 028; expiry 029.
+  notify_event_change_request (055): submitted pending and applied 030, 031,
+      approved and rejected 033, approved changes to staff (reviewed and
+      applied) 034. event_change_summary and event_change_value (055): each kind
+      of value (text, date, number, yes/no, list, equipment, empty list) 032.
+  notify_equipment_request (055): submitted 035-037, accepted and rejected 038.
+  submit_event_for_safety_checks (055, from 048): 039, 040.
+  notify_safety_decision (055): approved, rejected and changes requested 041.
+  notify_event_registration (057): registered 042-044, waiting list 044,
+      withdrawn 046. event_registration_details (057) 043-046.
+  notify_event_cancelled (057): registered and waitlisted attendees 045.
 """
 
 import uuid
@@ -94,7 +131,7 @@ from urllib.parse import quote
 
 import pytest
 
-from tests.integration.supabase_admin import admin_request, user_id_for
+from tests.integration.supabase_admin import admin_request, delete_as_user, user_id_for
 
 SGT = timezone(timedelta(hours=8))
 
@@ -122,7 +159,7 @@ class Flow:
         self.client, self.sign_in = client, sign_in
         latest = admin_request("/rest/v1/notifications?select=notification_id&order=notification_id.desc&limit=1")
         self.since = latest[0]["notification_id"] if latest else 0
-        self.requests, self.venues, self.users = [], [], []
+        self.requests, self.venues, self.users, self.equipment = [], [], [], []
         self.coordinator = user_id_for("Event Coordinator")
 
     def call(self, who, method, path, body=None, status=200):
@@ -137,9 +174,10 @@ class Flow:
         items = self.call(who, "get", "/api/notifications?limit=50")["items"]
         return [n for n in items if n["notification_id"] > self.since and (link is None or n["link"] == link)]
 
-    def one(self, who, title, link):
-        found = [n for n in self.inbox(who, link) if n["title"] == title]
-        assert len(found) == 1, f"expected one {title!r} linking to {link}, got {found}"
+    def one(self, who, title, link, about=""):
+        """The single notification `who` has with this title and link (and text `about`)."""
+        found = [n for n in self.inbox(who, link) if n["title"] == title and about in n["body"]]
+        assert len(found) == 1, f"expected one {title!r} linking to {link} about {about!r}, got {found}"
         return found[0]
 
     def user(self, name, role=None):
@@ -166,7 +204,7 @@ class Flow:
             "link": "/events", "created_at": created.isoformat(),
             "read_at": created.isoformat() if read else None})[0]
 
-    def submit_request(self, draft=False):
+    def submit_request(self, draft=False, capacity=40):
         """The Organiser submits a complete request (or saves it as a draft)."""
         starts = (datetime.now(SGT) + timedelta(days=60 + len(self.requests))).replace(
             hour=10, minute=0, second=0, microsecond=0)
@@ -175,7 +213,7 @@ class Flow:
             "description": "Created by test_notifications.py; removed afterwards.",
             "event_organiser_id": user_id_for("Event Organiser"),
             "start_datetime": starts.isoformat(), "end_datetime": (starts + timedelta(hours=3)).isoformat(),
-            "capacity_needed": 40, "room_layout": "theatre", "required_facilities": ["projector"],
+            "capacity_needed": capacity, "room_layout": "theatre", "required_facilities": ["projector"],
             "equipment_requirements": [], "registration_needs": "None", "save_as_draft": draft,
         }, 201)["event_request"]
         self.requests.append(row["event_request_id"])
@@ -191,9 +229,9 @@ class Flow:
         self.call("Event Coordinator", "post", f"/api/event-requests/{request['event_request_id']}/review",
                   {"outcome": outcome, **({"comments": comments} if comments else {})})
 
-    def event(self):
+    def event(self, capacity=40):
         """A request submitted, assigned and approved: the event approval created."""
-        request = self.submit_request()
+        request = self.submit_request(capacity=capacity)
         self.assign(request)
         self.review(request, "approved")
         return admin_request(f"/rest/v1/events?select=*&event_request_id=eq.{request['event_request_id']}")[0]
@@ -232,7 +270,59 @@ class Flow:
         admin_request(f"/rest/v1/venue_booking_requests?booking_id=eq.{booking['booking_id']}",
                       {"hold_expires_at": expires.isoformat()}, "PATCH")
 
+    def change(self, event, reason, values):
+        """The Organiser asks to change `event`; returns the change request."""
+        current = admin_request(f"/rest/v1/events?select=updated_at&event_id=eq.{event['event_id']}")[0]
+        return self.call("Event Organiser", "post", f"/api/events/{event['event_id']}/change-requests", {
+            "reason": reason, "proposed_values": values,
+            "expected_event_updated_at": current["updated_at"]}, 201)["change_request"]
+
+    def decide_change(self, change, decision, reason=None):
+        """The assigned Coordinator approves or rejects a change request."""
+        self.call("Event Coordinator", "post", f"/api/event-change-requests/{change['event_change_request_id']}/decision",
+                  {"decision": decision, **({"reason": reason} if reason else {})})
+
+    def equipment_item(self):
+        """Arrange: a catalogue item Technical Support can reserve."""
+        row = admin_request("/rest/v1/equipment", {"equipment_type": f"ITEST Mic {uuid.uuid4().hex[:6]}",
+                                                   "equipment_model": "Test", "total_quantity": 10})[0]
+        self.equipment.append(row["equipment_id"])
+        return row
+
+    def request_equipment(self, event, item, quantity, requirements=None):
+        """The Coordinator requests `quantity` of `item` for `event`."""
+        return self.call("Event Coordinator", "post", f"/api/events/{event['event_id']}/equipment-requests", {
+            "equipment_type": item["equipment_type"], "quantity": quantity,
+            "technical_requirements": requirements}, 201)["equipment_request"]
+
+    def review_equipment(self, request, outcome, item=None, quantity=None, reason=None):
+        """Technical Support reserves the equipment (to accept) and records the decision."""
+        path = f"/api/equipment-request-reviews/{request['equipment_request_id']}"
+        if outcome != "rejected":
+            self.call("Technical Support Staff", "post", f"{path}/reservation",
+                      {"equipment_id": item["equipment_id"], "quantity": quantity}, 201)
+        self.call("Technical Support Staff", "post", path, {
+            "outcome": outcome, "equipment_id": item and item["equipment_id"], "accepted_quantity": quantity,
+            "reason": reason or ""})
+
+    def register(self, who, event):
+        """`who` (an Attendee) registers for `event`."""
+        self.call(who, "post", f"/api/events/{event['event_id']}/registrations", {
+            "full_name": "ITEST Attendee", "contact_email": "itest@connectsphere.invalid",
+            "contact_phone": "+65 6123 4567"})
+
     def clean(self):
+        for request_id in self.requests:
+            for event in admin_request(f"/rest/v1/events?select=event_id&event_request_id=eq.{request_id}"):
+                # A reviewed equipment request can only be deleted by its requester once pending again.
+                admin_request(f"/rest/v1/equipment_reservations?event_id=eq.{event['event_id']}", method="DELETE")
+                admin_request(f"/rest/v1/equipment_request?event_id=eq.{event['event_id']}", {
+                    "status": "pending", "accepted_quantity": None, "reviewed_by": None, "reviewed_at": None,
+                    "equipment_id": None, "reason_for_rejection": None}, "PATCH")
+                delete_as_user(f"/rest/v1/equipment_request?event_id=eq.{event['event_id']}",
+                               self.sign_in("Event Coordinator"))
+        for equipment_id in self.equipment:
+            admin_request(f"/rest/v1/equipment?equipment_id=eq.{equipment_id}", method="DELETE")
         for venue_id in self.venues:
             for table in ("venue_booking_requests", "venue_blocks", "venues"):
                 admin_request(f"/rest/v1/{table}?venue_id=eq.{venue_id}", method="DELETE")
@@ -899,3 +989,402 @@ def test_ntf_029_a_separate_notification_is_sent_when_the_hold_expires(flow, hel
     assert flow.one("Event Coordinator", "Tentative hold expired", link)["body"] == (
         f"The tentative hold on {venue['venue_name']} for {event['event_name']} ({sgt(event['start_datetime'])} – "
         f"{sgt(event['end_datetime'])} SGT) expired on {sgt(expired)} SGT. The venue is now available to other requests.")
+
+
+# ---------------------------------------------------------------------------
+# S9 Event change requests and their outcomes
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def changes(flow):
+    """Three change requests for one event: a minor one applied straight away,
+    one approved after review, and one with every kind of value, rejected."""
+    event = flow.event()
+    original, renamed = event["event_name"], event["event_name"] + " (renamed)"
+    applied = flow.change(event, "Clearer title", {"event_name": renamed, "description": "Updated description."})
+    approved = flow.change(event, "More guests expected", {"capacity_needed": 60})
+    flow.decide_change(approved, "approve")
+    starts = datetime.fromisoformat(event["start_datetime"]) + timedelta(hours=1)
+    ends = datetime.fromisoformat(event["end_datetime"]) + timedelta(hours=1)
+    rejected = flow.change(event, "Different set-up", {
+        "start_datetime": starts.isoformat(), "end_datetime": ends.isoformat(), "room_layout": "u_shape",
+        "need_wheelchair_accessibility": True, "required_facilities": ["projector", "wifi"],
+        "equipment_requirements": [{"equipment_type": "Microphone", "quantity": 2}]})
+    flow.decide_change(rejected, "reject", "Too late to change the set-up.")
+    summaries = {
+        "applied": f"Description: Created by test_notifications.py; removed afterwards. → Updated description.; "
+                   f"Event name: {original} → {renamed}",
+        "approved": "Expected attendance: 40 → 60",
+        "rejected": (f"End: {sgt(event['end_datetime'])} → {sgt(ends)}; Equipment requirements: none → Microphone ×2; "
+                     f"Wheelchair accessibility: No → Yes; Venue requirements: projector → projector, wifi; "
+                     f"Room layout: theatre → u shape; Start: {sgt(event['start_datetime'])} → {sgt(starts)}")}
+    return dict(event=event, original=original, renamed=renamed, applied=applied, approved=approved,
+                rejected=rejected, summaries=summaries)
+
+
+def test_ntf_030_organiser_is_told_the_change_request_was_submitted(flow, changes):
+    """TC-NTF-030 | S9 AC1: the Organiser is told a change request was successfully submitted.
+
+    Does: the Organiser submitted a minor change (applied straight away) and a
+    change that needs review; their notifications are read.
+    Expect: one "Event change request submitted" for each: "Your change request
+    for <event> has been submitted and applied. Changes: ..." and "... has been
+    submitted and is awaiting review. Changes: ...", opening their change
+    requests. A failure means the Organiser has no confirmation.
+    """
+    link = "/event-change-requests/new"
+    applied = flow.one("Event Organiser", "Event change request submitted", link, "and applied")
+    pending = flow.one("Event Organiser", "Event change request submitted", link, changes["summaries"]["approved"])
+
+    assert applied["body"] == (f"Your change request for {changes['original']} has been submitted and applied. "
+                               f"Changes: {changes['summaries']['applied']}")
+    assert pending["body"] == (f"Your change request for {changes['renamed']} has been submitted and is awaiting "
+                               f"review. Changes: {changes['summaries']['approved']}")
+
+
+def test_ntf_031_assigned_coordinator_is_notified_of_a_change_request(flow, changes):
+    """TC-NTF-031 | S9 AC2: the assigned Event Coordinator is notified when one is submitted.
+
+    Does: reads the event's Coordinator's notifications for the two submissions.
+    Expect: one "New event change request" each: the one needing review opens
+    its review page; the one already applied says so and opens the event. A
+    failure means the Coordinator does not know a change was asked for.
+    """
+    event = changes["event"]
+    flow.one("Event Coordinator", "New event change request",
+             f"/review-event-change-requests/{changes['approved']['event_change_request_id']}")
+    applied = flow.one("Event Coordinator", "New event change request", f"/events/{event['event_id']}")
+
+    assert "(applied, no review needed)" in applied["body"]
+
+
+def test_ntf_032_change_request_notification_details_the_changes(flow, changes):
+    """TC-NTF-032 | S9 AC3: the notification includes the details of the requested changes.
+
+    Does: reads the Coordinator's notification for the request that changes the
+    times, layout, accessibility, facilities and equipment.
+    Expect: "<Organiser> requested changes to <event>. Changes: <field>: <from>
+    → <to>; ... Reason: <reason>", each value readable: times in SGT, Yes/No,
+    lists joined, equipment as "Microphone ×2", an empty list as "none". A
+    failure means the Coordinator cannot see what is being asked.
+    """
+    link = f"/review-event-change-requests/{changes['rejected']['event_change_request_id']}"
+    note = flow.one("Event Coordinator", "New event change request", link)
+
+    assert note["body"] == (f"{name_of(user_id_for('Event Organiser'))} requested changes to {changes['renamed']}. "
+                            f"Changes: {changes['summaries']['rejected']}. Reason: Different set-up")
+
+
+def test_ntf_033_organiser_is_notified_of_approval_or_rejection(flow, changes):
+    """TC-NTF-033 | S9 AC4: the Organiser is notified when it is approved or rejected.
+
+    Does: the Coordinator approved one reviewed request and rejected another
+    with a reason; the Organiser's notifications are read.
+    Expect: "Event change request approved": "... has been approved by
+    <Coordinator>. The event has been updated." and "Event change request
+    rejected": "... has been rejected by <Coordinator>. Reason: <reason>". A
+    failure means the Organiser does not learn the outcome.
+    """
+    coordinator, link = name_of(flow.coordinator), "/event-change-requests/new"
+
+    assert flow.one("Event Organiser", "Event change request approved", link, changes["renamed"])["body"] == \
+        f"Your change request for {changes['renamed']} has been approved by {coordinator}. The event has been updated."
+    assert flow.one("Event Organiser", "Event change request rejected", link, changes["renamed"])["body"] == \
+        f"Your change request for {changes['renamed']} has been rejected by {coordinator}. Reason: Too late to change the set-up."
+
+
+def test_ntf_034_staff_are_told_of_approved_changes(flow, changes):
+    """TC-NTF-034 | S9 AC5: if approved, the relevant users are notified of the changes.
+
+    Does: reads the notifications of the event's Venue Staff, Technical Support
+    and Safety Officer.
+    Expect: each has one "Event changes approved" per approved request (the one
+    applied straight away and the one approved after review), listing the
+    changes and opening the event; none for the rejected request. A failure
+    means staff keep working from outdated event details.
+    """
+    link = f"/events/{changes['event']['event_id']}"
+    for role in STAFF:
+        received = sorted(n["body"] for n in flow.inbox(role, link) if n["title"] == "Event changes approved")
+        assert received == sorted([
+            f"Changes to {changes['original']} have been approved. Changes: {changes['summaries']['applied']}",
+            f"Changes to {changes['renamed']} have been approved. Changes: {changes['summaries']['approved']}"]), role
+
+
+# ---------------------------------------------------------------------------
+# S10 Equipment requests and their status
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def equipment(flow):
+    """Two equipment requests for one event: one accepted, one rejected."""
+    event, item = flow.event(), flow.equipment_item()
+    accepted = flow.request_equipment(event, item, 2, "Wireless, with spare batteries")
+    refused = flow.request_equipment(event, item, 1)
+    flow.review_equipment(accepted, "accepted", item, 2)
+    flow.review_equipment(refused, "rejected", reason="Not available that week.")
+    return event, item
+
+
+def equipment_text(item, quantity):
+    return f"{quantity} × {item['equipment_type']}"
+
+
+def test_ntf_035_coordinator_is_told_the_equipment_request_was_submitted(flow, equipment):
+    """TC-NTF-035 | S10 AC1: the Coordinator is told the request was successfully submitted.
+
+    Does: reads the Coordinator's notifications after their two requests.
+    Expect: one "Equipment request submitted" for each, opening their equipment
+    requests. A failure means the Coordinator has no confirmation.
+    """
+    _, item = equipment
+    for quantity in (2, 1):
+        flow.one("Event Coordinator", "Equipment request submitted", "/equipment-requests", equipment_text(item, quantity))
+
+
+def test_ntf_036_the_events_technical_support_is_notified(flow, equipment):
+    """TC-NTF-036 | S10 AC2: the relevant Technical Support Staff is notified.
+
+    Does: reads the notifications of the Technical Support Staff assigned to the
+    event (approval assigned them).
+    Expect: one "New equipment request" per request, opening the equipment
+    review page. A failure means nobody is told there is equipment to arrange.
+    """
+    event, item = equipment
+    assert event["technical_support_id"] == user_id_for("Technical Support Staff")
+    for quantity in (2, 1):
+        flow.one("Technical Support Staff", "New equipment request", "/equipment", equipment_text(item, quantity))
+
+
+def test_ntf_037_equipment_notification_includes_the_request_details(flow, equipment):
+    """TC-NTF-037 | S10 AC3: the notification includes the equipment request's details.
+
+    Does: reads both notifications for the request with technical requirements.
+    Expect, to Technical Support: "<Coordinator> requested 2 × <equipment> for
+    <event> (<start> – <end> SGT). Technical requirements: <text>. Status:
+    pending review."; to the Coordinator: "Your equipment request for 2 ×
+    <equipment> for <event> has been submitted. Status: pending Technical Support
+    review." A failure means staff cannot tell what is needed, when, or for what.
+    """
+    event, item = equipment
+    asked = equipment_text(item, 2)
+
+    assert flow.one("Technical Support Staff", "New equipment request", "/equipment", asked)["body"] == (
+        f"{name_of(flow.coordinator)} requested {asked} for {event['event_name']} ({sgt(event['start_datetime'])} – "
+        f"{sgt(event['end_datetime'])} SGT). Technical requirements: Wireless, with spare batteries. Status: pending review.")
+    assert flow.one("Event Coordinator", "Equipment request submitted", "/equipment-requests", asked)["body"] == (
+        f"Your equipment request for {asked} for {event['event_name']} has been submitted. "
+        "Status: pending Technical Support review.")
+
+
+def test_ntf_038_coordinator_is_notified_when_the_request_is_accepted_or_rejected(flow, equipment):
+    """TC-NTF-038 | S10 AC4: notified when the status changes to Rejected or Accepted.
+
+    Does: Technical Support reserved and accepted one request, and rejected
+    another with a reason; the Coordinator's notifications are read.
+    Expect: "Equipment request accepted" and "Equipment request rejected" (with
+    the reason), each naming the equipment, event and reviewer. A failure means
+    the Coordinator does not know whether the equipment is arranged.
+    """
+    event, item = equipment
+    staff, name = name_of(user_id_for("Technical Support Staff")), event["event_name"]
+    expected = {
+        ("Equipment request accepted", 2): "has been accepted by {staff}.",
+        ("Equipment request rejected", 1): "has been rejected by {staff}. Reason: Not available that week.",
+    }
+    for (title, quantity), outcome in expected.items():
+        asked = equipment_text(item, quantity)
+        assert flow.one("Event Coordinator", title, "/equipment-requests", asked)["body"] == \
+            f"Your equipment request for {asked} for {name} " + outcome.format(staff=staff)
+
+
+# ---------------------------------------------------------------------------
+# S11 Safety Officer: event submitted for safety review
+# ---------------------------------------------------------------------------
+
+def submit_for_safety(flow, capacity=40):
+    """An event with its venue approved, submitted for safety checks by its Coordinator."""
+    event, venue = flow.event(capacity), flow.venue()
+    flow.decide(flow.book(event, venue), "approved")
+    flow.call("Event Coordinator", "post", f"/api/events/{event['event_id']}/safety-checks")
+    return {**event, "venue_name": venue["venue_name"]}
+
+
+@pytest.fixture(scope="module")
+def safety_review(flow):
+    return submit_for_safety(flow)
+
+
+def test_ntf_039_safety_officer_is_notified_of_a_safety_review(flow, safety_review):
+    """TC-NTF-039 | S11 AC1: the Safety Officer is notified when an event is submitted for safety review.
+
+    Does: reads the notifications of the Safety Officer assigned to the event.
+    Expect: exactly one "Event awaiting safety check" for it. A failure means
+    the event waits in the queue without the officer knowing.
+    """
+    assert safety_review["safety_officer_id"] == user_id_for("Safety Officer")
+
+    flow.one("Safety Officer", "Event awaiting safety check", f"/operational-safety-reviews/{safety_review['event_id']}")
+
+
+def test_ntf_040_safety_notification_shows_the_event_its_date_and_link(flow, safety_review):
+    """TC-NTF-040 | S11 AC2: shows the event name, the event date and a link to it.
+
+    Does: reads the notification's text and opens its link's review as the officer.
+    Expect: "<event> (<start> – <end> SGT) has been submitted for safety checks
+    by <Coordinator>.", and the safety review it links to opens for the officer.
+    A failure means a missing name or date, or a link that does not open.
+    """
+    link = f"/operational-safety-reviews/{safety_review['event_id']}"
+    note = flow.one("Safety Officer", "Event awaiting safety check", link)
+
+    assert note["body"] == (f"{safety_review['event_name']} ({sgt(safety_review['start_datetime'])} – "
+                            f"{sgt(safety_review['end_datetime'])} SGT) has been submitted for safety checks by "
+                            f"{name_of(flow.coordinator)}.")
+    assert flow.call("Safety Officer", "get", "/api" + link)["event"]["event_id"] == safety_review["event_id"]
+
+
+def test_ntf_041_coordinator_is_notified_of_the_safety_decision(flow):
+    """TC-NTF-041 | S11 AC3: the Coordinator is told the safety review's outcome, including a return to Planning.
+
+    Does: three events are submitted for safety checks; the Safety Officer
+    approves one, rejects one and requests changes on one, with remarks for the
+    last two. The Coordinator's notifications are read.
+    Expect: "Safety review approved": "The safety review for <event> (<start> –
+    <end> SGT) has been approved by <officer>."; "Safety review rejected": "...
+    has been rejected by <officer>. Remarks: <remarks> The event has returned to
+    Planning."; and "Safety changes requested": "... has been sent back with
+    changes requested by <officer>. Remarks: ... returned to Planning.", each
+    opening its event. A failure means the Coordinator does not learn the
+    outcome, why, or that the event is back in Planning.
+    """
+    officer, back = name_of(user_id_for("Safety Officer")), ". Remarks: No fire marshal. The event has returned to Planning."
+    for outcome, title, verdict, ending in (
+            ("approved", "Safety review approved", "approved", "."),
+            ("rejected", "Safety review rejected", "rejected", back),
+            ("changes_requested", "Safety changes requested", "sent back with changes requested", back)):
+        event = submit_for_safety(flow)
+        flow.call("Safety Officer", "post", f"/api/operational-safety-reviews/{event['event_id']}/decision",
+                  {"outcome": outcome, "remarks": None if outcome == "approved" else "No fire marshal."})
+        note = flow.one("Event Coordinator", title, f"/events/{event['event_id']}")
+
+        assert note["body"] == (f"The safety review for {event['event_name']} ({sgt(event['start_datetime'])} – "
+                                f"{sgt(event['end_datetime'])} SGT) has been {verdict} by {officer}{ending}")
+
+
+# ---------------------------------------------------------------------------
+# S12 Attendee: registration and withdrawal
+# ---------------------------------------------------------------------------
+
+def open_registration(flow, capacity=40, waiting_list=False):
+    """A confirmed event (safety approved) whose registration is open now."""
+    event = submit_for_safety(flow, capacity)
+    flow.call("Safety Officer", "post", f"/api/operational-safety-reviews/{event['event_id']}/decision",
+              {"outcome": "approved"})
+    now = datetime.now(timezone.utc)
+    flow.call("Event Organiser", "patch", f"/api/events/{event['event_id']}/registration-period", {
+        "registration_opens_at": (now - timedelta(minutes=1)).isoformat(),
+        "registration_closes_at": (now + timedelta(days=1)).isoformat(), "waiting_list_enabled": waiting_list})
+    return event
+
+
+def details(event):
+    """The event as registration notifications describe it."""
+    return (f"{event['event_name']} ({sgt(event['start_datetime'])} – {sgt(event['end_datetime'])} SGT) "
+            f"at {event['venue_name']}")
+
+
+@pytest.fixture(scope="module")
+def registered(flow):
+    """The Attendee registered for an event with places left (S12 AC1, AC2, AC5)."""
+    event = open_registration(flow)
+    flow.register("Attendee", event)
+    return event
+
+
+@pytest.fixture(scope="module")
+def full_event(flow):
+    """An event for one, with a waiting list: another attendee took the place,
+    then the Attendee registered (S12 AC3, AC4)."""
+    event = open_registration(flow, capacity=1, waiting_list=True)
+    first = flow.user("ITEST First Attendee", "Attendee")
+    flow.register(first, event)
+    flow.register("Attendee", event)
+    return event, first
+
+
+def test_ntf_042_attendee_is_sent_a_confirmation_on_registering(flow, registered):
+    """TC-NTF-042 | S12 AC1: a confirmation when the Attendee successfully registers.
+
+    Does: reads the Attendee's notifications after registering for an event
+    that has places left.
+    Expect: exactly one "Event registration confirmed" for it, opening My
+    Registrations. A failure means the Attendee cannot tell the registration
+    went through.
+    """
+    flow.one("Attendee", "Event registration confirmed", "/my-registrations", registered["event_name"])
+
+
+def test_ntf_043_registration_shows_the_event_its_date_time_and_venue(flow, registered):
+    """TC-NTF-043 | S12 AC2: includes the event name, date, time and venue.
+
+    Does: reads the confirmation's text.
+    Expect: "Your registration for <event> (<start> – <end> SGT) at <venue> is
+    confirmed.", the venue being the event's approved booking. A failure means a
+    detail is missing or wrong.
+    """
+    note = flow.one("Attendee", "Event registration confirmed", "/my-registrations", registered["event_name"])
+
+    assert note["body"] == f"Your registration for {details(registered)} is confirmed."
+
+
+def test_ntf_044_a_full_event_puts_the_attendee_on_the_waiting_list(flow, full_event):
+    """TC-NTF-044 | S12 AC3: when full with a waiting list on, the Attendee is told they are waitlisted.
+
+    Does: reads the notifications of the attendee who took the only place, and
+    of the Attendee who registered after it was full.
+    Expect: the first has "Event registration confirmed"; the Attendee has
+    "Added to waiting list": "<event> ... is full, so you have been added to
+    its waiting list instead. This does not confirm a place at the event." and
+    no confirmation. A failure means a waitlisted Attendee believes they have a
+    place, or the reverse.
+    """
+    event, first = full_event
+    flow.one(first, "Event registration confirmed", "/my-registrations", event["event_name"])
+    note = flow.one("Attendee", "Added to waiting list", "/my-registrations", event["event_name"])
+
+    assert note["body"] == (f"{details(event)} is full, so you have been added to its waiting list instead. "
+                            "This does not confirm a place at the event.")
+    assert not [n for n in flow.inbox("Attendee", "/my-registrations")
+                if n["title"] == "Event registration confirmed" and event["event_name"] in n["body"]]
+
+
+def test_ntf_045_registered_and_waitlisted_attendees_are_told_of_a_cancellation(flow, full_event):
+    """TC-NTF-045 | S12 AC4: a notification if the event is cancelled.
+
+    Does: the Organiser cancels the full event, which has one registered and one
+    waitlisted attendee.
+    Expect: each has one "Event cancelled": "<event> ... has been cancelled, so
+    your registration no longer applies.", opening My Registrations. A failure
+    means an attendee turns up to an event that is not happening.
+    """
+    event, first = full_event
+    flow.call("Event Organiser", "post", f"/api/events/{event['event_id']}/cancel")
+
+    for attendee in (first, "Attendee"):
+        note = flow.one(attendee, "Event cancelled", "/my-registrations", event["event_name"])
+        assert note["body"] == f"{details(event)} has been cancelled, so your registration no longer applies."
+
+
+def test_ntf_046_attendee_is_sent_a_confirmation_on_withdrawing(flow, registered):
+    """TC-NTF-046 | S12 AC5: a confirmation when the registration is successfully withdrawn.
+
+    Does: the Attendee withdraws their registration.
+    Expect: one "Event registration withdrawn": "Your registration for <event>
+    ... has been withdrawn.", opening My Registrations. A failure means the
+    Attendee cannot tell the withdrawal went through.
+    """
+    flow.call("Attendee", "post", f"/api/events/{registered['event_id']}/registrations/withdraw")
+
+    note = flow.one("Attendee", "Event registration withdrawn", "/my-registrations", registered["event_name"])
+    assert note["body"] == f"Your registration for {details(registered)} has been withdrawn."
