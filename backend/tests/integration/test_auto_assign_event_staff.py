@@ -83,10 +83,15 @@ def _submit_request(client, sign_in, label):
     return request_id
 
 
-def _review(client, sign_in, request_id, outcome, comments=None):
+def _review(client, sign_in, request_id, outcome, comments=None, role="Event Coordinator"):
     body = {"outcome": outcome, **({"comments": comments} if comments else {})}
     return client.post(f"/api/event-requests/{request_id}/review",
-                       headers=sign_in("Event Coordinator"), json=body)
+                       headers=sign_in(role), json=body)
+
+
+def _request_status(request_id):
+    rows = admin_request(f"/rest/v1/event_request?select=status&event_request_id=eq.{request_id}")
+    return rows[0]["status"]
 
 
 def _remove(request_id):
@@ -159,5 +164,82 @@ def test_event_information_shows_the_assigned_staff(client, sign_in, approved):
         assert shown[column] == event[column]
 
 
+# TC-AAS-004 (AC1): rejecting a request creates no event, so no staff are assigned.
+def test_rejected_request_assigns_no_staff(client, sign_in, new_request):
+    request_id = new_request("rejected")
 
+    response = _review(client, sign_in, request_id, "rejected", "Not feasible on these dates.")
+
+    assert response.status_code == 200, response.get_json()
+    assert _request_status(request_id) == "rejected"
+    assert _events_for(request_id) == []
+
+
+# TC-AAS-005 (AC1): asking for clarification is not an approval, so no event is
+# created and no staff are assigned.
+def test_clarification_assigns_no_staff(client, sign_in, new_request):
+    request_id = new_request("clarification")
+
+    response = _review(client, sign_in, request_id, "clarification_requested", "Which room layout?")
+
+    assert response.status_code == 200, response.get_json()
+    assert _request_status(request_id) == "submitted"
+    assert _events_for(request_id) == []
+
+
+# TC-AAS-006 (AC1): a submitted request nobody has reviewed has no staff yet.
+def test_unreviewed_request_assigns_no_staff(new_request):
+    request_id = new_request("unreviewed")
+
+    assert _request_status(request_id) == "submitted"
+    assert _events_for(request_id) == []
+
+
+# TC-AAS-007 (AC1): a review missing its required comment is refused, leaving
+# the request undecided and no staff assigned.
+def test_invalid_review_assigns_no_staff(client, sign_in, new_request):
+    request_id = new_request("invalid review")
+
+    response = _review(client, sign_in, request_id, "rejected")
+
+    assert response.status_code == 400, response.get_json()
+    assert _request_status(request_id) == "submitted"
+    assert _events_for(request_id) == []
+
+
+# TC-AAS-008 (AC2): approving twice is refused, and the event and the staff
+# recorded by the first approval are unchanged.
+def test_second_approval_does_not_reassign_staff(client, sign_in, approved):
+    request_id, event = approved
+
+    response = _review(client, sign_in, request_id, "approved")
+
+    assert response.status_code == 409, response.get_json()
+    events = _events_for(request_id)
+    assert len(events) == 1, events
+    for column in STAFF:
+        assert events[0][column] == event[column]
+
+# TC-AAS-009 (AC1, AC2): with nobody holding a staff role, approval still
+# succeeds and leaves only that role empty, rather than failing or assigning
+# someone from another role. The memberships are removed for this test only.
+def test_role_with_no_users_is_left_empty(client, sign_in, new_request):
+    request_id = new_request("no safety officer")
+    memberships = admin_request("/rest/v1/user_roles?select=user_id,role_id,roles(role_name)")
+    officers = [row for row in memberships
+                if _role_key((row.get("roles") or {}).get("role_name") or "") == "safety_officer"]
+    for row in officers:
+        admin_request(f"/rest/v1/user_roles?user_id=eq.{row['user_id']}&role_id=eq.{row['role_id']}",
+                      method="DELETE")
+    try:
+        response = _review(client, sign_in, request_id, "approved")
+    finally:
+        for row in officers:
+            admin_request("/rest/v1/user_roles",
+                          {"user_id": row["user_id"], "role_id": row["role_id"]})
+
+    assert response.status_code == 200, response.get_json()
+    event = _events_for(request_id)[0]
+    assert event["safety_officer_id"] is None
+    assert event["venue_staff_id"] and event["technical_support_id"]
 
