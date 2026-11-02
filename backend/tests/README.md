@@ -41,3 +41,17 @@ Browser rendering, keyboard/screen-reader access, mobile layout, session navigat
 Purpose, description, attendance, venue/accessibility/equipment requirements and registration needs are absent from the current event UI/schema described by the user. Their display acceptance criteria are not covered or satisfied by these tests.
 
 The current client maps upstream HTTP 400 and 403 to 401. Tests record that existing contract; schema/configuration errors can therefore appear as authentication errors. Passing this suite does not establish full AC compliance.
+
+## Integration tests
+
+These run against the separate Supabase test project set in `backend/.env.integration-test`:
+
+```powershell
+$env:RUN_INTEGRATION_TESTS="1"; python -m pytest tests/integration -v
+```
+
+After `supabase db reset --linked` on that project, restore its accounts and roles:
+
+```powershell
+python tests/integration/seed_test_accounts.py
+```
