@@ -123,7 +123,7 @@ def test_tc_scrum214_003_ac3_updates_existing_period_when_store_allows_it(phase)
     client = create_app().test_client()
     now = datetime.now(timezone.utc)
     old_opening = now + timedelta(days=1) if phase == 'before-opening' else now - timedelta(days=1)
-    original = {'event_id': 1, 'status': 'confirmed',
+    original = {'event_id': 1, 'status': 'confirmed', 'registration_status': 'open',
                 'registration_opens_at': old_opening.isoformat(),
                 'registration_closes_at': (now + timedelta(days=3)).isoformat(),
                 'waiting_list_enabled': False}
@@ -201,7 +201,7 @@ def test_tc_scrum214_005_007_ac5_ac7_registration_outcomes_and_messages(period_s
 def test_tc_scrum214_006_ac6_attendee_reads_updated_period_after_save():
     """AC6: a later attendee read returns supplied updated dates, uncached."""
     client = create_app().test_client()
-    original = {'event_id': 1, 'status': 'confirmed',
+    original = {'event_id': 1, 'status': 'confirmed', 'registration_status': 'open',
                 'start_datetime': '2027-01-03T10:00:00+08:00',
                 'end_datetime': '2027-01-03T17:00:00+08:00', **settings()}
     changes = settings(registration_opens_at='2027-01-01T11:00:00+08:00',

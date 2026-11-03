@@ -44,6 +44,8 @@ def event_error(error):
 def list_events():
     token = authenticated_token(supabase_request)
     rows = supabase_request('/rest/v1/events?select=*&order=start_datetime.asc.nullslast', token=token)
+    if request.args.get('status') == 'confirmed':
+        rows = [row for row in rows if row.get('status') == 'confirmed']
     return jsonify(events=rows)
 
 
