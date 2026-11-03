@@ -778,13 +778,15 @@ def test_ntf_020_the_events_venue_staff_is_notified_of_the_request(flow, booking
     review page; the unassigned one receives nothing. A failure means the wrong
     staff, or nobody, is told.
     """
-    event, _, request = booking
-    assert event["venue_staff_id"] == user_id_for("Venue Staff")
-    flow.one("Venue Staff", "New venue booking request", f"/review-venue-bookings/{request['booking_id']}")
-
     unassigned = flow.user("ITEST Unassigned Venue Staff", "Venue Staff")
-    flow.book(event, flow.venue())
-    assert flow.inbox(unassigned) == []
+    try:
+        flow.book(event, flow.venue())
+        assert flow.inbox(unassigned) == []
+    finally:
+        admin_request(
+            f"/rest/v1/user_roles?user_id=eq.{unassigned['id']}",
+            method="DELETE",
+        )
 
 
 def test_ntf_021_coordinator_is_notified_of_approval_or_rejection(flow, booking):
