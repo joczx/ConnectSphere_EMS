@@ -70,6 +70,18 @@ def test_popup_lists_the_newest_ten_for_the_signed_in_user(_, query):
     query.assert_called_once_with(LIST_RPC, token='user-token', payload={'p_limit': 10, 'p_offset': 0, 'p_days': None})
 
 
+@patch('app.routes.notifications.supabase_request', return_value={
+    'items': [{'notification_id': 8, 'notification_type': 'venue_hold_expired'}],
+    'total': 1,
+    'unread': 1,
+})
+@patch('app.routes.notifications.authenticated_token', return_value='user-token')
+def test_expired_venue_hold_notification_is_returned(_, query):
+    response = client().get(f'{NOTIFICATIONS_URL}?limit=10', headers=HEADERS)
+    assert response.status_code == 200
+    assert response.json['items'] == [{'notification_id': 8, 'notification_type': 'venue_hold_expired'}]
+
+
 # Verifies a full-page request reads 20 notifications from the last 14 days, skipping earlier pages.
 @patch('app.routes.notifications.supabase_request', return_value=ITEMS)
 @patch('app.routes.notifications.authenticated_token', return_value='user-token')
