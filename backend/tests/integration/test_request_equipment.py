@@ -26,7 +26,7 @@ def equipment_event(client, sign_in):
             "event_organiser_id": user_id_for("Event Organiser"),
             "start_datetime": starts.isoformat(), "end_datetime": (starts + timedelta(hours=2)).isoformat(),
             "capacity_needed": 40, "room_layout": "theatre", "required_facilities": [],
-            "equipment_requirements": [], "registration_needs": "None",
+            "equipment_requirements": [],
         })
         assert created.status_code == 201, created.get_json()
         request_id = created.get_json()["event_request"]["event_request_id"]

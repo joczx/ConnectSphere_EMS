@@ -27,7 +27,7 @@ def reservation_setup(client, sign_in):
             "description": marker, "event_organiser_id": user_id_for("Event Organiser"),
             "start_datetime": start.isoformat(), "end_datetime": end.isoformat(),
             "capacity_needed": 30, "room_layout": "theatre", "required_facilities": [],
-            "equipment_requirements": [], "registration_needs": "None",
+            "equipment_requirements": [],
         })
         assert response.status_code == 201, response.get_json()
         request_id = response.get_json()["event_request"]["event_request_id"]

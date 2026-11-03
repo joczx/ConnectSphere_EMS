@@ -26,7 +26,6 @@ def planning_event(client, sign_in):
         "required_facilities": ["projector", "wifi"],
         "equipment_requirements": [
             {"equipment_type": "microphone", "quantity": 2, "notes": "Wireless"}],
-        "registration_needs": "Online registration",
         "need_wheelchair_accessibility": True, "need_blind_accessibility": False,
     }
     try:
@@ -72,14 +71,14 @@ def test_authorised_users_see_complete_event_information(client, sign_in, planni
 
 
 # TC-VEI-IT-004 (AC2,3): explicitly recorded 'none' values are returned accurately.
-def test_no_equipment_or_registration_is_shown_accurately(client, sign_in, planning_event):
+def test_no_equipment_is_shown_accurately(client, sign_in, planning_event):
     event, _ = planning_event
     updated = client.patch(f"/api/events/{event['event_id']}", headers=sign_in("Event Coordinator"),
-                           json={"equipment_requirements": [], "registration_needs": None,
+                           json={"equipment_requirements": [],
                                  "confirm_critical": True, "expected_updated_at": event["updated_at"]})
     assert updated.status_code == 200, updated.get_json()
     shown = _read(client, sign_in, event["event_id"], "Event Organiser")
-    assert shown["equipment_requirements"] == [] and shown["registration_needs"] is None
+    assert shown["equipment_requirements"] == []
     assert shown["event_name"] == event["event_name"]
 
 

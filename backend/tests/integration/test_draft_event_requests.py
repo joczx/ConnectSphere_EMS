@@ -32,7 +32,6 @@ def drafts(client, sign_in):
         "room_layout": "theatre",
         "required_facilities": [],
         "equipment_requirements": [],
-        "registration_needs": "None",
     }
     minimal = {"event_name": marker, "event_organiser_id": organiser}
 
@@ -127,7 +126,6 @@ def test_incomplete_draft_submission_is_refused(client, drafts):
 @pytest.mark.parametrize("field", [
     "event_name", "purpose", "description", "start_datetime", "end_datetime",
     "capacity_needed", "room_layout", "required_facilities", "equipment_requirements",
-    "registration_needs",
 ])
 def test_each_missing_mandatory_answer_blocks_draft_submission(client, drafts, field):
     headers, _, complete, create, stored = drafts

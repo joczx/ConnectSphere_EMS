@@ -34,7 +34,6 @@ def submission(client, sign_in):
         "equipment_requirements": [
             {"equipment_type": "microphone", "quantity": 2, "notes": "Wireless"},
         ],
-        "registration_needs": "Online registration",
         "need_wheelchair_accessibility": True,
         "need_blind_accessibility": False,
     }
@@ -102,7 +101,7 @@ def test_each_submission_receives_a_unique_id(submission):
 # TC-CER-IT-003: AC3,4,11. Every mandatory answer is validated individually.
 @pytest.mark.parametrize("field", [
     "event_name", "purpose", "description", "start_datetime", "end_datetime", "capacity_needed",
-    "room_layout", "required_facilities", "equipment_requirements", "registration_needs",
+    "room_layout", "required_facilities", "equipment_requirements",
     "event_organiser_id",
 ])
 def test_missing_mandatory_field_returns_error_without_creating_row(submission, field):

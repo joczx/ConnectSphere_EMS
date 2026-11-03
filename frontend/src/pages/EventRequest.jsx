@@ -120,9 +120,8 @@ export default function EventRequest() {
           {[['need_wheelchair_accessibility', 'Wheelchair accessibility needed'], ['need_blind_accessibility', 'Accessibility for blind attendees needed']].map(([name, text]) =>
             <label key={name}>{text}<select name={name} defaultValue={request[name] ? 'yes' : 'no'}><option value="no">No</option><option value="yes">Yes</option></select></label>)}
           </EventFormSection>
-          <EventFormSection title="4. Equipment and registration" description="Record your initial requirements. The coordinator can submit equipment requests during planning.">
+          <EventFormSection title="4. Equipment" description="Record initial equipment requirements. The coordinator can submit equipment requests during planning.">
           <label>Equipment requirements (one per line: type, quantity, notes — or write "none")<RequiredIndicator /><textarea name="equipment_requirements" rows="3" required placeholder="projector, 2, HDMI input" defaultValue={toLines(request.equipment_requirements)} /></label>
-          <label>Registration needs (write "none" if not needed)<RequiredIndicator /><textarea name="registration_needs" rows="3" required defaultValue={value('registration_needs')} /></label>
           </EventFormSection>
           {editable && <div className="heading event-form-actions">
             <button type="submit" value="draft" className="secondary" formNoValidate>{state.busy ? 'Saving…' : rejected ? 'Save changes' : 'Save draft'}</button>
