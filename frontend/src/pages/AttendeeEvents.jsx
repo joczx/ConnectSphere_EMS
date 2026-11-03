@@ -56,6 +56,7 @@ export default function AttendeeEvents() {
       return <article className="panel" key={event.event_id}>
         <h2>{event.event_name}</h2><p>{event.description}</p>
         <p>Event starts: {registrationDate(event.start_datetime)}</p>
+        <p>Venue: {event.venues?.length ? event.venues.join(', ') : 'Venue not assigned yet'}</p>
         <p>Registration opens: {registrationDate(event.registration_opens_at)}<br />Registration closes: {registrationDate(event.registration_closes_at)}</p>
         <p>{messages[status]}</p>
         <p>Capacity: {event.capacity ?? 'Not set'}. Available places: {event.available_capacity ?? 'Not set'}. Waiting list: {event.waiting_list_enabled ? 'Enabled' : 'Disabled'}.</p>

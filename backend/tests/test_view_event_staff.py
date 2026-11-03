@@ -97,6 +97,19 @@ class ViewEventStaffTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertNotIn('event', response.json)
 
+    # TC-VES-005 (AC1, edge): a staff member whose account has a blank name is
+    # still shown, by the part of their email address before the @.
+    @patch('app.routes.users.supabase_request')
+    def test_staff_member_with_a_blank_name_is_shown_by_email(self, query):
+        query.side_effect = [USER, [
+            {'user_id': VENUE_STAFF, 'name': '  ', 'email': 'vera.venue@example.com'},
+        ]]
+
+        response = self.client.get(f'/api/users?ids={VENUE_STAFF}', headers=self.headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['users'], {VENUE_STAFF: 'vera.venue'})
+
 
 if __name__ == '__main__':
     unittest.main()

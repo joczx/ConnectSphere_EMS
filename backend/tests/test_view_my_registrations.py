@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from app import create_app
+from app.services.event_store import StoreError
 
 
 @pytest.fixture
@@ -107,3 +108,23 @@ def test_my_registrations_requires_authentication():
     with patch('app.services.registration_service.supabase_request') as rpc:
         assert client.get('/api/my-registrations').status_code == 401
         rpc.assert_not_called()
+
+
+@pytest.mark.parametrize('result,status,message', [
+    pytest.param(StoreError(503, code='PGRST202'), 503, 'Registration is not configured yet.', id='TC-SCRUM34-008'),
+    pytest.param(StoreError(503), 503, 'Event service is temporarily unavailable.', id='TC-SCRUM34-009'),
+    pytest.param({'error': 'Only attendees can view their registrations.', 'status': 403}, 403,
+                 'Only attendees can view their registrations.', id='TC-SCRUM34-010'),
+])
+def test_tc_scrum34_008_009_010_ac4_failed_read_is_reported_not_shown_as_no_records(result, status, message):
+    """TC-SCRUM34-008/009/010 / AC4: registration not set up, the database
+    unavailable, or the request refused is reported, never mistaken for the
+    attendee having no registration records."""
+    client = create_app().test_client()
+    rpc = {'side_effect': result} if isinstance(result, StoreError) else {'return_value': result}
+    with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
+         patch('app.services.registration_service.supabase_request', **rpc):
+        response = client.get('/api/my-registrations', headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == status
+    assert response.json['error'].startswith(message)
+    assert 'registrations' not in response.json
