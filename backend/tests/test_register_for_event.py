@@ -12,6 +12,7 @@ from app import create_app
 from app.schemas.registration import parse_attendee
 from app.services.event_service import EventError
 from app.services.event_store import StoreError
+from app.services.registration_email_service import send_pending_emails
 from app.services.registration_service import registration_call
 
 
@@ -138,3 +139,40 @@ def test_registration_submits_details_using_authenticated_identity():
     assert response.json == result
     rpc.assert_called_once_with('/rest/v1/rpc/register_for_event', token='verified', method='POST',
         payload={'p_event_id': 1, **{'p_' + k: v for k, v in attendee_details().items()}})
+
+
+@pytest.fixture
+def mail_config(monkeypatch):
+    for key, value in {'SUPABASE_SERVICE_ROLE_KEY': 'server-secret', 'SMTP_HOST': 'smtp.example.com',
+                       'SMTP_USERNAME': 'sender', 'SMTP_PASSWORD': 'secret', 'SMTP_FROM': 'events@example.com'}.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.delenv('SMTP_PORT', raising=False)
+
+
+def test_registration_email_sender_requires_configuration(mail_config, monkeypatch):
+    """TC-SCRUM33-026 / AC5: the confirmation sender refuses to run without
+    its SMTP settings rather than silently dropping registration emails."""
+    monkeypatch.delenv('SMTP_HOST')
+    with patch('app.services.registration_email_service.supabase_request') as rpc:
+        with pytest.raises(ValueError, match='Configure'):
+            send_pending_emails()
+    rpc.assert_not_called()
+
+
+def test_registration_email_is_sent_and_marked_sent(mail_config):
+    """TC-SCRUM33-027 / AC5: a queued registration confirmation is emailed to
+    the attendee over STARTTLS and then marked sent, so it is not sent again."""
+    queued = {'id': 1, 'recipient': 'alex@example.com', 'subject': 'Event registration confirmed',
+              'body': 'Your registration is confirmed for Conference.'}
+    with patch('app.services.registration_email_service.supabase_request', side_effect=[[queued], []]) as rpc, \
+         patch('app.services.registration_email_service.smtplib.SMTP') as smtp:
+        assert send_pending_emails() == 1
+    smtp.assert_called_once_with('smtp.example.com', 587, timeout=15)
+    connection = smtp.return_value.__enter__.return_value
+    connection.starttls.assert_called_once()
+    connection.login.assert_called_once_with('sender', 'secret')
+    message = connection.send_message.call_args.args[0]
+    assert (message['To'], message['Subject']) == ('alex@example.com', 'Event registration confirmed')
+    assert 'Your registration is confirmed' in message.get_content()
+    assert rpc.call_args.args == ('/rest/v1/registration_email_outbox?id=eq.1',)
+    assert rpc.call_args.kwargs['method'] == 'PATCH' and rpc.call_args.kwargs['payload']['sent_at']

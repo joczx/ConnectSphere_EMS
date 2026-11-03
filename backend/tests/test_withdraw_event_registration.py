@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from app import create_app
+from app.services.event_store import StoreError
 
 
 @pytest.fixture
@@ -112,3 +113,20 @@ def test_withdrawal_refusals_are_returned_unchanged(status, message):
         response = client.post('/api/events/1/registrations/withdraw', headers={'Authorization': 'Bearer verified'})
     assert response.status_code == status
     assert response.json['error'] == message
+
+
+@pytest.mark.parametrize('failure,message', [
+    pytest.param(StoreError(503, code='PGRST202'), 'Registration is not configured yet.', id='TC-SCRUM35-006'),
+    pytest.param(StoreError(503), 'Event service is temporarily unavailable.', id='TC-SCRUM35-007'),
+])
+def test_tc_scrum35_006_007_ac4_failed_withdrawal_is_not_confirmed(client, failure, message):
+    """TC-SCRUM35-006/007 / AC4: when registration is not set up or the
+    database is unavailable, the attendee is told the withdrawal failed and
+    is not shown a withdrawal confirmation."""
+    with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
+         patch('app.services.registration_service.supabase_request', side_effect=failure):
+        response = client.post('/api/events/41/registrations/withdraw', headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 503
+    assert response.json['error'].startswith(message)
+    assert 'registration' not in response.json
+    assert 'message' not in response.json
