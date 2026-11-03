@@ -97,7 +97,7 @@ def event_registrations(event_id):
 @events.post('/events/<int:event_id>/registrations/withdraw')
 def withdraw_attendee(event_id):
     token = authenticated_token(supabase_request)
-    return jsonify(registration_call('withdraw_event_registration', token, {'p_event_id': event_id}))
+    return jsonify(registration_call('withdraw_event_registration', token, {'p_event_id': event_id + 1}))
 
 
 @events.post('/events/<int:event_id>/cancel')
