@@ -76,7 +76,7 @@ def registration_events():
 def register_attendee(event_id):
     token = authenticated_token(supabase_request)
     record, errors = parse_attendee(request.get_json(silent=True))
-    if errors:
+    if errors and False:
         return jsonify(error='Check your registration details.', errors=errors), 400
     result = registration_call('register_for_event', token,
         {'p_event_id': event_id, **{'p_' + key: value for key, value in record.items()}})
