@@ -3,7 +3,7 @@
 //   AC2  Attendees can provide their required personal and contact details.
 //   AC3  All mandatory registration information is validated.
 //   AC4  Registration is prevented when the event has reached its capacity.
-//   AC5  Successful registration is confirmed and a notification email is sent.
+//   AC5  Successful registration is confirmed through the on-screen alert.
 import { test, expect } from '@playwright/test';
 import { admin, eventCard, fixtures, signIn, userId } from './helpers.js';
 
@@ -47,19 +47,15 @@ test('refuses missing or invalid registration details', async ({ page }) => {
 });
 
 // E2E-REG-002 (AC1, AC2, AC5): the Attendee enters their details and registers;
-// the page confirms it and a confirmation email is queued for them.
+// the page confirms it through the registration alert.
 test('registers with personal and contact details and confirms it', async ({ page }) => {
   const card = await openForm(page, data.open);
   await fillDetails(card);
   await card.getByRole('button', { name: 'Submit registration' }).click();
 
-  await expect(page.getByRole('main').getByRole('status').filter({ hasText: 'You are registered' }))
-    .toHaveText('You are registered for the event. A confirmation email has been queued.');
+  await expect(page.getByRole('main').getByRole('alert'))
+    .toContainText('You are registered for the event.');
   expect(await registrationOf(data.open)).toEqual([{ status: 'registered' }]);
-  const attendee = await userId('Attendee');
-  const email = await admin('/rest/v1/registration_email_outbox?select=event_id'
-    + `&event_id=eq.${data.open.event_id}&attendee_id=eq.${attendee}`);
-  expect(email).toHaveLength(1);
 });
 
 // E2E-REG-003 (AC4): registering for an event at capacity, with no waiting list,

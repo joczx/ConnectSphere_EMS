@@ -6,7 +6,7 @@ from app.services.event_service import EventError, list_activity, load_event, up
 from app.services.event_venue_criteria import criteria_from_event, describe, search_filters
 from app.services.event_status_service import lifecycle_call
 from app.schemas.registration import parse_settings, parse_attendee
-from app.services.registration_service import registration_call
+from app.services.registration_service import registration_call, attendee_catalogue
 
 events = Blueprint('events', __name__, url_prefix='/api')
 
@@ -69,7 +69,7 @@ def set_registration_period(event_id):
 @events.get('/registration-events')
 def registration_events():
     token = authenticated_token(supabase_request)
-    return jsonify(registration_call('attendee_registration_events', token, {}))
+    return jsonify(attendee_catalogue(token))
 
 
 @events.post('/events/<int:event_id>/registrations')
@@ -78,8 +78,14 @@ def register_attendee(event_id):
     record, errors = parse_attendee(request.get_json(silent=True))
     if errors:
         return jsonify(error='Check your registration details.', errors=errors), 400
-    return jsonify(registration_call('register_for_event', token,
-        {'p_event_id': event_id, **{'p_' + key: value for key, value in record.items()}}))
+    result = registration_call('register_for_event', token,
+        {'p_event_id': event_id, **{'p_' + key: value for key, value in record.items()}})
+    if not isinstance(result, dict) or 'registration' not in result:
+        return jsonify(result)
+    registration = result['registration']
+    message = ('You have joined the waiting list. Your place is not confirmed.'
+               if registration['status'] == 'waiting_list' else 'You are registered for the event.')
+    return jsonify(registration=registration, message=message)
 
 
 @events.get('/my-registrations')

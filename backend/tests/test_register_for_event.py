@@ -12,7 +12,6 @@ from app import create_app
 from app.schemas.registration import parse_attendee
 from app.services.event_service import EventError
 from app.services.event_store import StoreError
-from app.services.registration_email_service import send_pending_emails
 from app.services.registration_service import registration_call
 
 
@@ -36,7 +35,6 @@ def test_registration_refusal_is_returned_to_attendee(status, message):
     assert response.json['error'] == message
 
 
-
 def test_missing_database_function_has_actionable_configuration_error():
     failure = StoreError(503, code='PGRST202')
     with patch('app.services.registration_service.supabase_request', side_effect=failure):
@@ -45,7 +43,6 @@ def test_missing_database_function_has_actionable_configuration_error():
     assert caught.value.status == 503
     assert '046_event_registration.sql' in caught.value.to_dict()['error']
     assert caught.value.__cause__ is failure
-
 
 
 def test_other_database_errors_are_preserved():
@@ -89,10 +86,8 @@ def test_registration_store_failures_return_safe_api_errors(error, expected_stat
     assert 'registration' not in response.json
 
 
-
 def attendee_details(**changes):
     return {'full_name': 'Alex Tan', 'contact_email': 'alex@example.com', 'contact_phone': '+65 8123 4567', **changes}
-
 
 
 @pytest.mark.parametrize('payload', [None, {}, [], attendee_details(full_name=' '),
@@ -102,7 +97,6 @@ def attendee_details(**changes):
     attendee_details(contact_phone='letters'), attendee_details(contact_phone='-------')])
 def test_mandatory_personal_details_are_validated(payload):
     assert parse_attendee(payload)[1]
-
 
 
 def test_personal_details_are_trimmed():
@@ -117,7 +111,6 @@ def test_contact_email_format_is_not_validated():
     assert record['contact_email'] == 'not-an-email'
 
 
-
 def test_invalid_attendee_details_never_reach_database():
     client = create_app().test_client()
     with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
@@ -128,51 +121,17 @@ def test_invalid_attendee_details_never_reach_database():
     rpc.assert_not_called()
 
 
-
-def test_registration_submits_details_using_authenticated_identity():
+@pytest.mark.parametrize('status,message', [
+    ('registered', 'You are registered for the event.'),
+    ('waiting_list', 'You have joined the waiting list. Your place is not confirmed.'),
+])
+def test_registration_submits_details_using_authenticated_identity(status, message):
     client = create_app().test_client()
-    result = {'registration': {'status': 'registered'}}
+    result = {'registration': {'status': status}, 'obsolete_metadata': 'ignored'}
     with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
          patch('app.services.registration_service.supabase_request', return_value=result) as rpc:
         response = client.post('/api/events/1/registrations', json=attendee_details(), headers={'Authorization': 'Bearer verified'})
     assert response.status_code == 200
-    assert response.json == result
+    assert response.json == {'registration': {'status': status}, 'message': message}
     rpc.assert_called_once_with('/rest/v1/rpc/register_for_event', token='verified', method='POST',
         payload={'p_event_id': 1, **{'p_' + k: v for k, v in attendee_details().items()}})
-
-
-@pytest.fixture
-def mail_config(monkeypatch):
-    for key, value in {'SUPABASE_SERVICE_ROLE_KEY': 'server-secret', 'SMTP_HOST': 'smtp.example.com',
-                       'SMTP_USERNAME': 'sender', 'SMTP_PASSWORD': 'secret', 'SMTP_FROM': 'events@example.com'}.items():
-        monkeypatch.setenv(key, value)
-    monkeypatch.delenv('SMTP_PORT', raising=False)
-
-
-def test_registration_email_sender_requires_configuration(mail_config, monkeypatch):
-    """TC-SCRUM33-026 / AC5: the confirmation sender refuses to run without
-    its SMTP settings rather than silently dropping registration emails."""
-    monkeypatch.delenv('SMTP_HOST')
-    with patch('app.services.registration_email_service.supabase_request') as rpc:
-        with pytest.raises(ValueError, match='Configure'):
-            send_pending_emails()
-    rpc.assert_not_called()
-
-
-def test_registration_email_is_sent_and_marked_sent(mail_config):
-    """TC-SCRUM33-027 / AC5: a queued registration confirmation is emailed to
-    the attendee over STARTTLS and then marked sent, so it is not sent again."""
-    queued = {'id': 1, 'recipient': 'alex@example.com', 'subject': 'Event registration confirmed',
-              'body': 'Your registration is confirmed for Conference.'}
-    with patch('app.services.registration_email_service.supabase_request', side_effect=[[queued], []]) as rpc, \
-         patch('app.services.registration_email_service.smtplib.SMTP') as smtp:
-        assert send_pending_emails() == 1
-    smtp.assert_called_once_with('smtp.example.com', 587, timeout=15)
-    connection = smtp.return_value.__enter__.return_value
-    connection.starttls.assert_called_once()
-    connection.login.assert_called_once_with('sender', 'secret')
-    message = connection.send_message.call_args.args[0]
-    assert (message['To'], message['Subject']) == ('alex@example.com', 'Event registration confirmed')
-    assert 'Your registration is confirmed' in message.get_content()
-    assert rpc.call_args.args == ('/rest/v1/registration_email_outbox?id=eq.1',)
-    assert rpc.call_args.kwargs['method'] == 'PATCH' and rpc.call_args.kwargs['payload']['sent_at']

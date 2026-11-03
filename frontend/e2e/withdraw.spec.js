@@ -23,8 +23,8 @@ test('withdraws a registration, confirms it and releases the place', async ({ pa
 
   await card.getByRole('button', { name: 'Withdraw registration' }).click();
 
-  await expect(page.getByRole('main').getByRole('status').filter({ hasText: 'withdrawn' }))
-    .toHaveText('Your registration has been successfully withdrawn.');
+  await expect(page.getByRole('main').getByRole('alert'))
+    .toContainText('Your registration has been successfully withdrawn.');
   await expect(card).toContainText('Your registration has been withdrawn.');
   await expect(card).toContainText(`Available places: ${data.withdraw.capacity_needed}`);
 

@@ -141,11 +141,10 @@ def teardown(state_file):
     flow = Flow(client, _sign_in_as(client))
     flow.since, flow.requests, flow.venues = state["since"], state["requests"], state["venues"]
     flow.users, flow.equipment = state["users"], state["equipment"]
-    # Registrations and their email rows go with the events they belong to.
+    # Remove registrations before their events.
     for request_id in flow.requests:
         for event in admin_request(f"/rest/v1/events?select=event_id&event_request_id=eq.{request_id}"):
-            for table in ("registration_email_outbox", "event_registration"):
-                admin_request(f"/rest/v1/{table}?event_id=eq.{event['event_id']}", method="DELETE")
+            admin_request(f"/rest/v1/event_registration?event_id=eq.{event['event_id']}", method="DELETE")
     flow.clean()
     path.unlink()
 
