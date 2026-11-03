@@ -122,12 +122,13 @@ def test_type_filter_and_catalogue_for_technical_support(client, sign_in, invent
     assert marker in catalogue.get_json()["equipment_types"]
 
 
-# TC-EAV-IT-006 (AC6): both catalogue and availability are Technical Support only.
+# TC-EAV-IT-006 (AC6): availability details are Technical Support only. The
+# shared type list also supports Coordinators creating equipment requests.
 @pytest.mark.parametrize("role", ["Event Organiser", "Event Coordinator", "Event Coordinator Lead",
                                  "Venue Staff", "Safety Officer", "Attendee"])
-@pytest.mark.parametrize("endpoint", ["/api/equipment-types", "/api/equipment-availability"])
-def test_other_roles_cannot_view_equipment(client, sign_in, inventory, role, endpoint):
-    response = client.get(endpoint, headers=sign_in(role), query_string=_criteria(inventory))
+def test_other_roles_cannot_view_equipment(client, sign_in, inventory, role):
+    response = client.get("/api/equipment-availability", headers=sign_in(role),
+                          query_string=_criteria(inventory))
     assert response.status_code == 403, response.get_json()
     assert response.get_json()["error"]
     assert "results" not in response.get_json() and "equipment_types" not in response.get_json()

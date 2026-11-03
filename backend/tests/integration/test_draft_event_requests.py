@@ -129,7 +129,13 @@ def test_incomplete_draft_submission_is_refused(client, drafts):
 ])
 def test_each_missing_mandatory_answer_blocks_draft_submission(client, drafts, field):
     headers, _, complete, create, stored = drafts
-    del complete[field]
+    # Supabase defaults omitted list columns to []; for these fields [] is a
+    # valid explicit answer meaning "none required". Store null to represent
+    # the distinct draft state "not answered yet".
+    if field in {"required_facilities", "equipment_requirements"}:
+        complete[field] = None
+    else:
+        del complete[field]
     request_id = create(complete)["event_request"]["event_request_id"]
     before = stored(request_id)
     response = client.post(f"/api/event-requests/{request_id}/submit", headers=headers)
