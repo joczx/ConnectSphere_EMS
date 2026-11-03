@@ -214,7 +214,7 @@ class Flow:
             "event_organiser_id": user_id_for("Event Organiser"),
             "start_datetime": starts.isoformat(), "end_datetime": (starts + timedelta(hours=3)).isoformat(),
             "capacity_needed": capacity, "room_layout": "theatre", "required_facilities": ["projector"],
-            "equipment_requirements": [], "registration_needs": "None", "save_as_draft": draft,
+            "equipment_requirements": [], "save_as_draft": draft,
         }, 201)["event_request"]
         self.requests.append(row["event_request_id"])
         return row
