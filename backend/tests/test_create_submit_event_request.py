@@ -225,8 +225,7 @@ def test_equipment_quantity_must_be_a_number():
     assert "whole number" in errors["equipment_requirements"]
 
 
-# AC 2, 6, 7, 8: submission, database-generated ID, timestamp and status.
-# TC-CER-022: Asserts: Submit a complete request and return persisted ID, timestamp, and status.
+# TC-CER-022 | AC2, AC6, AC7, AC8 — Submit and persist a completed request.
 def test_service_submits_complete_request_and_returns_generated_id():
     record, errors = schema.parse_payload(valid_payload())
     assert not errors

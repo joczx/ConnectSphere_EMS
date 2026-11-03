@@ -75,7 +75,6 @@ export default function ReviewEventRequest() {
         ['Equipment requirements', list(request.equipment_requirements, i => `${i.equipment_type} × ${i.quantity}${i.notes ? ` (${i.notes})` : ''}`)],
         ['Wheelchair accessibility needed', request.need_wheelchair_accessibility ? 'Yes' : 'No'],
         ['Accessibility for blind attendees needed', request.need_blind_accessibility ? 'Yes' : 'No'],
-        ['Registration needs', request.registration_needs],
       ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || 'Not specified'}</dd></div>)}</dl></article>}
       {state.reviews?.length > 0 && <section className="panel"><h2>Review history</h2><dl>
         {state.reviews.map(review => <div key={review.review_id}><dt>{humanise(review.outcome)} on {when(review.created_at)}</dt><dd>{review.comments || 'No remarks'}</dd></div>)}
