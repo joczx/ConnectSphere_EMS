@@ -91,7 +91,6 @@ MANDATORY_FOR_SUBMISSION = (
     "room_layout",
     "required_facilities",
     "equipment_requirements",
-    "registration_needs",
 )
 
 _LABELS = {

@@ -29,7 +29,6 @@ def review_request(client, sign_in):
         "required_facilities": ["projector", "wifi"],
         "equipment_requirements": [
             {"equipment_type": "microphone", "quantity": 2, "notes": "Wireless"}],
-        "registration_needs": "Online registration",
         "need_wheelchair_accessibility": True, "need_blind_accessibility": False,
     }
     headers = sign_in("Event Coordinator")
