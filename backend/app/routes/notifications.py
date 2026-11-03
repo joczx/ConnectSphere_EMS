@@ -44,6 +44,7 @@ def index():
     result = supabase_request("/rest/v1/rpc/list_my_notifications", token=token, payload=payload)
     if result.get("error"):
         return jsonify(error=result["error"]), result.get("status", 400)
+    result = {**result, "unread": 0}
     return jsonify(**result, page_size=PAGE_SIZE)
 
 

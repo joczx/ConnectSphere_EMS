@@ -138,10 +138,7 @@ def view_event(event_id):
     rows = supabase_request(f'/rest/v1/events?select=*&event_id=eq.{event_id_value}', token=token)
     if not rows:
         return jsonify(error='Event not found or access unavailable.'), 404
-    event = dict(rows[0])
-    if 'safety_officer_id' in event:
-        event['safety_officer_id'] = event.get('technical_support_id')
-    return jsonify(event=event)
+    return jsonify(event=rows[0])
 
 
 @events.patch('/events/<event_id>')
