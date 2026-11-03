@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from app import create_app
+from app.services.event_store import StoreError
 
 
 @pytest.fixture
@@ -116,3 +117,21 @@ def test_event_roster_requires_authentication():
 
 
 # AC5: unauthorised responses must not expose attendee information.
+
+
+@pytest.mark.parametrize('failure,message', [
+    pytest.param(StoreError(503, code='PGRST202'), 'Registration is not configured yet.', id='TC-SCRUM36-008'),
+    pytest.param(StoreError(503), 'Event service is temporarily unavailable.', id='TC-SCRUM36-009'),
+])
+def test_tc_scrum36_008_009_ac5_failed_roster_read_exposes_no_registration_information(failure, message):
+    """TC-SCRUM36-008/009 / AC1, AC5: when registration is not set up or the
+    database is unavailable, the organiser gets an error and no attendee
+    information or totals."""
+    client = create_app().test_client()
+    with patch('app.routes.events.supabase_request', return_value={'id': 'organiser'}), \
+         patch('app.services.registration_service.supabase_request', side_effect=failure):
+        response = client.get('/api/events/41/registrations', headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 503
+    assert response.json['error'].startswith(message)
+    for field in ('event', 'registrations', 'total_registered', 'total_waitlisted', 'total_withdrawn'):
+        assert field not in response.json
