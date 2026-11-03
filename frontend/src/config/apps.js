@@ -67,7 +67,14 @@ const apps = [
     icon: '📅',
     roles: [],
   },
-
+  {
+    id: 'event-requests', category: 'events',
+    label: 'Event Requests',
+    description: 'Open Event Requests',
+    path: '/event-requests',
+    icon: '📝',
+    roles: [],
+  },
   {
     id: 'event-change-requests', category: 'events',
     label: 'Request Event Changes',
@@ -130,6 +137,14 @@ const apps = [
     description: 'Open Venue Search',
     path: '/venue-search',
     icon: '🏢',
+    roles: [],
+  },
+  {
+    id: 'venue-suitability', category: 'venues',
+    label: 'Venue Suitability',
+    description: 'Check venue suitability for an event',
+    path: '/venue-suitability',
+    icon: '✅',
     roles: [],
   },
   {
