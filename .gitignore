@@ -31,3 +31,9 @@ Thumbs.db
 backend/coverage_report
 
 outputs/
+
+#for delivery
+release/
+staged/
+*.zip
+*.log
