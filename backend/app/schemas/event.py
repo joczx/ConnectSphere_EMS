@@ -20,6 +20,7 @@ NON_CRITICAL_FIELDS = (
     "event_name",
     "purpose",
     "description",
+    "registration_needs",
 )
 
 # "critical fields which may affect existing arrangements". Changing any of
@@ -50,6 +51,7 @@ LABELS = {
     "event_name": "Event name",
     "purpose": "Purpose",
     "description": "Description",
+    "registration_needs": "Registration needs",
     "start_datetime": "Proposed start date and time",
     "end_datetime": "Proposed end date and time",
     "capacity_needed": "Expected attendance",

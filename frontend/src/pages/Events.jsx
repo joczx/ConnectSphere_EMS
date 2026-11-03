@@ -32,6 +32,7 @@ const formFrom = (event) => ({
   event_name: event.event_name ?? '',
   purpose: event.purpose ?? '',
   description: event.description ?? '',
+  registration_needs: event.registration_needs ?? '',
   start_datetime: toInput(event.start_datetime),
   end_datetime: toInput(event.end_datetime),
   capacity_needed: event.capacity_needed ?? '',
@@ -49,6 +50,7 @@ function changedFields(event, form) {
     event_name: form.event_name.trim(),
     purpose: form.purpose.trim(),
     description: form.description.trim(),
+    registration_needs: form.registration_needs.trim() || null,
     start_datetime: toIso(form.start_datetime),
     end_datetime: toIso(form.end_datetime),
     capacity_needed: form.capacity_needed === '' ? null : Number(form.capacity_needed),
@@ -73,6 +75,7 @@ function saved(event, field) {
   if (field === 'required_facilities') return event[field] ?? [];
   if (field.startsWith('need_')) return !!event[field];
   if (field === 'capacity_needed') return event[field] ?? null;
+  if (field === 'registration_needs') return event[field] ?? null;
   return event[field] ?? '';
 }
 
@@ -373,6 +376,7 @@ export default function Events() {
           <Detail label="Accessibility for blind attendees needed" value={event.need_blind_accessibility ? 'Yes' : 'No'} />
         </dl><h3>Equipment requirements</h3><dl className="event-detail-grid">
           <Detail label="Equipment requirements" value={display('equipment_requirements', event.equipment_requirements)} />
+          <Detail label="Registration needs" value={event.registration_needs} />
         </dl></>}
 
         {edit.open && <form onSubmit={submitEdit} className="event-form">
@@ -404,6 +408,7 @@ export default function Events() {
             <EventFormSection title="4. Equipment">
             <label>Equipment requirements (one per line: type, quantity, notes — or write "none")
               <textarea rows="3" placeholder="projector, 2, HDMI input" value={edit.values.equipment_requirements} onChange={e => setField('equipment_requirements', e.target.value)} /></label>
+            <label>Registration needs<textarea rows="3" value={edit.values.registration_needs} onChange={e => setField('registration_needs', e.target.value)} /></label>
             </EventFormSection>
           </fieldset>
           <div className="heading">
@@ -511,6 +516,11 @@ export default function Events() {
       </section>}
       {event && (can('event.registrationPeriod', event) || can('event.edit', event)) &&
         <EventRegistrationRoster key={event.event_id} eventId={event.event_id} summaryOnly />}
+      {event && <section className="panel event-detail-section" id="event-registration" tabIndex={-1}>
+        <h2>Registration arrangements</h2>
+        {event.registration_needs && <p style={{ whiteSpace: 'pre-wrap' }}>{event.registration_needs}</p>}
+        {!event.registration_needs && <p>No registration requirements recorded.</p>}
+      </section>}
       </aside></div>}
     </main>
   </>;
