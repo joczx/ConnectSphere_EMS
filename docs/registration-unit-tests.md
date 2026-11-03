@@ -64,6 +64,52 @@ six-module scope.
 - Missing registration-setting validation, service error, event lookup, venue
   refusal and equipment authentication paths were added with meaningful assertions.
 
+## SCRUM-32: View an Event as an Attendee
+
+`backend/tests/test_view_upcoming_events.py` has seven passing instances:
+
+| AC | Case | API expectation |
+| --- | --- | --- |
+| AC1 | TC-SCRUM32-001 | Return multiple supplied upcoming confirmed events open for registration, with available capacity and no-store. |
+| AC2 | TC-SCRUM32-002 | Preserve the twelve supplied event/venue detail fields, including dates, times and registration settings. |
+| AC3 | TC-SCRUM32-003 | Fetch changed confirmed name, description, venue and times on a second read, with no-store on both responses. |
+| AC4 | TC-SCRUM32-004 | Return an already-empty mocked catalogue for cancelled, closed and not_open scenario labels. |
+
+The seventh instance checks authentication. TC-SCRUM32-004 follows the supplied
+test specification: its three labels all use `{'events': []}`. It does not supply
+cancelled/closed rows or test whether filtering removes them. Similarly, venue
+fields in AC2/AC3 are supplied by a mock, not retrieved by a real lookup. These
+unit tests map to all four ACs at the response-contract level; they do not prove
+the complete SQL/UI implementation. Run from `backend`:
+
+```powershell
+python -m pytest tests/test_view_upcoming_events.py -q -p no:cacheprovider
+```
+
+## SCRUM-214: Set and Update Registration Period
+
+`backend/tests/test_registration_period.py` has 31 passing cases. Run from
+`backend` with:
+
+```powershell
+python -m pytest tests/test_registration_period.py -q -p no:cacheprovider
+```
+
+| AC | Python unit-test cases |
+| --- | --- |
+| AC1 | `test_tc_scrum214_001_004_ac1_ac4_set_dates_and_waiting_list`; authentication, unassigned-organiser refusal and confirmed-stage checks. |
+| AC2 | `test_tc_scrum214_002_ac2_invalid_order_is_rejected_before_database_call`; equal/before opening, timezone and fractional-second ordering. |
+| AC3 | `test_tc_scrum214_003_ac3_updates_existing_period_when_store_allows_it`; before/during scenarios and the closed-period refusal response. |
+| AC4 | Both enabled and disabled waiting-list values in TC-SCRUM214-001/004; invalid preference types are rejected by schema tests. |
+| AC5 | `test_tc_scrum214_005_007_ac5_ac7_registration_outcomes_and_messages`; successful open-period response and not-open/closed refusals. |
+| AC6 | `test_tc_scrum214_006_ac6_attendee_reads_updated_period_after_save`; reads before/after a save, changed opening/closing/preference and no-store headers. |
+| AC7 | Not-open/closed API error wording in TC-SCRUM214-005/007 and catalogue status preservation for frontend messages. |
+
+The before/during fixtures and not-open/closed outcomes are mocked database
+decisions. They verify the Python API contract, not real clock boundary
+enforcement. Visible React messages and the SQL permission/timing rules need
+their own tests; Python mocks cannot establish full implementation of those ACs.
+
 ## Limits of the AC assertions
 
 Supabase calls are mocked. These tests assert the Python API contract; they do

@@ -1,10 +1,14 @@
-"""Unit tests for setting and updating an event's registration period.
+"""SCRUM-214: unit tests for setting and updating registration periods.
 
 Covers setting validation, timezone ordering, waiting-list preference validation,
 authentication, verified-token forwarding and attendee-facing period responses.
 Database timing gates and real lifecycle permissions are tested separately by
 frontend/tests/registration-db.mjs.
+AC1--AC7 are mapped to API/schema tests below. Timing outcomes and ownership
+are mocked RPC decisions, not SQL clock/permission tests. AC7 checks the API
+message; visible catalogue wording is rendered by React and is not tested here.
 """
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -49,16 +53,24 @@ def test_registration_requires_authentication(method, path):
         rpc.assert_not_called()
 
 
-def test_settings_pass_verified_token_and_not_client_identity():
+@pytest.mark.parametrize('waiting_list_enabled', [True, False], ids=['waiting-list-enabled', 'waiting-list-disabled'])
+def test_tc_scrum214_001_004_ac1_ac4_set_dates_and_waiting_list(waiting_list_enabled):
+    """AC1/AC4: submit opening, closing and either waiting-list preference."""
     client = create_app().test_client()
+    payload = settings(waiting_list_enabled=waiting_list_enabled)
+    result = {'event': {'event_id': 1, 'status': 'confirmed', **payload}}
     with patch('app.routes.events.supabase_request', return_value={'id': 'organiser'}), \
-         patch('app.routes.events.load_event', return_value={'status': 'confirmed'}), \
-         patch('app.services.registration_service.supabase_request', return_value={'event': {'event_id': 1}}) as rpc:
-        response = client.patch('/api/events/1/registration-period', json=settings(),
+         patch('app.routes.events.load_event', return_value={'status': 'confirmed'}) as load, \
+         patch('app.services.registration_service.supabase_request', return_value=result) as rpc:
+        response = client.patch('/api/events/1/registration-period', json=payload,
                                 headers={'Authorization': 'Bearer verified'})
     assert response.status_code == 200
-    assert rpc.call_args.kwargs['token'] == 'verified'
-    assert rpc.call_args.kwargs['payload']['p_event_id'] == 1
+    assert response.json == result
+    load.assert_called_once_with(1, 'verified')
+    rpc.assert_called_once_with('/rest/v1/rpc/set_event_registration_period', token='verified', method='POST',
+        payload={'p_event_id': 1, 'p_registration_opens_at': '2027-01-01T02:00:00+00:00',
+                 'p_registration_closes_at': '2027-01-02T02:00:00+00:00',
+                 'p_waiting_list_enabled': waiting_list_enabled})
 
 
 def test_database_refusal_without_status_defaults_to_bad_request():
@@ -82,16 +94,139 @@ def test_registration_period_field_errors_are_returned_to_the_organiser():
     assert response.json['errors'] == error['errors']
 
 
-def test_invalid_period_is_rejected_before_database_call():
+@pytest.mark.parametrize('closing', [
+    pytest.param('2026-12-31T00:00:00Z', id='closing-before-opening'),
+    pytest.param('2027-01-01T02:00:00Z', id='closing-equals-opening-in-another-timezone'),
+])
+def test_tc_scrum214_002_ac2_invalid_order_is_rejected_before_database_call(closing):
     client = create_app().test_client()
     with patch('app.routes.events.supabase_request', return_value={'id': 'organiser'}), \
          patch('app.services.registration_service.supabase_request') as rpc:
         response = client.patch('/api/events/1/registration-period',
-                                json=settings(registration_closes_at='2026-12-31T00:00:00Z'),
+                                json=settings(registration_closes_at=closing),
                                 headers={'Authorization': 'Bearer verified'})
     assert response.status_code == 400
     assert 'registration_closes_at' in response.json['errors']
     rpc.assert_not_called()
+
+
+@pytest.mark.parametrize('phase', ['before-opening', 'during-registration'])
+def test_tc_scrum214_003_ac3_updates_existing_period_when_store_allows_it(phase):
+    """AC3: forward updates in both scenarios; SQL decides timing eligibility."""
+    client = create_app().test_client()
+    now = datetime.now(timezone.utc)
+    old_opening = now + timedelta(days=1) if phase == 'before-opening' else now - timedelta(days=1)
+    original = {'event_id': 1, 'status': 'confirmed',
+                'registration_opens_at': old_opening.isoformat(),
+                'registration_closes_at': (now + timedelta(days=3)).isoformat(),
+                'waiting_list_enabled': False}
+    changes = {'registration_opens_at': (old_opening + timedelta(hours=1)).isoformat(),
+               'registration_closes_at': (now + timedelta(days=4)).isoformat(),
+               'waiting_list_enabled': True}
+    updated = {**original, **changes}
+    with patch('app.routes.events.supabase_request', return_value={'id': 'organiser'}), \
+         patch('app.routes.events.load_event', return_value=original) as load, \
+         patch('app.services.registration_service.supabase_request', return_value={'event': updated}) as rpc:
+        response = client.patch('/api/events/1/registration-period', json=changes,
+                                headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 200
+    assert response.json == {'event': updated}
+    assert original['registration_opens_at'] != updated['registration_opens_at']
+    assert original['registration_closes_at'] != updated['registration_closes_at']
+    load.assert_called_once_with(1, 'verified')
+    rpc.assert_called_once_with('/rest/v1/rpc/set_event_registration_period', token='verified', method='POST',
+        payload={'p_event_id': 1, **{'p_' + field: value for field, value in changes.items()}})
+
+
+def test_ac3_update_after_period_closed_returns_refusal():
+    """Preserve the store's closed-period refusal without claiming a save."""
+    client = create_app().test_client()
+    message = 'Registration settings can only change before or during registration.'
+    with patch('app.routes.events.supabase_request', return_value={'id': 'organiser'}), \
+         patch('app.routes.events.load_event', return_value={'status': 'confirmed'}), \
+         patch('app.services.registration_service.supabase_request', return_value={'error': message, 'status': 409}):
+        response = client.patch('/api/events/1/registration-period', json=settings(),
+                                headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 409
+    assert response.json == {'error': message}
+
+
+def test_ac1_unassigned_organiser_cannot_claim_registration_settings_were_saved():
+    client = create_app().test_client()
+    message = 'Only the assigned Event Organiser can manage registration.'
+    with patch('app.routes.events.supabase_request', return_value={'id': 'unassigned'}), \
+         patch('app.routes.events.load_event', return_value={'status': 'confirmed'}), \
+         patch('app.services.registration_service.supabase_request', return_value={'error': message, 'status': 403}):
+        response = client.patch('/api/events/1/registration-period', json=settings(),
+                                headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 403
+    assert response.json == {'error': message}
+
+
+@pytest.mark.parametrize('registration_status,message', [
+    ('not_open', 'Registration is not yet open.'),
+    ('closed', 'Registration has closed.'),
+    ('open', None),
+])
+def test_tc_scrum214_005_007_ac5_ac7_registration_outcomes_and_messages(registration_status, message):
+    """AC5/AC7: return allowed/refused RPC outcomes and exact error wording.
+
+    The API does not evaluate a clock; SQL period boundaries are not exercised.
+    """
+    client = create_app().test_client()
+    details = {'full_name': 'Alex Tan', 'contact_email': 'alex@example.com', 'contact_phone': '+65 8123 4567'}
+    result = {'error': message, 'status': 409} if message else {'registration': {'event_id': 1, 'status': 'registered'}}
+    with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
+         patch('app.services.registration_service.supabase_request', return_value=result) as rpc:
+        response = client.post('/api/events/1/registrations', json=details,
+                               headers={'Authorization': 'Bearer verified'})
+    rpc.assert_called_once_with('/rest/v1/rpc/register_for_event', token='verified', method='POST',
+        payload={'p_event_id': 1, **{'p_' + field: value for field, value in details.items()}})
+    if registration_status == 'open':
+        assert response.status_code == 200
+        assert response.json == result
+    else:
+        assert response.status_code == 409
+        assert response.json == {'error': message}
+        assert 'registration' not in response.json
+
+
+def test_tc_scrum214_006_ac6_attendee_reads_updated_period_after_save():
+    """AC6: a later attendee read returns supplied updated dates, uncached."""
+    client = create_app().test_client()
+    original = {'event_id': 1, 'status': 'confirmed', **settings()}
+    changes = settings(registration_opens_at='2027-01-01T11:00:00+08:00',
+                       registration_closes_at='2027-01-02T11:00:00+08:00',
+                       waiting_list_enabled=False)
+    updated = {**original, **changes}
+    with patch('app.routes.events.supabase_request', side_effect=[{'id': 'attendee'}, {'id': 'organiser'}, {'id': 'attendee'}]), \
+         patch('app.routes.events.load_event', return_value=original), \
+         patch('app.services.registration_service.supabase_request', side_effect=[
+             {'events': [original]}, {'event': updated}, {'events': [updated]},
+         ]) as rpc:
+        before = client.get('/api/registration-events', headers={'Authorization': 'Bearer attendee-token'})
+        saved = client.patch('/api/events/1/registration-period', json=changes,
+                             headers={'Authorization': 'Bearer organiser-token'})
+        after = client.get('/api/registration-events', headers={'Authorization': 'Bearer attendee-token'})
+    assert before.status_code == saved.status_code == after.status_code == 200
+    assert before.json == {'events': [original]}
+    assert saved.json == {'event': updated}
+    assert after.json == {'events': [updated]}
+    assert before.headers['Cache-Control'] == after.headers['Cache-Control'] == 'no-store'
+    assert rpc.call_count == 3
+    assert [call.kwargs['token'] for call in rpc.call_args_list] == ['attendee-token', 'organiser-token', 'attendee-token']
+
+
+@pytest.mark.parametrize('registration_status', ['not_open', 'closed'])
+def test_ac7_catalogue_preserves_status_for_the_frontend_message(registration_status):
+    """The frontend selects its message from the returned registration status."""
+    client = create_app().test_client()
+    event = {'event_id': 1, 'status': 'confirmed', 'registration_status': registration_status, **settings()}
+    with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
+         patch('app.services.registration_service.supabase_request', return_value={'events': [event]}):
+        response = client.get('/api/registration-events', headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 200
+    assert response.json['events'][0]['registration_status'] == registration_status
 
 
 @pytest.mark.parametrize('status', ['planning', 'pending_safety_checks', 'completed', 'cancelled', None])
