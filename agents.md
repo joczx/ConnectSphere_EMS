@@ -305,14 +305,3 @@ Only an approved booking makes a venue unavailable. See
   How a conflicting booking is described, wherever one appears.
 - **[backend/tests/test_venue_booking_conflicts.py](backend/tests/test_venue_booking_conflicts.py)** —
   The overlap boundaries and each acceptance criterion.
-
-## Integration-test database
-
-- `supabase/migrations/20261029064030_remote_schema.sql` is the integration-test database schema snapshot, including tables, functions, queries and triggers. Whenever database changes are made, update this file to keep the integration-test database definition current.
-- Local integration-test credentials belong in `backend/.env.integration-test`, which Git ignores. Do not commit credentials.
-- To run integration tests manually in PowerShell:
-
-```powershell
-cd backend
-$env:RUN_INTEGRATION_TESTS="1"; python -m pytest tests/integration -v
-```

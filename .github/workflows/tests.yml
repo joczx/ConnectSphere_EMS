@@ -52,3 +52,205 @@ jobs:
         env:
           RUN_INTEGRATION_TESTS: "1"
         run: python -m pytest tests/integration -v
+
+  e2e-tests:
+    name: End-to-end Tests
+    # Same shared test project as the integration tests, so it runs after them
+    # rather than alongside, and like them only where the secret is available.
+    needs: integration-tests
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: integration-test-database
+      cancel-in-progress: false
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install backend dependencies
+        run: python -m pip install -r requirements.txt
+        working-directory: backend
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Install Playwright browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Write integration test config
+        working-directory: backend
+        run: printf '%s\n' "$INTEGRATION_ENV_FILE" > .env.integration-test
+        env:
+          INTEGRATION_ENV_FILE: ${{ secrets.INTEGRATION_ENV_FILE }}
+      # Starts Flask (against the test project) and Vite itself; see playwright.config.js.
+      - name: Run end-to-end tests
+        working-directory: frontend
+        run: npx playwright test
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 14
+
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Audit Python dependencies
+        run: |
+          python -m pip install pip-audit
+          python -m pip_audit -r backend/requirements.txt
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Audit frontend runtime dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+
+  package:
+    name: Build Release Package
+    needs:
+      - test-cases-ci
+      - integration-tests
+      - e2e-tests
+      - audit
+    # Forked pull requests do not receive integration-test secrets. Packaging
+    # may continue when those jobs were intentionally skipped, but never after an
+    # actual test or audit failure.
+    if: |
+      always() &&
+      needs.test-cases-ci.result == 'success' &&
+      needs.audit.result == 'success' &&
+      (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped') &&
+      (needs.e2e-tests.result == 'success' || needs.e2e-tests.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build React application
+        working-directory: frontend
+        run: npm run build
+      - name: Assemble release directory
+        run: |
+          mkdir -p release/backend/vendor release/frontend
+
+          python -m pip install \
+            -r backend/requirements.txt \
+            --target release/backend/vendor
+
+          cp -R backend/app release/backend/app
+          cp backend/run.py release/backend/run.py
+          cp backend/requirements.txt release/backend/requirements.txt
+          cp backend/.env.example release/backend/.env.example
+
+          cp -R frontend/dist release/frontend/dist
+          cp frontend/package.json release/frontend/package.json
+          cp frontend/package-lock.json release/frontend/package-lock.json
+
+          cp -R supabase release/supabase
+
+          cd release
+          zip -qr ../connectsphere-release.zip .
+      - name: Generate release SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: release
+          format: spdx-json
+          output-file: connectsphere-sbom.spdx.json
+          artifact-name: connectsphere-sbom.spdx.json
+          upload-release-assets: false
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: connectsphere-release
+          path: connectsphere-release.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  smoke:
+    name: Smoke Test Release Package
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The checkout supplies only smoke.sh. The applications themselves come
+      # from the artifact produced by the package job.
+      - name: Check out smoke-test script
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Download release package
+        uses: actions/download-artifact@v4
+        with:
+          name: connectsphere-release
+      - name: Run and smoke-test release package
+        run: |
+          unzip -q connectsphere-release.zip -d staged
+
+          PYTHONPATH="$PWD/staged/backend/vendor:$PWD/staged/backend" \
+            python -m flask \
+              --app run:app \
+              run \
+              --host 127.0.0.1 \
+              --port 5000 \
+              --no-reload \
+              > backend.log 2>&1 &
+          backend_pid=$!
+
+          python -m http.server \
+            4173 \
+            --bind 127.0.0.1 \
+            --directory staged/frontend/dist \
+            > frontend.log 2>&1 &
+          frontend_pid=$!
+
+          trap 'kill "$backend_pid" "$frontend_pid" 2>/dev/null || true' EXIT
+
+          bash smoke.sh \
+            http://127.0.0.1:5000 \
+            http://127.0.0.1:4173 \
+            || {
+              echo "Backend log:"
+              cat backend.log
+              echo "Frontend log:"
+              cat frontend.log
+              exit 1
+            }

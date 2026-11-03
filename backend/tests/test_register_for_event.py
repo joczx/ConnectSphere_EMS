@@ -1,8 +1,8 @@
 """Unit tests for attendee registration with personal/contact details.
 
-Covers input validation, authenticated submission and refusal responses. Actual
-registration-window and capacity enforcement is verified separately by
-frontend/tests/registration-db.mjs.
+Covers input validation, authenticated submission and refusal responses.
+Actual registration-window and capacity enforcement
+is verified separately by frontend/tests/registration-db.mjs.
 """
 from unittest.mock import patch
 
@@ -55,6 +55,39 @@ def test_other_database_errors_are_preserved():
     assert caught.value is failure
 
 
+def test_registration_refusal_without_status_uses_default_and_preserves_field_errors():
+    errors = {'event_id': 'Registration unavailable.'}
+    with patch('app.services.registration_service.supabase_request',
+               return_value={'error': 'Cannot register.', 'errors': errors}):
+        with pytest.raises(EventError) as caught:
+            registration_call('register_for_event', 'verified', {'p_event_id': 1})
+    assert caught.value.status == 400
+    assert caught.value.to_dict() == {'error': 'Cannot register.', 'errors': errors}
+
+
+def test_registration_service_preserves_non_object_store_result():
+    with patch('app.services.registration_service.supabase_request', return_value=[]) as query:
+        assert registration_call('register_for_event', 'verified', {'p_event_id': 1}) == []
+    query.assert_called_once_with('/rest/v1/rpc/register_for_event', token='verified',
+                                 payload={'p_event_id': 1}, method='POST')
+
+
+@pytest.mark.parametrize('error,expected_status', [
+    (StoreError(409, code='23514'), 409),
+    (StoreError(401), 401),
+    (StoreError(503), 503),
+])
+def test_registration_store_failures_return_safe_api_errors(error, expected_status):
+    client = create_app().test_client()
+    with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
+         patch('app.services.registration_service.supabase_request', side_effect=error):
+        response = client.post('/api/events/1/registrations', json=attendee_details(),
+                               headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == expected_status
+    assert 'error' in response.json
+    assert 'registration' not in response.json
+
+
 
 def attendee_details(**changes):
     return {'full_name': 'Alex Tan', 'contact_email': 'alex@example.com', 'contact_phone': '+65 8123 4567', **changes}
@@ -97,7 +130,7 @@ def test_invalid_attendee_details_never_reach_database():
 
 def test_registration_submits_details_using_authenticated_identity():
     client = create_app().test_client()
-    result = {'registration': {'status': 'registered'}, 'notification': 'queued'}
+    result = {'registration': {'status': 'registered'}}
     with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
          patch('app.services.registration_service.supabase_request', return_value=result) as rpc:
         response = client.post('/api/events/1/registrations', json=attendee_details(), headers={'Authorization': 'Bearer verified'})
@@ -105,4 +138,3 @@ def test_registration_submits_details_using_authenticated_identity():
     assert response.json == result
     rpc.assert_called_once_with('/rest/v1/rpc/register_for_event', token='verified', method='POST',
         payload={'p_event_id': 1, **{'p_' + k: v for k, v in attendee_details().items()}})
-

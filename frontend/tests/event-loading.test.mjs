@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loadEvents } from '../src/services/eventLoading.js';
+import { loadEvents, loadEventWorkspace, eventWorkspaceItems } from '../src/services/eventLoading.js';
 
 test('a status service outage still loads visible events with a warning', async () => {
   const calls = [];
@@ -31,4 +31,37 @@ test('event query failures remain errors', async () => {
     if (path === '/api/events') throw error;
     return {};
   }, '/api/events'), error);
+});
+
+test('workspace combines all own request statuses without duplicating approved events', () => {
+  const events = [{ event_id: 1, event_request_id: 10, status: 'confirmed' }];
+  const requests = ['draft', 'submitted', 'planning', 'rejected', 'cancelled'].map((status, index) => ({
+    event_request_id: index + 20, event_organiser_id: 'me', status,
+  }));
+  requests.push({ event_request_id: '10', event_organiser_id: 'me', status: 'planning' },
+    { event_request_id: 99, event_organiser_id: 'other', status: 'submitted' });
+  const result = eventWorkspaceItems(events, requests, 'me');
+  assert.equal(result.length, 6);
+  assert.deepEqual(result.map(item => item.status), ['confirmed', 'draft', 'submitted', 'planning', 'rejected', 'cancelled']);
+  assert.equal(result[1].workspace_path, '/event-requests/20');
+  assert.equal(requests[0].workspace_path, undefined);
+});
+
+test('workspace requests are organiser-scoped and failures preserve operational events with a warning', async () => {
+  const calls = [];
+  const result = await loadEventWorkspace(async path => {
+    calls.push(path);
+    if (path.startsWith('/api/event-requests')) throw new Error('Unavailable');
+    return { events: [{ event_id: 1 }] };
+  }, '/api/events', {}, 'me');
+  assert.ok(calls.includes('/api/event-requests?event_organiser_id=me'));
+  assert.equal(result.data.events[0].event_id, 1);
+  assert.deepEqual(result.data.event_requests, []);
+  assert.match(result.requestWarning, /could not be loaded/);
+});
+
+test('other staff do not query organiser requests', async () => {
+  const calls = [];
+  await loadEventWorkspace(async path => { calls.push(path); return { events: [] }; }, '/api/events');
+  assert.deepEqual(calls, ['/api/events/status-refresh', '/api/events']);
 });
