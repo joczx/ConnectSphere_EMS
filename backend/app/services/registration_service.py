@@ -40,7 +40,7 @@ def _visible_event(event, now):
         return False
     if any(value.tzinfo is None for value in (starts, ends, opens, closes)):
         return False
-    return opens < closes and now < closes and now < starts and now < ends
+    return opens <= now < closes and now < starts and now < ends
 
 
 def attendee_catalogue(token):

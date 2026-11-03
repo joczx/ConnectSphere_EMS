@@ -191,7 +191,7 @@ def test_tc_scrum214_005_007_ac5_ac7_registration_outcomes_and_messages(period_s
         payload={'p_event_id': 1, **{'p_' + field: value for field, value in details.items()}})
     if period_state == 'open':
         assert response.status_code == 200
-        assert response.json == result
+        assert response.json == {**result, 'message': 'You are registered for the event.'}
     else:
         assert response.status_code == 409
         assert response.json == {'error': message}
@@ -227,8 +227,8 @@ def test_tc_scrum214_006_ac6_attendee_reads_updated_period_after_save():
 
 
 @pytest.mark.parametrize('period_state', ['not_open', 'closed'])
-def test_ac7_catalogue_shows_future_period_and_hides_closed_period(period_state):
-    """Before opening the event is visible; closed periods are hidden."""
+def test_ac7_catalogue_hides_future_and_closed_periods(period_state):
+    """Before opening and after closing, the event is hidden."""
     client = create_app().test_client()
     event = {'event_id': 1, 'status': 'confirmed',
              'start_datetime': '2027-01-03T10:00:00+08:00',
@@ -241,7 +241,7 @@ def test_ac7_catalogue_shows_future_period_and_hides_closed_period(period_state)
          patch('app.services.registration_service.supabase_request', return_value={'events': [event]}):
         response = client.get('/api/registration-events', headers={'Authorization': 'Bearer verified'})
     assert response.status_code == 200
-    assert response.json == {'events': [event] if period_state == 'not_open' else []}
+    assert response.json == {'events': []}
 
 
 @pytest.mark.parametrize('status', ['planning', 'pending_safety_checks', 'completed', 'cancelled', None])

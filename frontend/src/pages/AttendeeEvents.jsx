@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import WithdrawRegistration from '../components/WithdrawRegistration';
 import { registrationDate } from '../components/RegistrationPeriod';
 import { useAuth } from '../auth/AuthContext';
+import { Alert, AlertTitle, AlertDescription } from '../components/Alert';
 
 export default function AttendeeEvents() {
   const { api } = useAuth();
@@ -30,10 +31,11 @@ export default function AttendeeEvents() {
     e.preventDefault();
     setBusy(true); setError(''); setMessage('');
     try {
-      const data = await api(`/api/events/${event.event_id}/registrations`, { method: 'POST', body: details });
-      const emailMessage = data.notification === 'queued' ? ' A confirmation email has been queued.'
-        : data.notification === 'sent' ? ' A confirmation email has already been sent.' : '';
-      setMessage((data.registration.status === 'waiting_list' ? 'You have joined the waiting list. Your place is not confirmed.' : 'You are registered for the event.') + emailMessage);
+      const data = await api(`/api/events/${event.event_id}/registrations`, {
+        method: 'POST', body: details, successFeedback: false,
+      });
+      setMessage(data.message || (data.registration.status === 'waiting_list'
+        ? 'You have joined the waiting list. Your place is not confirmed.' : 'You are registered for the event.'));
       setSelected(null);
       setRefresh(n => n + 1);
     } catch (err) { setError(err.message); }
@@ -45,7 +47,7 @@ export default function AttendeeEvents() {
     <p><Link to="/my-registrations">View my registrations</Link></p>
     {loading && <p role="status">Loading events…</p>}
     {error && <p role="alert" className="error">{error}</p>}
-    {message && <p role="status">{message}</p>}
+    {message && <Alert><AlertTitle>Registration update</AlertTitle><AlertDescription>{message}</AlertDescription></Alert>}
     {!loading && !error && !events.length && <p>No events are available for registration.</p>}
     {events.map(event => {
       const now = Date.now();

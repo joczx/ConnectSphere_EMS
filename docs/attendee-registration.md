@@ -20,36 +20,33 @@ Registration details are visible only to the attendee through the existing RLS
 policy. Existing registrations keep null personal details; no details are invented.
 The previous one-argument registration RPC is removed to prevent validation bypass.
 
-## Email delivery
+## Successful registration confirmation
 
-Registration atomically writes a confirmation to `registration_email_outbox`.
-Duplicates return the existing registration without creating another notification.
-Waiting-list notifications use different wording from confirmed registration.
+SCRUM-33 AC5 is confirmed through the on-screen registration alert. The API
+returns the registration record and a clear success message. Waitlisted entries
+are explicitly described as not confirming a place.
 
-Configure the backend variables shown in `backend/.env.example`. Keep the service
-role key server-side. Use an SMTP server supporting STARTTLS on port 587 (or set
-`SMTP_PORT`). From `backend`, schedule `python send_registration_emails.py` every
-minute, with only one sender running at a time. Each invocation sends up to 100
-pending messages. Monitor nonzero exit codes and rerun after failures; unsent rows
-remain pending. The UI reports that email is queued, rather than claiming delivery.
-
-Delivery is at least once: a crash after SMTP acceptance but before marking a row
-sent can produce a duplicate email on retry. A stable Message-ID assists tracing.
-SMTP acceptance does not establish inbox delivery. Real delivery requires configured
-credentials and a verified sender; automated tests use a mocked SMTP connection.
+Apply `061_remove_registration_confirmation_email.sql` after 060. It replaces the
+registration and withdrawal functions, removes their obsolete delivery-queue
+operations, and drops the queue table without CASCADE. Registration validation,
+capacity locking, re-registration and in-app notification triggers are preserved.
+The sender command, delivery service and SMTP configuration have been removed.
+Historical migrations remain for reproducibility; 061 removes the old feature
+when upgrading an existing database. It must be applied to the intended remote
+project separately.
 
 ## Validation
 
 From `backend`:
 
 ```powershell
-python -m coverage run --branch --source=app.schemas.registration,app.services.registration_service,app.services.registration_email_service -m pytest tests/test_registration_period.py tests/test_register_for_event.py -p no:cacheprovider
+python -m coverage run --branch --source=app.schemas.registration,app.services.registration_service -m pytest tests/test_registration_period.py tests/test_register_for_event.py -p no:cacheprovider
 python -m coverage report --fail-under=100 -m
 ```
 
 From the repository root: `node --test frontend/tests/registration-db.mjs`.
 The database test uses the existing local PGlite test dependency and applies the
-actual migrations to an isolated database; no production email is sent.
+actual migrations to an isolated database; no live database is required.
 
 ## Withdrawal
 
@@ -69,9 +66,7 @@ promoted by this story. The updated capacity and status appear in attendee event
 information and immediately after a successful withdrawal.
 
 Attendees may register again while registration is open, subject to capacity.
-Re-registration resets the withdrawal timestamp and queues a fresh confirmation.
-Withdrawal removes pending confirmation emails; a message already accepted by SMTP
-or currently being sent cannot be recalled.
+Re-registration resets the withdrawal timestamp and returns a fresh success message for the registration alert.
 
 ## My registrations
 

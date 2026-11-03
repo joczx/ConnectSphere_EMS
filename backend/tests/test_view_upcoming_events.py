@@ -130,11 +130,11 @@ def test_catalogue_includes_event_at_exact_opening_time(event):
     assert response.json == {'events': [event]}
 
 
-def test_catalogue_shows_confirmed_event_before_registration_opens(event):
+def test_catalogue_hides_confirmed_event_before_registration_opens(event):
     event = {**event, 'registration_opens_at': '2027-06-02T00:00:00Z'}
     response = get_catalogue([event])
     assert response.status_code == 200
-    assert response.json == {'events': [event]}
+    assert response.json == {'events': []}
 
 
 def test_upcoming_events_requires_authentication():

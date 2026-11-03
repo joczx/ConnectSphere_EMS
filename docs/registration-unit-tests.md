@@ -8,13 +8,13 @@ Each file link opens the Python unit tests for that story.
 | Story | Listed cases | Test file | Current pytest instances |
 | --- | --- | --- | --- |
 | SCRUM-32: View an Event as an Attendee | 5 | [test_view_upcoming_events.py](../backend/tests/test_view_upcoming_events.py) | 26 |
-| SCRUM-33: Register for an Event | 14 | [test_register_for_event.py](../backend/tests/test_register_for_event.py) | 27 |
+| SCRUM-33: Register for an Event | 14 | [test_register_for_event.py](../backend/tests/test_register_for_event.py) | 26 |
 | SCRUM-34: View Registration Status | 7 | [test_view_my_registrations.py](../backend/tests/test_view_my_registrations.py) | 12 |
 | SCRUM-35: Withdraw Event Registration | 8 | [test_withdraw_event_registration.py](../backend/tests/test_withdraw_event_registration.py) | 10 |
 | SCRUM-36: View Registration Information | 7 | [test_view_event_registrations.py](../backend/tests/test_view_event_registrations.py) | 12 |
 | SCRUM-157: View Confirmed Event Information | 13 | [test_confirmed_event_information.py](../backend/tests/test_confirmed_event_information.py) | 29 |
 | SCRUM-214: Set and Update Registration Period | 16 | [test_registration_period.py](../backend/tests/test_registration_period.py) | 33 |
-| **Total** | **70** | **7 files** | **149** |
+| **Total** | **70** | **7 files** | **148** |
 
 "Listed cases" counts rows in the supplied test-case inventory, not Python test
 functions. Combined tests can cover several listed cases, parametrised tests run
@@ -32,9 +32,9 @@ python -m pytest tests/test_view_upcoming_events.py tests/test_register_for_even
 ```
 
 These tests use mocked external services and need no live integration database.
-Registration contact email is test data; the suite does not send real email.
-The date-based AC4 filter and public-field projection are included in the passing
-full offline backend run of **930 tests** on 3 November 2026.
+Contact details remain required. SCRUM-33 AC5 now tests the on-screen confirmation
+alert; the retired delivery-worker cases have been removed.
+Latest full offline backend verification on 4 November 2026: **929 passed**.
 
 The separate [SCRUM-32 integration tests](attendee-catalogue-integration-tests.md)
 exercise the configured isolated Supabase project. Their results must not be

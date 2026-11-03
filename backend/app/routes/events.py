@@ -78,8 +78,14 @@ def register_attendee(event_id):
     record, errors = parse_attendee(request.get_json(silent=True))
     if errors:
         return jsonify(error='Check your registration details.', errors=errors), 400
-    return jsonify(registration_call('register_for_event', token,
-        {'p_event_id': event_id, **{'p_' + key: value for key, value in record.items()}}))
+    result = registration_call('register_for_event', token,
+        {'p_event_id': event_id, **{'p_' + key: value for key, value in record.items()}})
+    if not isinstance(result, dict) or 'registration' not in result:
+        return jsonify(result)
+    registration = result['registration']
+    message = ('You have joined the waiting list. Your place is not confirmed.'
+               if registration['status'] == 'waiting_list' else 'You are registered for the event.')
+    return jsonify(registration=registration, message=message)
 
 
 @events.get('/my-registrations')

@@ -61,7 +61,7 @@ def cleanup(flow):
             continue
         for event in rows:
             event_id = event['event_id']
-            for table in ('registration_email_outbox', 'event_registration', 'venue_booking_requests'):
+            for table in ('event_registration', 'venue_booking_requests'):
                 remove(f'/rest/v1/{table}?event_id=eq.{event_id}')
             name = quote(event['event_name'], safe='')
             remove(f'/rest/v1/notifications?notification_id=gt.{flow.since}&body=like.*{name}*')
@@ -175,12 +175,11 @@ def test_tc_scrum32_004_ac4_ineligible_test_events_are_absent(client, sign_in, m
     assert owned_rows == [], f'AC4: {state} event is still exposed: {owned_rows}'
 
 
-def test_confirmed_event_is_visible_before_opening_but_registration_is_refused(
+def test_confirmed_event_is_hidden_before_opening_and_registration_is_refused(
         client, sign_in, make_confirmed_event):
     event = make_confirmed_event('not_open')
     rows = read_catalogue(client, sign_in)
-    visible = next(row for row in rows if row['event_id'] == event['event_id'])
-    assert instant(visible['registration_opens_at']) > datetime.now(timezone.utc)
+    assert all(row['event_id'] != event['event_id'] for row in rows)
     response = client.post(f"/api/events/{event['event_id']}/registrations",
         headers=sign_in('Attendee'), json={'full_name': 'Early Attendee',
         'contact_email': 'early@connectsphere.invalid', 'contact_phone': '+65 6123 4567'})

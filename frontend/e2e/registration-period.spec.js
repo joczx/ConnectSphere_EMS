@@ -21,6 +21,16 @@ async function openForm(page, event) {
 const periodSection = page =>
   page.locator('section').filter({ has: page.getByRole('heading', { name: 'Registration period' }) });
 
+async function openCatalogue(page) {
+  const [response] = await Promise.all([
+    page.waitForResponse(response => response.url().endsWith('/api/registration-events')
+      && response.request().method() === 'GET'),
+    page.goto('/#/event-registration'),
+  ]);
+  expect(response.status()).toBe(200);
+  await expect(eventCard(page, data.open)).toBeVisible();
+}
+
 // E2E-RPD-001 (AC2): a closing time before the opening time is refused.
 test('refuses a closing time before the opening time', async ({ page }) => {
   await openForm(page, data.not_open);
@@ -36,8 +46,11 @@ test('refuses a closing time before the opening time', async ({ page }) => {
 // times and turns on the waiting list; the Attendee then sees the new period.
 test('sets the period and waiting list, and Attendees see the change', async ({ page, request }) => {
   try {
+    await signIn(page, 'Attendee');
+    await openCatalogue(page);
+    await expect(eventCard(page, data.not_open)).toHaveCount(0);
     await openForm(page, data.not_open);
-    const opens = DateTime.now().plus({ days: 3 }).startOf('minute');
+    const opens = DateTime.now().minus({ hours: 1 }).startOf('minute');
     const closes = opens.plus({ days: 1 });
     await page.getByLabel('Registration opens').fill(inputTime(opens));
     await page.getByLabel('Registration closes').fill(inputTime(closes));
@@ -49,13 +62,13 @@ test('sets the period and waiting list, and Attendees see the change', async ({ 
     await expect(periodSection(page)).toContainText('Enabled when capacity is reached');
 
     await signIn(page, 'Attendee');
-    await page.goto('/#/event-registration');
+    await openCatalogue(page);
     const card = eventCard(page, data.not_open);
     await expect(card).toContainText(`Registration opens: ${registrationDate(opens.toISO())}`);
     await expect(card).toContainText(`Registration closes: ${registrationDate(closes.toISO())}`);
     await expect(card).toContainText('Waiting list: Enabled');
-    await expect(card).toContainText('Registration is not yet open.');
-    await expect(card.getByRole('button', { name: /^Register/ })).toBeDisabled();
+    await expect(card).toContainText('Registration is open.');
+    await expect(card.getByRole('button', { name: /^Register/ })).toBeEnabled();
   } finally {
     await apiAs(request, 'Event Organiser', 'PATCH', `/api/events/${data.not_open.event_id}/registration-period`, {
       registration_opens_at: data.not_open.registration_opens_at,
@@ -76,22 +89,17 @@ test('updates the period while registration is open', async ({ page }) => {
   await expect(periodSection(page)).toContainText(registrationDate(closes.toISO()));
 });
 
-// E2E-RPD-004 (AC5, AC7): pre-opening events are visible/disabled, closed ones hidden.
-test('shows future periods disabled and returns period refusal messages', async ({ page, request }) => {
+// E2E-RPD-004 (AC5, AC7): future and closed periods are hidden; direct attempts are refused.
+test('hides future periods and returns period refusal messages', async ({ page, request }) => {
   await signIn(page, 'Attendee');
-  await page.goto('/#/event-registration');
+  await openCatalogue(page);
 
   const login = await request.post('http://127.0.0.1:5000/api/login', { data: account('Attendee') });
   expect(login.ok()).toBeTruthy();
   const { access_token: token } = await login.json();
   for (const [event, message] of [[data.not_open, 'Registration is not yet open.'],
     [data.closed, 'Registration has closed.']]) {
-    if (event.event_id === data.not_open.event_id) {
-      await expect(eventCard(page, event)).toContainText('Registration is not yet open.');
-      await expect(eventCard(page, event).getByRole('button', { name: /^Register/ })).toBeDisabled();
-    } else {
-      await expect(eventCard(page, event)).toHaveCount(0);
-    }
+    await expect(eventCard(page, event)).toHaveCount(0);
     const response = await request.post(`http://127.0.0.1:5000/api/events/${event.event_id}/registrations`, {
       headers: { Authorization: `Bearer ${token}` },
       data: { full_name: 'Period Test Attendee', contact_email: 'period@connectsphere.invalid', contact_phone: '+65 6123 4567' },
