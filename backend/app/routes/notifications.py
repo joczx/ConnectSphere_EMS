@@ -44,6 +44,13 @@ def index():
     result = supabase_request("/rest/v1/rpc/list_my_notifications", token=token, payload=payload)
     if result.get("error"):
         return jsonify(error=result["error"]), result.get("status", 400)
+    result = {
+        **result,
+        "items": [
+            item for item in result.get("items", [])
+            if item.get("notification_type") != "venue_hold_expired"
+        ],
+    }
     return jsonify(**result, page_size=PAGE_SIZE)
 
 
