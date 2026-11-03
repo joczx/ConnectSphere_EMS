@@ -783,11 +783,8 @@ def test_ntf_020_the_events_venue_staff_is_notified_of_the_request(flow, booking
     flow.one("Venue Staff", "New venue booking request", f"/review-venue-bookings/{request['booking_id']}")
 
     unassigned = flow.user("ITEST Unassigned Venue Staff", "Venue Staff")
-    try:
-        flow.book(event, flow.venue())
-        assert flow.inbox(unassigned) == []
-    finally:
-        flow.drop_user(unassigned)
+    flow.book(event, flow.venue())
+    assert flow.inbox(unassigned) == []
 
 
 def test_ntf_021_coordinator_is_notified_of_approval_or_rejection(flow, booking):
