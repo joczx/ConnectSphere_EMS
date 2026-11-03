@@ -9,6 +9,7 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 import pytest
 
@@ -61,3 +62,82 @@ def user_id_for(role):
     if not rows:
         pytest.skip(f"{email} has no row in public.users in the test project.")
     return rows[0]["user_id"]
+
+
+def create_technical_support_event(client, sign_in, label, starts_at, ends_at):
+    """Create a planning event assigned to the configured Technical Support user.
+
+    The public API performs the Organiser submission and Coordinator approval;
+    the service-role client only assigns the known test Technical Support user.
+    Call ``delete_test_event`` during fixture cleanup.
+    """
+    return create_event_assigned_to(
+        client, sign_in, label, starts_at, ends_at, "Technical Support Staff",
+        purpose="Equipment integration test",
+    )
+
+
+def create_event_assigned_to(client, sign_in, label, starts_at, ends_at, staff_role, *, purpose="Integration test"):
+    """Create a planning event and assign one known test staff member to it.
+
+    Submission and approval deliberately use the public API.  The service-role
+    request is limited to deterministic assignment for a test that needs a
+    particular reviewer, and ``delete_test_event`` removes the result.
+    """
+    organiser_id = user_id_for("Event Organiser")
+    coordinator_id = user_id_for("Event Coordinator")
+    staff_columns = {
+        "Venue Staff": "venue_staff_id",
+        "Technical Support Staff": "technical_support_id",
+        "Safety Officer": "safety_officer_id",
+    }
+    if staff_role not in staff_columns:
+        raise ValueError(f"Unsupported staff role {staff_role!r}")
+    staff_id = user_id_for(staff_role)
+    suffix = uuid.uuid4().hex[:8]
+    response = client.post("/api/event-requests", headers=sign_in("Event Organiser"), json={
+        "event_name": f"ITEST {label} {suffix}",
+        "purpose": purpose,
+        "description": "Created by integration tests; removed during fixture cleanup.",
+        "event_organiser_id": organiser_id,
+        "start_datetime": starts_at.isoformat(),
+        "end_datetime": ends_at.isoformat(),
+        "capacity_needed": 40,
+        "room_layout": "theatre",
+        "required_facilities": ["projector"],
+        "equipment_requirements": [],
+    })
+    assert response.status_code == 201, response.get_json()
+    request_id = response.get_json()["event_request"]["event_request_id"]
+
+    admin_request(
+        f"/rest/v1/event_request?event_request_id=eq.{request_id}",
+        {"event_coordinator_id": coordinator_id}, "PATCH",
+    )
+    approved = client.post(
+        f"/api/event-requests/{request_id}/review",
+        headers=sign_in("Event Coordinator"), json={"outcome": "approved"},
+    )
+    assert approved.status_code == 200, approved.get_json()
+
+    events = admin_request(
+        f"/rest/v1/events?select=event_id&event_request_id=eq.{request_id}"
+    )
+    assert len(events) == 1, events
+    event_id = events[0]["event_id"]
+    admin_request(
+        f"/rest/v1/events?event_id=eq.{event_id}",
+        {staff_columns[staff_role]: staff_id}, "PATCH",
+    )
+    return {"event_id": event_id, "event_request_id": request_id}
+
+
+def delete_test_event(event):
+    """Remove an event and all direct reservations made by an integration test."""
+    event_id = event["event_id"]
+    admin_request(f"/rest/v1/equipment_reservations?event_id=eq.{event_id}", method="DELETE")
+    admin_request(f"/rest/v1/events?event_id=eq.{event_id}", method="DELETE")
+    admin_request(
+        f"/rest/v1/event_request?event_request_id=eq.{event['event_request_id']}",
+        method="DELETE",
+    )
