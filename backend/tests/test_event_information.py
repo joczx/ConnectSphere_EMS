@@ -28,7 +28,6 @@ def an_event(**overrides):
         "need_wheelchair_accessibility": True,
         "need_blind_accessibility": False,
         "equipment_requirements": [{"equipment_type": "projector", "quantity": 2, "notes": None}],
-        "registration_needs": "Open registration.",
         "status": "planning",
     }
     event.update(overrides)
@@ -62,7 +61,6 @@ def test_a_confirmed_event_says_why_it_cannot_be_edited():
         ("event_name", "Halloween Night"),
         ("purpose", "Something else"),
         ("description", "A different evening."),
-        ("registration_needs", "Closed registration."),
     ],
 )
 def test_a_non_critical_change_needs_no_confirmation(field, value):
@@ -119,7 +117,7 @@ def test_every_field_the_story_lists_is_writable():
         "event_name", "purpose", "description", "start_datetime", "end_datetime",
         "capacity_needed", "room_layout", "required_facilities",
         "need_wheelchair_accessibility", "need_blind_accessibility",
-        "equipment_requirements", "registration_needs",
+        "equipment_requirements",
     ):
         assert field in schema.WRITABLE_FIELDS
 

@@ -70,7 +70,6 @@ def _submit_request(client, sign_in, label):
         "room_layout": "theatre",
         "required_facilities": ["projector"],
         "equipment_requirements": [],
-        "registration_needs": "None",
     })
     assert response.status_code == 201, response.get_json()
     request_id = response.get_json()["event_request"]["event_request_id"]

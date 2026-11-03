@@ -27,8 +27,6 @@ import ReviewVenueBooking from './pages/ReviewVenueBooking';
 import VenueSearchResults from './pages/VenueSearchResults';
 import VenueSearchFilters from './pages/VenueSearchFilters';
 import EquipmentAvailability from './pages/EquipmentAvailability';
-import VenueSuitability from './pages/VenueSuitability';
-import VenueSuitabilityCheck from './pages/VenueSuitabilityCheck';
 import Venues from './pages/Venues';
 import VenueDetails from './pages/VenueDetails';
 import CreateVenue from './pages/CreateVenue';
@@ -83,8 +81,6 @@ export default function App() {
     <Route path="/venue-search/results" element={protectedView(<VenueSearchResults />)} />
     <Route path="/venue-search/filters" element={protectedView(<VenueSearchFilters />)} />
     <Route path="/equipment-availability" element={protectedView(<EquipmentAvailability />)} />
-    <Route path="/venue-suitability" element={protectedView(<VenueSuitability />)} />
-    <Route path="/venue-suitability/check/:eventId" element={protectedView(<VenueSuitabilityCheck />)} />
     <Route path="/operational-safety-reviews" element={protectedView(<OperationalSafetyReviews />)} />
     <Route path="/operational-safety-reviews/:eventId" element={protectedView(<OperationalSafetyReview />)} />
     <Route path="/venues" element={protectedView(<Venues />)} />
