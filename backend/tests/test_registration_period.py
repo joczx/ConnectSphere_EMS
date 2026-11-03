@@ -11,6 +11,7 @@ import pytest
 from app import create_app
 from app.schemas.registration import parse_settings
 from app.services.event_service import EventError
+from app.services.event_store import StoreError
 from app.services.registration_service import registration_call
 
 
@@ -105,3 +106,22 @@ def test_registration_settings_require_confirmed_event(status):
     assert 'confirmed' in response.json['error']
     load.assert_called_once_with(1, 'verified')
     rpc.assert_not_called()
+
+
+@pytest.mark.parametrize('failure,message', [
+    pytest.param(StoreError(503, code='PGRST202'), 'Registration is not configured yet.', id='TC-SCRUM214-017'),
+    pytest.param(StoreError(503), 'Event service is temporarily unavailable.', id='TC-SCRUM214-018'),
+])
+def test_registration_period_save_failure_is_reported(failure, message):
+    """TC-SCRUM214-017/018 / AC1, AC3: when registration is not set up or the
+    database is unavailable, the organiser is told the period was not saved
+    rather than shown the event as updated."""
+    client = create_app().test_client()
+    with patch('app.routes.events.supabase_request', return_value={'id': 'organiser'}), \
+         patch('app.routes.events.load_event', return_value={'status': 'confirmed'}), \
+         patch('app.services.registration_service.supabase_request', side_effect=failure):
+        response = client.patch('/api/events/1/registration-period', json=settings(),
+                                headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 503
+    assert response.json['error'].startswith(message)
+    assert 'event' not in response.json
