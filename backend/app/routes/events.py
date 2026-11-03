@@ -6,7 +6,7 @@ from app.services.event_service import EventError, list_activity, load_event, up
 from app.services.event_venue_criteria import criteria_from_event, describe, search_filters
 from app.services.event_status_service import lifecycle_call
 from app.schemas.registration import parse_settings, parse_attendee
-from app.services.registration_service import registration_call
+from app.services.registration_service import registration_call, attendee_catalogue
 
 events = Blueprint('events', __name__, url_prefix='/api')
 
@@ -69,7 +69,7 @@ def set_registration_period(event_id):
 @events.get('/registration-events')
 def registration_events():
     token = authenticated_token(supabase_request)
-    return jsonify(registration_call('attendee_registration_events', token, {}))
+    return jsonify(attendee_catalogue(token))
 
 
 @events.post('/events/<int:event_id>/registrations')

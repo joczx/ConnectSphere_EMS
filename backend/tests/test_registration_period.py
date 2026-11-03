@@ -19,6 +19,13 @@ from app.services.event_store import StoreError
 from app.services.registration_service import registration_call
 
 
+@pytest.fixture(autouse=True)
+def catalogue_clock():
+    with patch('app.services.registration_service._catalogue_now',
+               return_value=datetime(2027, 1, 1, 4, tzinfo=timezone.utc)):
+        yield
+
+
 def settings(**changes):
     return {'registration_opens_at': '2027-01-01T10:00:00+08:00',
             'registration_closes_at': '2027-01-02T10:00:00+08:00',
@@ -163,12 +170,12 @@ def test_ac1_unassigned_organiser_cannot_claim_registration_settings_were_saved(
     assert response.json == {'error': message}
 
 
-@pytest.mark.parametrize('registration_status,message', [
+@pytest.mark.parametrize('period_state,message', [
     ('not_open', 'Registration is not yet open.'),
     ('closed', 'Registration has closed.'),
     ('open', None),
 ])
-def test_tc_scrum214_005_007_ac5_ac7_registration_outcomes_and_messages(registration_status, message):
+def test_tc_scrum214_005_007_ac5_ac7_registration_outcomes_and_messages(period_state, message):
     """AC5/AC7: return allowed/refused RPC outcomes and exact error wording.
 
     The API does not evaluate a clock; SQL period boundaries are not exercised.
@@ -182,7 +189,7 @@ def test_tc_scrum214_005_007_ac5_ac7_registration_outcomes_and_messages(registra
                                headers={'Authorization': 'Bearer verified'})
     rpc.assert_called_once_with('/rest/v1/rpc/register_for_event', token='verified', method='POST',
         payload={'p_event_id': 1, **{'p_' + field: value for field, value in details.items()}})
-    if registration_status == 'open':
+    if period_state == 'open':
         assert response.status_code == 200
         assert response.json == result
     else:
@@ -194,7 +201,9 @@ def test_tc_scrum214_005_007_ac5_ac7_registration_outcomes_and_messages(registra
 def test_tc_scrum214_006_ac6_attendee_reads_updated_period_after_save():
     """AC6: a later attendee read returns supplied updated dates, uncached."""
     client = create_app().test_client()
-    original = {'event_id': 1, 'status': 'confirmed', **settings()}
+    original = {'event_id': 1, 'status': 'confirmed',
+                'start_datetime': '2027-01-03T10:00:00+08:00',
+                'end_datetime': '2027-01-03T17:00:00+08:00', **settings()}
     changes = settings(registration_opens_at='2027-01-01T11:00:00+08:00',
                        registration_closes_at='2027-01-02T11:00:00+08:00',
                        waiting_list_enabled=False)
@@ -217,16 +226,22 @@ def test_tc_scrum214_006_ac6_attendee_reads_updated_period_after_save():
     assert [call.kwargs['token'] for call in rpc.call_args_list] == ['attendee-token', 'organiser-token', 'attendee-token']
 
 
-@pytest.mark.parametrize('registration_status', ['not_open', 'closed'])
-def test_ac7_catalogue_preserves_status_for_the_frontend_message(registration_status):
-    """The frontend selects its message from the returned registration status."""
+@pytest.mark.parametrize('period_state', ['not_open', 'closed'])
+def test_ac7_catalogue_shows_future_period_and_hides_closed_period(period_state):
+    """Before opening the event is visible; closed periods are hidden."""
     client = create_app().test_client()
-    event = {'event_id': 1, 'status': 'confirmed', 'registration_status': registration_status, **settings()}
+    event = {'event_id': 1, 'status': 'confirmed',
+             'start_datetime': '2027-01-03T10:00:00+08:00',
+             'end_datetime': '2027-01-03T17:00:00+08:00', **settings()}
+    if period_state == 'not_open':
+        event['registration_opens_at'] = '2027-01-01T05:00:00Z'
+    else:
+        event['registration_closes_at'] = '2027-01-01T03:00:00Z'
     with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
          patch('app.services.registration_service.supabase_request', return_value={'events': [event]}):
         response = client.get('/api/registration-events', headers={'Authorization': 'Bearer verified'})
     assert response.status_code == 200
-    assert response.json['events'][0]['registration_status'] == registration_status
+    assert response.json == {'events': [event] if period_state == 'not_open' else []}
 
 
 @pytest.mark.parametrize('status', ['planning', 'pending_safety_checks', 'completed', 'cancelled', None])

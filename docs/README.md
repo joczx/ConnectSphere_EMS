@@ -1,5 +1,7 @@
 # Project documentation
 
+- [Registration stories: unit-test files, case counts and run commands](registration-unit-tests.md)
+- [SCRUM-32: attendee catalogue integration tests and findings](attendee-catalogue-integration-tests.md)
 - [Equipment reservations: setup, behaviour and verification](equipment-reservations.md)
 - [Event Coordinator assignment: setup, behaviour and verification](event-coordinator-assignment.md)
 - [Coordinator Lead dashboard: setup, behaviour and verification](coordinator-lead-dashboard.md)

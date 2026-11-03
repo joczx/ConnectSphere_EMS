@@ -5,7 +5,6 @@ import WithdrawRegistration from '../components/WithdrawRegistration';
 import { registrationDate } from '../components/RegistrationPeriod';
 import { useAuth } from '../auth/AuthContext';
 
-const messages = { open: 'Registration is open.', not_open: 'Registration is not yet open.', closed: 'Registration has closed.', unavailable: 'Registration is unavailable for this event.' };
 export default function AttendeeEvents() {
   const { api } = useAuth();
   const [events, setEvents] = useState([]);
@@ -50,15 +49,18 @@ export default function AttendeeEvents() {
     {!loading && !error && !events.length && <p>No events are available for registration.</p>}
     {events.map(event => {
       const now = Date.now();
-      const status = event.status !== 'confirmed' || now >= Date.parse(event.end_datetime) ? 'unavailable'
-        : now < Date.parse(event.registration_opens_at) ? 'not_open'
-          : now >= Date.parse(event.registration_closes_at) ? 'closed' : 'open';
+      const canRegister = event.status === 'confirmed'
+        && now >= Date.parse(event.registration_opens_at)
+        && now < Date.parse(event.registration_closes_at)
+        && now < Date.parse(event.start_datetime)
+        && now < Date.parse(event.end_datetime);
       return <article className="panel" key={event.event_id}>
         <h2>{event.event_name}</h2><p>{event.description}</p>
         <p>Event starts: {registrationDate(event.start_datetime)}</p>
         <p>Venue: {event.venues?.length ? event.venues.join(', ') : 'Venue not assigned yet'}</p>
         <p>Registration opens: {registrationDate(event.registration_opens_at)}<br />Registration closes: {registrationDate(event.registration_closes_at)}</p>
-        <p>{messages[status]}</p>
+        <p>{now < Date.parse(event.registration_opens_at) ? 'Registration is not yet open.'
+          : canRegister ? 'Registration is open.' : 'Registration is unavailable for this event.'}</p>
         <p>Capacity: {event.capacity ?? 'Not set'}. Available places: {event.available_capacity ?? 'Not set'}. Waiting list: {event.waiting_list_enabled ? 'Enabled' : 'Disabled'}.</p>
         {event.my_registration === 'withdrawn' && <p>Your registration has been withdrawn.</p>}
         {['registered', 'waiting_list'].includes(event.my_registration) ? <>
@@ -78,10 +80,10 @@ export default function AttendeeEvents() {
               <label>Contact email<input name="contact_email" type="text" inputMode="email" autoComplete="email" required maxLength={254} value={details.contact_email} onChange={e => setDetails({ ...details, contact_email: e.target.value })} /></label>
               <label>Contact phone<input name="contact_phone" type="tel" autoComplete="tel" required maxLength={30} value={details.contact_phone} onChange={e => setDetails({ ...details, contact_phone: e.target.value })} /></label>
               {event.waiting_list_enabled && <p>If the event is full, you will join the waiting list rather than receive a confirmed place.</p>}
-              <button type="submit" disabled={status !== 'open'}>{busy ? 'Submitting…' : 'Submit registration'}</button>
+              <button type="submit" disabled={!canRegister}>{busy ? 'Submitting…' : 'Submit registration'}</button>
               <button type="button" className="secondary" onClick={() => setSelected(null)}>Cancel</button>
             </fieldset>
-          </form> : <button disabled={busy || status !== 'open'} onClick={() => { setSelected(event.event_id); setError(''); setMessage(''); }}>Register{event.waiting_list_enabled ? ' or join waiting list' : ''}</button>}
+          </form> : <button disabled={busy || !canRegister} onClick={() => { setSelected(event.event_id); setError(''); setMessage(''); }}>Register{event.waiting_list_enabled ? ' or join waiting list' : ''}</button>}
       </article>;
     })}
   </main></>;

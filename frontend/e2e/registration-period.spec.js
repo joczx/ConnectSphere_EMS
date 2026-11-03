@@ -8,7 +8,7 @@
 //   AC7  A message is shown when registration is not yet open or has closed.
 import { test, expect } from '@playwright/test';
 import { DateTime } from 'luxon';
-import { eventCard, fixtures, inputTime, registrationDate, signIn } from './helpers.js';
+import { account, apiAs, eventCard, fixtures, inputTime, registrationDate, signIn } from './helpers.js';
 
 const data = fixtures();
 
@@ -34,25 +34,35 @@ test('refuses a closing time before the opening time', async ({ page }) => {
 
 // E2E-RPD-002 (AC1, AC3, AC4, AC6): before registration opens, the Organiser sets new
 // times and turns on the waiting list; the Attendee then sees the new period.
-test('sets the period and waiting list, and Attendees see the change', async ({ page }) => {
-  await openForm(page, data.not_open);
-  const opens = DateTime.now().plus({ days: 3 }).startOf('minute');
-  const closes = opens.plus({ days: 1 });
-  await page.getByLabel('Registration opens').fill(inputTime(opens));
-  await page.getByLabel('Registration closes').fill(inputTime(closes));
-  await page.getByLabel('Enable a waiting list when capacity is reached').check();
-  await page.getByRole('button', { name: 'Save registration settings' }).click();
+test('sets the period and waiting list, and Attendees see the change', async ({ page, request }) => {
+  try {
+    await openForm(page, data.not_open);
+    const opens = DateTime.now().plus({ days: 3 }).startOf('minute');
+    const closes = opens.plus({ days: 1 });
+    await page.getByLabel('Registration opens').fill(inputTime(opens));
+    await page.getByLabel('Registration closes').fill(inputTime(closes));
+    await page.getByLabel('Enable a waiting list when capacity is reached').check();
+    await page.getByRole('button', { name: 'Save registration settings' }).click();
 
-  await expect(periodSection(page).getByRole('status')).toHaveText('Registration settings saved.');
-  await expect(periodSection(page)).toContainText(registrationDate(opens.toISO()));
-  await expect(periodSection(page)).toContainText('Enabled when capacity is reached');
+    await expect(periodSection(page).getByRole('status')).toHaveText('Registration settings saved.');
+    await expect(periodSection(page)).toContainText(registrationDate(opens.toISO()));
+    await expect(periodSection(page)).toContainText('Enabled when capacity is reached');
 
-  await signIn(page, 'Attendee');
-  await page.goto('/#/event-registration');
-  const card = eventCard(page, data.not_open);
-  await expect(card).toContainText(`Registration opens: ${registrationDate(opens.toISO())}`);
-  await expect(card).toContainText(`Registration closes: ${registrationDate(closes.toISO())}`);
-  await expect(card).toContainText('Waiting list: Enabled');
+    await signIn(page, 'Attendee');
+    await page.goto('/#/event-registration');
+    const card = eventCard(page, data.not_open);
+    await expect(card).toContainText(`Registration opens: ${registrationDate(opens.toISO())}`);
+    await expect(card).toContainText(`Registration closes: ${registrationDate(closes.toISO())}`);
+    await expect(card).toContainText('Waiting list: Enabled');
+    await expect(card).toContainText('Registration is not yet open.');
+    await expect(card.getByRole('button', { name: /^Register/ })).toBeDisabled();
+  } finally {
+    await apiAs(request, 'Event Organiser', 'PATCH', `/api/events/${data.not_open.event_id}/registration-period`, {
+      registration_opens_at: data.not_open.registration_opens_at,
+      registration_closes_at: data.not_open.registration_closes_at,
+      waiting_list_enabled: data.not_open.waiting_list_enabled,
+    });
+  }
 });
 
 // E2E-RPD-003 (AC3): during registration, the Organiser extends the closing time.
@@ -66,16 +76,28 @@ test('updates the period while registration is open', async ({ page }) => {
   await expect(periodSection(page)).toContainText(registrationDate(closes.toISO()));
 });
 
-// E2E-RPD-004 (AC5, AC7): outside the period the Attendee is told why and cannot register.
-test('shows not-yet-open and closed messages, and blocks registering', async ({ page }) => {
+// E2E-RPD-004 (AC5, AC7): pre-opening events are visible/disabled, closed ones hidden.
+test('shows future periods disabled and returns period refusal messages', async ({ page, request }) => {
   await signIn(page, 'Attendee');
   await page.goto('/#/event-registration');
 
+  const login = await request.post('http://127.0.0.1:5000/api/login', { data: account('Attendee') });
+  expect(login.ok()).toBeTruthy();
+  const { access_token: token } = await login.json();
   for (const [event, message] of [[data.not_open, 'Registration is not yet open.'],
     [data.closed, 'Registration has closed.']]) {
-    const card = eventCard(page, event);
-    await expect(card).toContainText(message);
-    await expect(card.getByRole('button', { name: /^Register/ })).toBeDisabled();
+    if (event.event_id === data.not_open.event_id) {
+      await expect(eventCard(page, event)).toContainText('Registration is not yet open.');
+      await expect(eventCard(page, event).getByRole('button', { name: /^Register/ })).toBeDisabled();
+    } else {
+      await expect(eventCard(page, event)).toHaveCount(0);
+    }
+    const response = await request.post(`http://127.0.0.1:5000/api/events/${event.event_id}/registrations`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { full_name: 'Period Test Attendee', contact_email: 'period@connectsphere.invalid', contact_phone: '+65 6123 4567' },
+    });
+    expect(response.status()).toBe(409);
+    expect((await response.json()).error).toBe(message);
   }
 });
 

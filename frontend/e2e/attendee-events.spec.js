@@ -35,23 +35,28 @@ test('shows the event name, description, date, time and venue', async ({ page })
 // E2E-ATT-003 (AC3): after the Organiser changes the registration period, the
 // Attendee sees the new times.
 test('shows the latest event information after it changes', async ({ page, request }) => {
-  const opens = DateTime.now().plus({ days: 2 }).startOf('minute');
+  const opens = DateTime.now().minus({ hours: 1 }).startOf('minute');
   const closes = opens.plus({ days: 2 });
-  await apiAs(request, 'Event Organiser', 'PATCH', `/api/events/${data.not_open.event_id}/registration-period`, {
+  await apiAs(request, 'Event Organiser', 'PATCH', `/api/events/${data.open.event_id}/registration-period`, {
     registration_opens_at: opens.toUTC().toISO(), registration_closes_at: closes.toUTC().toISO(),
     waiting_list_enabled: false,
   });
 
   await page.getByRole('button', { name: 'Refresh' }).click();
 
-  await expect(eventCard(page, data.not_open)).toContainText(`Registration opens: ${registrationDate(opens.toISO())}`);
+  await expect(eventCard(page, data.open)).toContainText(`Registration opens: ${registrationDate(opens.toISO())}`);
 });
 
-// E2E-ATT-004 (AC4): a cancelled event is not displayed.
-// Known gap: attendee_registration_events() returns cancelled events and the page
-// lists them as "Registration is unavailable." test.fail() reports this as expected.
-test('does not display a cancelled event', async ({ page }) => {
-  test.fail(true, 'SCRUM-32 AC4: cancelled events are still listed to Attendees.');
+// E2E-ATT-004 (AC4): cancelled and closed events are not displayed.
+test('does not display unavailable events', async ({ page }) => {
   await expect(eventCard(page, data.open)).toBeVisible();
-  await expect(page.getByRole('heading', { name: data.cancelled.event_name })).toHaveCount(0);
+  for (const event of [data.cancelled, data.closed]) {
+    await expect(page.getByRole('heading', { name: event.event_name })).toHaveCount(0);
+  }
+});
+
+test('shows a confirmed event before opening with registration disabled', async ({ page }) => {
+  const card = eventCard(page, data.not_open);
+  await expect(card).toContainText('Registration is not yet open.');
+  await expect(card.getByRole('button', { name: /^Register/ })).toBeDisabled();
 });

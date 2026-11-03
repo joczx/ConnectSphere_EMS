@@ -68,6 +68,8 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     await db.exec(await readFile(new URL('../../supabase/051_my_registrations.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/052_event_registration_roster.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/054_remove_attendee_email_format_validation.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/058_attendee_event_venues.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/059_filter_attendee_registration_events.sql', import.meta.url), 'utf8'));
     // Rerunning the roster migration updates the function without duplicate errors.
     await db.exec(await readFile(new URL('../../supabase/052_event_registration_roster.sql', import.meta.url), 'utf8'));
     // Install the actual updated lifecycle function as on the deployed database.
@@ -124,7 +126,7 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     await assert.rejects(db.query("update public.events set status='pending_safety_checks' where event_id=7"), /Invalid event status transition/);
     await actor(attendee);
     assert.match((await rpc('register_for_event', [1])).error, /not yet open/);
-    assert.equal((await rpc('attendee_registration_events')).events[0].registration_status, 'not_open');
+    assert.equal((await rpc('attendee_registration_events')).events[0].event_id, 1);
     await assert.rejects(db.query('update public.events set waiting_list_enabled=false where event_id=1'), /assigned Event Organiser/);
     await actor(organiser);
     result = await rpc('set_event_registration_period', [1, past, future, true]);
@@ -150,7 +152,6 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     const info = (await rpc('attendee_registration_events')).events[0];
     assert.equal(info.my_registration, 'waiting_list');
     assert.equal((await rpc('my_event_registrations')).registrations[0].status, 'waiting_list');
-    assert.equal(info.registration_status, 'open');
     assert.equal(info.event_organiser_id, undefined);
     // Withdrawing a waiting-list entry does not release a confirmed place.
     assert.equal((await rpc('withdraw_event_registration', [1])).available_capacity, 0);
@@ -180,7 +181,7 @@ test('registration migration enforces ownership, period, capacity and lifecycle 
     await rpc('set_event_registration_period', [1, earlier, past, false]);
     await actor(nextAttendee);
     assert.match((await rpc('register_for_event', [1])).error, /closed/);
-    assert.equal((await rpc('attendee_registration_events')).events[0].registration_status, 'closed');
+    assert.deepEqual((await rpc('attendee_registration_events')).events, []);
     await actor(organiser);
     assert.equal((await rpc('set_event_registration_period', [1, past, future, false])).status, 409);
     assert.equal((await rpc('withdraw_event_registration', [1])).status, 403);

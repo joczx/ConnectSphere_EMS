@@ -1,17 +1,23 @@
 """SCRUM-32: attendee catalogue API unit tests, mapped to AC1--AC4.
 
-Supabase is mocked. These verify returned event details, fresh reads and cache
-headers. AC4 uses an already-filtered empty RPC result, as specified in the test
-case; it does not prove SQL filtering. Venue lookup and UI rendering also remain
-outside these tests. Passing API tests do not establish full story implementation.
+Supabase is mocked. These verify returned event details, fresh reads, cache
+headers and real API filtering of unavailable rows from the older RPC. SQL
+filtering is covered separately by the isolated migration and live integration
+tests. Venue lookup and UI rendering remain outside these Python unit tests.
 """
 from unittest.mock import patch
-import pytest
-
+from datetime import datetime, timezone
 import pytest
 
 from app import create_app
 from app.services.event_store import StoreError
+
+
+@pytest.fixture(autouse=True)
+def catalogue_clock():
+    with patch('app.services.registration_service._catalogue_now',
+               return_value=datetime(2027, 6, 1, tzinfo=timezone.utc)):
+        yield
 
 
 @pytest.fixture
@@ -19,7 +25,7 @@ def event():
     return {
         'event_id': 41, 'event_name': 'Community Technology Fair',
         'description': 'Community technology demonstrations and workshops.',
-        'status': 'confirmed', 'registration_status': 'open',
+        'status': 'confirmed',
         'start_datetime': '2027-06-15T10:00:00+08:00',
         'end_datetime': '2027-06-15T16:00:00+08:00',
         'venue_id': '10000000-0000-0000-0000-000000000001',
@@ -48,8 +54,7 @@ def test_tc_scrum32_001_ac1_lists_upcoming_events_open_for_registration(event):
     response = get_catalogue(rows)
     assert response.status_code == 200
     assert response.json == {'events': rows}
-    assert all(item['status'] == 'confirmed' and item['registration_status'] == 'open'
-               for item in response.json['events'])
+    assert all(item['status'] == 'confirmed' for item in response.json['events'])
     assert response.json['events'][0]['available_capacity'] == 173
     assert response.headers['Cache-Control'] == 'no-store'
 
@@ -65,16 +70,71 @@ def test_tc_scrum32_002_ac2_preserves_all_event_and_venue_details(event):
         assert returned[field] == event[field], field
 
 
-@pytest.mark.parametrize('scenario', ['cancelled', 'closed', 'not_open'])
+@pytest.mark.parametrize('scenario', ['cancelled', 'closed'])
 def test_tc_scrum32_004_ac4_preserves_empty_catalogue_for_unavailable_events(scenario):
     """AC4 specified case: an empty result is returned for each label.
 
-    All three labels deliberately mock the same empty list. No unavailable row
+    Both labels deliberately mock the same empty list. No unavailable row
     is provided, so this is not a test of the eligibility filtering algorithm.
     """
     response = get_catalogue([])
     assert response.status_code == 200, scenario
     assert response.json == {'events': []}, scenario
+
+
+@pytest.mark.parametrize('changes', [
+    pytest.param({'status': 'cancelled'}, id='cancelled'),
+    pytest.param({'status': 'completed'}, id='completed'),
+    pytest.param({'status': 'planning'}, id='planning'),
+    pytest.param({'registration_closes_at': '2027-05-31T00:00:00Z'}, id='closed'),
+    pytest.param({'registration_opens_at': '2027-06-15T00:00:00Z'}, id='opening-after-closing'),
+    pytest.param({'start_datetime': '2027-05-31T00:00:00Z'}, id='started'),
+    pytest.param({'status': None}, id='missing-event-status'),
+    pytest.param({'registration_opens_at': None}, id='missing-opening'),
+    pytest.param({'registration_closes_at': 'invalid'}, id='invalid-closing'),
+    pytest.param({'start_datetime': '2027-06-15T10:00:00'}, id='timezone-missing'),
+    pytest.param({'registration_closes_at': '2027-06-01T00:00:00Z'}, id='exact-closing'),
+    pytest.param({'start_datetime': '2027-06-01T00:00:00Z'}, id='exact-start'),
+    pytest.param({'end_datetime': '2027-05-31T00:00:00Z'}, id='ended'),
+])
+def test_ac4_filters_unavailable_rows_from_older_rpc(event, changes):
+    eligible = {**event, 'event_id': 42}
+    response = get_catalogue([{**event, **changes}, eligible])
+    assert response.status_code == 200
+    assert response.json == {'events': [eligible]}
+
+
+def test_ac3_ac4_cancelled_event_disappears_on_next_read(event):
+    client = create_app().test_client()
+    cancelled = {**event, 'status': 'cancelled'}
+    with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
+         patch('app.services.registration_service.supabase_request',
+               side_effect=[{'events': [event]}, {'events': [cancelled]}]):
+        before = client.get('/api/registration-events', headers={'Authorization': 'Bearer verified'})
+        after = client.get('/api/registration-events', headers={'Authorization': 'Bearer verified'})
+    assert before.status_code == after.status_code == 200
+    assert before.json == {'events': [event]}
+    assert after.json == {'events': []}
+
+
+def test_catalogue_projects_only_public_event_fields(event):
+    response = get_catalogue([{**event, 'obsolete_field': 'ignored'}])
+    assert response.status_code == 200
+    assert response.json == {'events': [event]}
+
+
+def test_catalogue_includes_event_at_exact_opening_time(event):
+    event = {**event, 'registration_opens_at': '2027-06-01T00:00:00Z'}
+    response = get_catalogue([event])
+    assert response.status_code == 200
+    assert response.json == {'events': [event]}
+
+
+def test_catalogue_shows_confirmed_event_before_registration_opens(event):
+    event = {**event, 'registration_opens_at': '2027-06-02T00:00:00Z'}
+    response = get_catalogue([event])
+    assert response.status_code == 200
+    assert response.json == {'events': [event]}
 
 
 def test_upcoming_events_requires_authentication():
