@@ -1,12 +1,21 @@
 # Registration story unit tests
 
-Run from the repository root:
+Run from `backend` to measure all six complete modules used by these stories:
 
 ```powershell
-python backend/run_registration_story_tests.py
+python -m coverage run --branch --source=app.schemas.registration,app.services.registration_service,app.routes.events,app.routes.venue_bookings,app.routes.equipment_requests,app.services.equipment_request_service -m pytest tests/ --ignore=tests/integration -q -p no:cacheprovider
+python -m coverage report --fail-under=100 -m
+python -m coverage html -d ../outputs/registration-full-coverage/html
 ```
 
-This runs exactly these five files, without a database or email delivery:
+Verified result: **882 tests pass, with 100% statement and branch coverage**
+across all six measured modules: **458/458 statements and 154/154 branches**.
+The existing supporting tests cover the other workflows sharing these modules;
+no extra tests, production changes or coverage exclusions were needed.
+Live database integration tests are explicitly ignored. External services are
+mocked; no production email is sent.
+
+The five story-specific test files remain:
 
 | Story | Test file | Passing cases |
 | --- | --- | --- |
@@ -19,22 +28,26 @@ This runs exactly these five files, without a database or email delivery:
 
 ## Coverage scope
 
-The runner requires **100% statement and branch coverage for the 21 Python
-functions listed in its `FUNCTIONS` mapping**. This includes the complete
-registration validation and shared registration service functions, the relevant
-event handlers, event ID validation and error handlers, and the venue/equipment
-read functions exercised by SCRUM-157. The two registration modules also have
-100% coverage as complete modules.
+The full-module run covers these entire Python source files, including their
+imports and all functions:
 
-No production code or coverage exclusions were changed to reach the target.
-The runner saves JSON, HTML and text reports under
-`outputs/registration-story-coverage/`, and exits unsuccessfully if any test fails
-or any listed function has uncovered statements or branches.
+- `app/schemas/registration.py` — 100%
+- `app/services/registration_service.py` — 100%
+- `app/routes/events.py` — 100%
+- `app/routes/venue_bookings.py` — 100%
+- `app/routes/equipment_requests.py` — 100%
+- `app/services/equipment_request_service.py` — 100%
 
-Shared modules also implement unrelated workflows. Their complete-module report
-is printed separately; it is **not 100%** (48% across the six measured modules in
-this run). This is not whole-backend coverage. Shared authentication internals,
-SQL execution and React rendering are outside this gate.
+The report command exits unsuccessfully if measured coverage falls below 100%.
+The HTML report identifies uncovered lines and branches when a future change
+introduces a gap. The recorded text report is under
+`outputs/registration-full-coverage/summary.txt`.
+
+Running only the five story files gives 100% for their 21 relevant functions,
+but 48% across the complete six shared modules. Use the full offline suite above
+to obtain complete module coverage. This is not whole-backend coverage: shared
+authentication internals, SQL execution and React rendering remain outside the
+six-module scope.
 
 ## Consolidation
 
