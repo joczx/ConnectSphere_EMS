@@ -10,12 +10,26 @@ import { eventDate, fixtures, signIn } from './helpers.js';
 const data = fixtures();
 const ROLES = ['Event Organiser', 'Event Coordinator', 'Venue Staff', 'Technical Support Staff'];
 
+async function openConfirmedEvent(page) {
+  const eventPath = `/api/events/${data.open.event_id}`;
+  const equipmentPath = `${eventPath}/equipment-requests`;
+  const [eventResponse, equipmentResponse] = await Promise.all([
+    page.waitForResponse(response => response.url().endsWith(eventPath)
+      && response.request().method() === 'GET'),
+    page.waitForResponse(response => response.url().endsWith(equipmentPath)
+      && response.request().method() === 'GET'),
+    page.goto(`/#/events/${data.open.event_id}`),
+  ]);
+  expect(eventResponse.status()).toBe(200);
+  expect(equipmentResponse.status()).toBe(200);
+}
+
 for (const [index, role] of ROLES.entries()) {
   // E2E-CEI-001 to E2E-CEI-004 (AC1, AC2): each authorised role sees the confirmed
   // event's date and time, its venue, and the equipment arranged for it.
   test(`E2E-CEI-00${index + 1} ${role} sees the confirmed arrangements`, async ({ page }) => {
     await signIn(page, role);
-    await page.goto(`/#/events/${data.open.event_id}`);
+    await openConfirmedEvent(page);
 
     // Scoped to the page body: the same names also appear in hidden notifications.
     const main = page.getByRole('main');
@@ -30,11 +44,11 @@ for (const [index, role] of ROLES.entries()) {
 // E2E-CEI-005 (AC3): the Organiser can set registration dates; the Coordinator cannot.
 test('only the Organiser can set the registration period', async ({ page }) => {
   await signIn(page, 'Event Organiser');
-  await page.goto(`/#/events/${data.open.event_id}`);
+  await openConfirmedEvent(page);
   await expect(page.getByRole('button', { name: 'Set or update registration' })).toBeVisible();
 
   await signIn(page, 'Event Coordinator');
-  await page.goto(`/#/events/${data.open.event_id}`);
+  await openConfirmedEvent(page);
   await expect(page.getByRole('heading', { name: 'Registration period' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Set or update registration' })).toHaveCount(0);
 });
