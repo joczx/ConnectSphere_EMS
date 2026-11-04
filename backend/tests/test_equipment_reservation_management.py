@@ -13,7 +13,7 @@ def client():
     return create_app().test_client()
 
 
-# Lists reservations through the authenticated owner-scoped RPC, ignoring client owner filters.
+# Verifies the route lists owner-scoped reservations without accepting a forged filter.
 def test_list_uses_verified_token_without_client_owner_filter(client):
     rows = [{'reservation_id': RESERVATION_ID, 'quantity': 3}]
     with patch('app.routes.equipment.authenticated_token', return_value='owner-token'), patch('app.routes.equipment.supabase_request', return_value=rows) as rpc:
@@ -41,7 +41,7 @@ def test_invalid_id_never_reaches_database(client, method):
     rpc.assert_not_called()
 
 
-# Sends a valid replacement quantity and verified owner token to the update RPC.
+# Verifies valid quantity changes use the owner-checked update RPC.
 @pytest.mark.parametrize('quantity', [1, 5])
 def test_update_forwards_replacement_quantity_and_token(client, quantity):
     with patch('app.routes.equipment.authenticated_token', return_value='owner-token'), patch('app.routes.equipment.supabase_request', return_value={'reservation': {'quantity': quantity}}) as rpc:
@@ -52,7 +52,7 @@ def test_update_forwards_replacement_quantity_and_token(client, quantity):
     })
 
 
-# Displays not-found and insufficient-stock errors returned when changing a reservation.
+# Verifies not-found and stock-conflict errors are returned to the caller.
 @pytest.mark.parametrize('status,message', [(404, 'Reservation not found or access unavailable.'), (409, 'Insufficient equipment: you can reserve at most 3 for this event.')])
 def test_database_rejection_is_displayable(client, status, message):
     with patch('app.routes.equipment.authenticated_token', return_value='token'), patch('app.routes.equipment.supabase_request', return_value={'error': message, 'status': status}):
@@ -61,7 +61,7 @@ def test_database_rejection_is_displayable(client, status, message):
     assert response.json['error'] == message
 
 
-# Cancels a reservation through the owner-checked cancellation RPC.
+# Verifies successful cancellation uses the owner-checked cancellation RPC.
 def test_cancel_calls_owner_checked_rpc(client):
     with patch('app.routes.equipment.authenticated_token', return_value='owner-token'), patch('app.routes.equipment.supabase_request', return_value={'cancelled': True}) as rpc:
         response = client.delete(PATH)

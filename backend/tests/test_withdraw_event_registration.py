@@ -7,6 +7,7 @@ TC-SCRUM35-001 through 005 test the API contract using mocked RPC results;
 they do not execute the database clock comparison or capacity calculation.
 """
 from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -78,7 +79,13 @@ def test_tc_scrum35_002_ac2_returns_start_time_refusal(client):
 def test_tc_scrum35_005_ac5_returns_updated_available_capacity(
         client, successful_withdrawal, prior_status, before, after):
     """AC5: propagate capacity before/after; calculation remains in the RPC."""
+    now = datetime.now(timezone.utc)
     catalogue = {'events': [{'event_id': 41, 'my_registration': prior_status,
+                             'status': 'confirmed',
+                             'start_datetime': (now + timedelta(days=2)).isoformat(),
+                             'end_datetime': (now + timedelta(days=3)).isoformat(),
+                             'registration_opens_at': (now - timedelta(days=1)).isoformat(),
+                             'registration_closes_at': (now + timedelta(days=1)).isoformat(),
                              'available_capacity': before}]}
     result = {**successful_withdrawal, 'available_capacity': after}
     with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \

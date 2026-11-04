@@ -2,8 +2,8 @@
 
 Network calls are mocked. These tests verify returned details, token forwarding,
 registration-setting validation and refusals. They do not execute SQL permissions
-or render React. AC4 checks a supplied confirmed-only list: the shared /api/events
-endpoint does not itself restrict results to confirmed events.
+or render React. AC4 checks filtering of mixed statuses through the explicit
+confirmed catalogue query; the unfiltered management list retains every stage.
 """
 from unittest.mock import patch
 
@@ -132,15 +132,15 @@ def test_ac3_registration_setting_permission_refusal_is_preserved(client, confir
 
 @pytest.mark.parametrize('empty', [False, True], ids=['confirmed-events', 'no-confirmed-events'])
 def test_tc_scrum157_004_ac4_returns_supplied_confirmed_only_catalogue(client, confirmed_event, empty):
-    """AC4 contract only: the mocked store already supplies confirmed rows.
-
-    This does not establish that the shared events API filters mixed statuses.
-    """
-    rows = [] if empty else [confirmed_event]
+    """AC4: filter mixed input, including when no confirmed events exist."""
+    other_rows = [{**confirmed_event, 'event_id': index, 'status': status}
+                  for index, status in enumerate(('planning', 'pending_safety_checks', 'completed', 'cancelled'), 50)]
+    expected = [] if empty else [confirmed_event]
+    rows = other_rows + expected
     with patch('app.routes.events.supabase_request', side_effect=[{'id': 'organiser'}, rows]):
-        response = client.get('/api/events', headers={'Authorization': 'Bearer verified'})
+        response = client.get('/api/events?status=confirmed', headers={'Authorization': 'Bearer verified'})
     assert response.status_code == 200
-    assert response.json == {'events': rows}
+    assert response.json == {'events': expected}
     assert all(event['status'] == 'confirmed' for event in response.json['events'])
 
 

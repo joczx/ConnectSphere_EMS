@@ -19,7 +19,7 @@ def test_assigned_events_use_authenticated_rpc(client):
     query.assert_called_once_with('/rest/v1/rpc/reservable_equipment_events', token='tech-token', payload={})
 
 
-# Records a successful reservation against the selected event and equipment item.
+# Verifies the route forwards a successful reservation response from the RPC.
 def test_reservation_is_recorded_against_selected_event(client):
     saved = {'event_id': '1', 'equipment_id': 10, 'quantity': 2, 'reservation_id': 'saved'}
     with patch('app.routes.equipment.authenticated_token', return_value='tech-token'), \
@@ -39,7 +39,7 @@ def test_invalid_quantity_never_reserves(client, quantity):
     query.assert_not_called()
 
 
-# Displays stock and assignment errors returned by the reservation service.
+# Verifies the route returns stock and assignment errors supplied by the RPC.
 @pytest.mark.parametrize(
     'status,message,available_quantity',
     [
