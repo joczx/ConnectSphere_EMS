@@ -34,9 +34,19 @@ async function decide(request, id, outcome, comments) {
 
 async function openNotification(page, title, eventName) {
   await page.goto('/#/notifications');
-  const item = page.getByRole('main').getByRole('listitem').filter({ hasText: title }).filter({ hasText: eventName });
-  await expect(item).toHaveCount(1);
-  return item;
+  while (true) {
+    const item = page.getByRole('main').getByRole('listitem')
+      .filter({ has: page.getByText(title, { exact: true }) })
+      .filter({ hasText: eventName });
+    if (await item.count()) {
+      await expect(item).toHaveCount(1);
+      return item;
+    }
+    const next = page.getByRole('button', { name: 'Next' });
+    if (!await next.count() || await next.isDisabled()) break;
+    await next.click();
+  }
+  throw new Error(`Notification "${title}" for "${eventName}" was not found.`);
 }
 
 // E2E-NER-001 (AC1): the Organiser submits a request through the form and is
