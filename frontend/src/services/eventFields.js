@@ -5,19 +5,27 @@
 // place stops the two drifting: a change to how equipment lines are parsed has
 // to hold on both sides or the same text means different things.
 
-export const LAYOUTS = ['theatre', 'classroom', 'boardroom', 'banquet', 'exhibition', 'u_shape', 'cabaret'];
+import { DateTime } from 'luxon';
+
+export const LAYOUTS =['theatre', 'classroom', 'boardroom', 'banquet', 'exhibition', 'u_shape', 'cabaret'];
 export const FACILITIES = ['stage', 'projector', 'sound_system', 'video_conferencing', 'wifi', 'parking', 'catering_area', 'air_conditioning'];
 
 // Which fields count as critical is deliberately NOT listed here. The server
 // decides, and names them in the 409 it returns, so the warning always matches
 // what is actually enforced rather than a copy that can drift from it.
 
-// datetime-local inputs use the browser's local time; the API stores UTC.
-export const toInput = (iso) => { if (!iso) return ''; const d = new Date(iso); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+// datetime-local inputs are in Singapore time (SGT), whatever the browser's own
+// timezone; the API stores UTC. Reading them in the browser's timezone saved a
+// time 8 hours off on any computer not set to Singapore time.
+export const toInput = (iso) => {
+  if (!iso) return '';
+  const date = DateTime.fromISO(iso, { zone: 'Asia/Singapore' });
+  return date.isValid ? date.toFormat("yyyy-MM-dd'T'HH:mm") : '';
+};
 export const toIso = (local) => {
   if (!local) return null;
-  const date = new Date(local);
-  return Number.isNaN(date.getTime()) ? local : date.toISOString();
+  const date = DateTime.fromISO(local, { zone: 'Asia/Singapore' });
+  return date.isValid ? date.toUTC().toISO() : local;
 };
 
 // Equipment is edited as one "type, quantity, notes" line per item, or "none".

@@ -15,6 +15,7 @@ import json
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
 from pathlib import Path
 
 from dotenv import dotenv_values, load_dotenv
@@ -111,9 +112,17 @@ def setup(state_file):
             # The Attendee registered and withdrew, then the event was cancelled.
             "cancelled": _confirm(flow, now - timedelta(minutes=5), now + timedelta(days=5)),
             "planning": flow.event(),
+            # For attendee-registration-notifications.spec.js only, so other files cannot
+            # change them: the Attendee registers then withdraws; joins a waiting list;
+            # and is registered for an event the Organiser cancels in the test.
+            "notify_register": _confirm(flow, now - timedelta(minutes=5), now + timedelta(days=5)),
+            "notify_waitlist": _confirm(flow, now - timedelta(minutes=5), now + timedelta(days=5),
+                                        capacity=1, waiting_list=True),
+            "notify_cancel": _confirm(flow, now - timedelta(minutes=5), now + timedelta(days=5)),
         }
-        for event in ("open", "full", "waitlist"):
+        for event in ("open", "full", "waitlist", "notify_waitlist"):
             _register(flow, filler, data[event])
+        _register(flow, "Attendee", data["notify_cancel"])
         _register(flow, "Attendee", data["waitlist"])
         _register(flow, "Attendee", data["withdraw"])
         _register(flow, "Attendee", data["cancelled"])
@@ -132,6 +141,16 @@ def setup(state_file):
     print(json.dumps(data, default=str))
 
 
+def _account_exists(user_id):
+    try:
+        admin_request(f"/auth/v1/admin/users/{user_id}")
+    except AssertionError as error:
+        if "user_not_found" in str(error):
+            return False
+        raise
+    return True
+
+
 def teardown(state_file):
     path = Path(state_file)
     if not path.exists():
@@ -140,12 +159,24 @@ def teardown(state_file):
     client = create_app().test_client()
     flow = Flow(client, _sign_in_as(client))
     flow.since, flow.requests, flow.venues = state["since"], state["requests"], state["venues"]
-    flow.users, flow.equipment = state["users"], state["equipment"]
+    # An account may already be gone (an earlier teardown got that far, or the test
+    # database was reset), and deleting it again would fail, so skip those.
+    flow.users, flow.equipment = [user for user in state["users"] if _account_exists(user)], state["equipment"]
     # Remove registrations before their events.
+    names = []
     for request_id in flow.requests:
+        names += [row["event_name"] for row in admin_request(
+            f"/rest/v1/event_request?select=event_name&event_request_id=eq.{request_id}")]
         for event in admin_request(f"/rest/v1/events?select=event_id&event_request_id=eq.{request_id}"):
             admin_request(f"/rest/v1/event_registration?event_id=eq.{event['event_id']}", method="DELETE")
+    # Flow.clean() deletes every notification newer than flow.since, which would also
+    # delete other runs' notifications (a CI run, or later local runs when this is a
+    # stopped run's state). Keep it from deleting any, then delete only those about
+    # this run's events; each event name is unique to the run.
+    flow.since = 2 ** 62
     flow.clean()
+    for name in names:
+        admin_request(f"/rest/v1/notifications?body=like.*{quote(name)}*", method="DELETE")
     path.unlink()
 
 
