@@ -11,7 +11,10 @@ export default defineConfig({
   workers: 1, // one shared test database
   // Results in the terminal, plus an HTML report for `npx playwright show-report`.
   reporter: [['list'], ['html', { open: 'never' }]],
-  use: { baseURL: 'http://localhost:5173', trace: 'retain-on-failure' },
+  use: {
+    baseURL: 'http://localhost:5173',
+    trace: 'retain-on-failure',
+  },
   webServer: [
     { command: 'python -m tests.e2e_server', cwd: '../backend',
       url: 'http://127.0.0.1:5000/', reuseExistingServer: false },

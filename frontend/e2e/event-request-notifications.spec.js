@@ -22,7 +22,7 @@ test.afterAll(async () => {
     await admin(`/rest/v1/events?event_request_id=eq.${id}`, { method: 'DELETE' });
     await admin(`/rest/v1/event_request?event_request_id=eq.${id}`, { method: 'DELETE' });
   }
-  await admin(`/rest/v1/notifications?body=like.*${encodeURIComponent('E2E request notification')}*`, { method: 'DELETE' });
+  await admin(`/rest/v1/notifications?body=like.*${encodeURIComponent(name)}*`, { method: 'DELETE' });
 });
 
 async function decide(request, id, outcome, comments) {
