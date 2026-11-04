@@ -148,3 +148,19 @@ def test_review_database_errors(code, message, status, field):
     if field:
         assert field in error.errors
 
+
+
+def test_status_only_request_search_does_not_add_owner_filter(table):
+    result = service.list_event_requests(status='submitted')
+    assert result == [{'event_request_id': 1}]
+    table.eq.assert_called_once_with('status', 'submitted')
+    table.order.assert_called_once_with('updated_at', desc=True)
+    table.execute.assert_called_once_with()
+
+
+def test_unfiltered_request_search_keeps_all_owners_and_statuses(table):
+    result = service.list_event_requests()
+    assert result == [{'event_request_id': 1}]
+    table.eq.assert_not_called()
+    table.order.assert_called_once_with('updated_at', desc=True)
+    table.execute.assert_called_once_with()
