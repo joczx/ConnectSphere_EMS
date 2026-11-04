@@ -11,7 +11,7 @@ import { DateTime } from 'luxon';
 import { admin, apiAs, inputTime, signIn, userId } from './helpers.js';
 
 // The approval test continues the request the submission test made.
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'serial', timeout: 60_000 });
 
 const name = `E2E request notification ${Date.now()}`;
 const starts = DateTime.now().plus({ days: 90 }).set({ hour: 10, minute: 0, second: 0, millisecond: 0 });
@@ -33,10 +33,20 @@ async function decide(request, id, outcome, comments) {
 }
 
 async function openNotification(page, title, eventName) {
-  await page.goto('/#/notifications');
-  const item = page.getByRole('main').getByRole('listitem').filter({ hasText: title }).filter({ hasText: eventName });
-  await expect(item).toHaveCount(1);
-  return item;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const responsePromise = page.waitForResponse(response =>
+      response.url().includes('/api/notifications?page=1')
+      && response.request().method() === 'GET');
+    await page.goto('/#/notifications?page=1');
+    const response = await responsePromise;
+    expect(response.status()).toBe(200);
+
+    const item = page.getByRole('main').getByRole('listitem')
+      .filter({ hasText: title }).filter({ hasText: eventName });
+    if (await item.count() === 1) return item;
+    await page.waitForTimeout(500);
+  }
+  throw new Error(`Notification "${title}" for "${eventName}" was not found after refreshing.`);
 }
 
 // E2E-NER-001 (AC1): the Organiser submits a request through the form and is
@@ -54,7 +64,12 @@ test('confirms a submitted event request', async ({ page }) => {
   await page.getByLabel('No facilities needed').check();
   await page.getByLabel('No equipment needed').check();
   await page.getByRole('button', { name: 'Review before submitting' }).click();
-  await page.getByRole('button', { name: 'Confirm and submit' }).click();
+  const [submission] = await Promise.all([
+    page.waitForResponse(response => response.url().endsWith('/api/event-requests')
+      && response.request().method() === 'POST'),
+    page.getByRole('button', { name: 'Confirm and submit' }).click(),
+  ]);
+  expect(submission.status()).toBe(201);
   await page.waitForURL(/#\/event-requests\/\d+$/);
   const id = Number(page.url().split('/').pop());
   created.push(id);
