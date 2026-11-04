@@ -1,0 +1,498 @@
+[
+  {
+    "story": "SCRUM-5",
+    "title": "User Registration (SCRUM-5)",
+    "source_sheet": "Sprint 1",
+    "file": "user-registration.spec.js",
+    "status": "blocked-missing-criteria-and-implementation",
+    "acceptance_criteria_source": ""
+  },
+  {
+    "story": "SCRUM-6",
+    "title": "User Authentication and Authorisation (SCRUM-6)",
+    "source_sheet": "Sprint 3",
+    "file": "authentication-authorisation.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Organiser/Event Coordinator/Venue Staff member/Technical Support Staff member/Attendee/Event Coordinator Lead/ Safety Officer, I want to securely log in to the system with access based on my assigned role so that I can use the functionality and information relevant to my responsibilities.\n\nAcceptance Criteria:\n- Allows users to securely log in using their registered credentials.\n- Identifies the user's assigned role upon successful authentication.\n- Provides an error message if the login is unsuccessful.\n- Provides access to functionality and information based on the user's role.\n- Does not allow users without the required permissions to access restricted functionality or information."
+  },
+  {
+    "story": "SCRUM-7",
+    "title": "Create and Submit Event Request (SCRUM-7)",
+    "source_sheet": "Sprint 1",
+    "file": "create-submit-event-request.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As the Event Organiser, I want to create an event request so that I can submit an event for processing.\n\nAcceptance Criteria:\n- The user can enter the required details for an event request.\n- The user can submit the completed event request.\n- The system validates that all mandatory fields are completed before submission.\n- The system displays an error message when required information is missing.\n- The system prevents the user from submitting invalid event details.\n- The system assigns a unique event request ID after successful submission.\n- The system records the date and time when the request is submitted.\n- The system sets the initial status of a newly submitted request to submitted.\n- The user can review the entered details before submitting the request.\n- The system displays a confirmation message after the event request is successfully created.\n- The system shows an error message if the request is not successfully created."
+  },
+  {
+    "story": "SCRUM-8",
+    "title": "Draft Event Request (SCRUM-8)",
+    "source_sheet": "Sprint 1",
+    "file": "draft-event-request.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Organiser, I want to create and save an incomplete event request so that I can submit an event for processing.\n\nAcceptance Criteria:\n- The system allows users to save an incomplete event request as a draft.\n- The system allows users to return to and edit their saved drafts.\n- The system prevents an incomplete request from being submitted until all mandatory information is provided.\n- The system displays a confirmation message after the event request is successfully created."
+  },
+  {
+    "story": "SCRUM-9",
+    "title": "Review and Approve Event Request (SCRUM-9)",
+    "source_sheet": "Sprint 1",
+    "file": "review-event-request.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I want to review submitted event requests so that I can clarify requirements and can verify the event requirements, clarify any missing information, and determine whether the request can proceed.\n\nAcceptance Criteria:\n- The system allows Event Coordinators to view submitted event requests.\n- The system displays the event details and requirements provided.\n- The Event Coordinator can approve, reject, or request clarification from the Event Organiser for an event request.\n- The Event Coordinator can add comments along with the outcome for the request.\n- The system records the outcome of the review and displays a confirmaton message when the status is successfully updated."
+  },
+  {
+    "story": "SCRUM-10",
+    "title": "View Event Information During Planning (SCRUM-10)",
+    "source_sheet": "Sprint 1",
+    "file": "planning-event-information.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an authorised user (Event Coordinator, Event Organiser), I want to view event information so that I can access the latest details needed for event planning and coordination.\n\nAcceptance Criteria:\n- The system allows authorised users to view relevant event information.\n- The system displays information including the event name, purpose, description, date and time, expected attendance, venue requirements, accessibility needs, equipment requirements, and registration needs where applicable.\n- The system displays the current and latest version of the event information.\n- Users can only view events they are authorised to access."
+  },
+  {
+    "story": "SCRUM-11",
+    "title": "Search and Filter Venues (SCRUM-11)",
+    "source_sheet": "Sprint 1",
+    "file": "search-filter-venues.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I want to search and filter venues based on my event requirements so that I can find venues that meet my needs.\n\nAcceptance Criteria:\n- The system allows the Event Coordinator to specify requirements such as date, time, attendance, location, capacity, accessibility, layout, and facilities.\n- The system displays venues that match the specified requirements.\n- The system allows the Event Coordinator to modify or remove search criteria.\n- The system displays a suitable message when no venues match the specified requirements."
+  },
+  {
+    "story": "SCRUM-12",
+    "title": "Check Venue Suitability and Availability (SCRUM-12)",
+    "source_sheet": "Sprint 3",
+    "file": "venue-suitability.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "I want the system to assess a venue's suitability and availability based on my event requirements so that I can determine whether the venue can accommodate my event\n\nAcceptance Criteria:\n\n- The user can select an event, and the system automatically retrieves its requirements, including date, time, attendance, location, capacity, accessibility, layout and facilities.\n- The system compares the event requirements against the venue's available information to determine suitability.\n- The system provides a clear suitability assessment by listing each requirement and indicating whether the venue fulfils it.\n- The system includes the venue's setup time before the event start time when checking availability.\n- The system includes the venue's turnaround time after the event end time when checking availability.\n- The venue is considered available when the requested effective occupied period does not overlap another booking's effective occupied period.\n- The venue is considered available when one effective occupied period ends exactly when another effective occupied period begins.\n- The system identifies booking conflicts when effective occupied periods overlap and informs the user of the conflict.\n- The system clearly indicates whether the venue is suitable and available for the selected event."
+  },
+  {
+    "story": "SCRUM-13",
+    "title": "Request Equipment (SCRUM-13)",
+    "source_sheet": "Sprint 1",
+    "file": "request-equipment.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I need to be able to record the equipment required for an event so that I can request for the needed equipment\n\nAcceptance Criteria:\n- The Event Coordinator can create an equipment request for a specific event.\n- The Event Coordinator can specify the equipment type, quantity, and relevant technical requirements.\n- Each equipment request is for one type of equipment, such as projectors, cameras, or microphones.\n- The system displays a success or error message after an equipment request is submitted.\n- Only Event Coordinators in charge of that event can create equipment requests for that event."
+  },
+  {
+    "story": "SCRUM-14",
+    "title": "Review and Update Equipment Request (SCRUM-14)",
+    "source_sheet": "Sprint 2",
+    "file": "review-equipment-request.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a Technical Support Staff, I want to review and update status of equipment requests (approved, rejected) for events assigned to me so that I can make the necessary arrangements and keep the Event Coordinator informed of the request status.\n\nAcceptance Criteria:\n- The Technical Support Staff member can view equipment requests for events assigned to them.\n- The equipment request displays relevant details such as equipment type, quantity, required date and time.\n- The Technical Support Staff member can reject or approve,the equipment request. This will update the status of each equipment request from \u2018pending\u2019 to \u2018rejected\u2019 or 'approved'.\n- The Technical Support Staff member can provide a reason or update when required, such as when a request is rejected.\n- The system displays a success or error message after an equipment request is updated."
+  },
+  {
+    "story": "SCRUM-15",
+    "title": "Check Equipment Availability (SCRUM-15)",
+    "source_sheet": "Sprint 1",
+    "file": "equipment-availability.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a Technical Support Staff, I want to check equipment availability for an event at a required date and time, so that I can ensure sufficient suitable equipment is allocated without double-booking or using unavailable inventory.\n\nAcceptance Criteria:\n- When the Technical Support Staff member filters equipment based on equipment type, quantity, available date and time, then a list of equipment available (with quantity more than 0) during specified date and time will be displayed. \n- The system excludes equipment that is already allocated to another event during an overlapping period.\n- The system displays the available quantity for each equipment type/model.\n- The system indicates when the available quantity is insufficient for the requested quantity.\n- When no suitable equipment is available, the system displays an appropriate message.\n- Only users with the Technical Support Staff role can view the equipment catalogue."
+  },
+  {
+    "story": "SCRUM-16",
+    "title": "Reserve Equipment (SCRUM-16)",
+    "source_sheet": "Sprint 1",
+    "file": "reserve-equipment.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As the Technical Support Staff, I need to reserve avaliable equipment for a event so that I can reserve the equipement for a event.\n\nAcceptance Criteria:\n- The Technical Support Staff can select equipment and specify a quantity.\n- The system only allows reservations when sufficient quantity is available.\n- The system records the reservation against the event.\n- The system checks the available quantity before confirming a reservation.\n- The system rejects a reservation when the requested quantity exceeds availability.\n- The system displays an appropriate error message.\n- The system ensures that the reserved quantities are deducted from available quantities for overlapping events.\n- The system ensures equipment remains available for events that do not overlap."
+  },
+  {
+    "story": "SCRUM-17",
+    "title": "Manage Equipment Reservation (SCRUM-17)",
+    "source_sheet": "Sprint 1",
+    "file": "manage-equipment-reservation.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Technical Support Staff, I want to modify or cancel my equipment reservation so that I can keep my equipment allocation accurate.\n\nAcceptance Criteria:\n- The Technical Support Staff can view their reservations.\n- The Technical Support Staff can increase or decrease the reserved quantity if availability allows.\n- The Technical Support Staff can cancel a reservation.\n- Cancelled/reduced quantities are returned to the available inventory for that time period"
+  },
+  {
+    "story": "SCRUM-20",
+    "title": "Amend Event Request (SCRUM-20)",
+    "source_sheet": "Sprint 2",
+    "file": "amend-event-request.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Organiser, I want to amend my event request when clarification or changes are requested by the Event Coordinator so that I can provide the required information and proceed with the event planning process.\n\nAcceptance Criteria:\n- The system allows the Event Organiser to update the relevant event request details.\n- The system allows the Event Organiser to review the updated request before resubmission.\n- The system allows the amended event request to be resubmitted to the Event Coordinator for review.\n- The system records the updated information and the amendment to the event request."
+  },
+  {
+    "story": "SCRUM-21",
+    "title": "Assign an Event Coordinator to a Requested Event (SCRUM-21)",
+    "source_sheet": "Sprint 2",
+    "file": "assign-event-coordinator-legacy.spec.js",
+    "status": "current-workflow-supersedes-original",
+    "acceptance_criteria_source": "As an Event coordinator, I want the system to assign me to an event so that I know which events I am responsible for managing its planning process.\n\nAcceptance Criteria:\n- The system automatically assigns an Event Coordinator when an event request is submitted\n- The system automatically assigns the Event Coordinator currently assigned to the event.\n- The system updates the event with the newly assigned Event Coordinator and displays a confirmation message.\n- The system ensures the assigned Event Coordinator can access the event and its relevant planning information."
+  },
+  {
+    "story": "SCRUM-22",
+    "title": "Event Status Management (SCRUM-22)",
+    "source_sheet": "Sprint 3",
+    "file": "event-status-management.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I want the system to automatically update an event's status based on its progress, so that I can track the current stage of the event without manually updating its status.\n\nAcceptance Criteria:\n- The system automatically updates the event status when the event progresses to a new stage of the event management workflow.\n- When an event request is successfully submitted, the system sets its initial status to Pending Approval.\n- When an event request is approved or rejected, the system automatically updates its status to Approved or Rejected, respectively.\n- When all required venue, equipment, and operational safety arrangements are approved, the system updates the event status to Confirmed.\n- The system displays the latest event status on the Event Information page.\n- If an automatic status update fails, the system retains the previous valid status and displays an appropriate error message."
+  },
+  {
+    "story": "SCRUM-23",
+    "title": "Update Event Information (SCRUM-23)",
+    "source_sheet": "Sprint 2",
+    "file": "update-event-information.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an authorised user (Event Coordinator, Event Organiser), I want to update event information so that the event details remain accurate throughout the planning process.\n\nAcceptance Criteria:\n- The system allows authorised users to update event information during the \"Planning\" phase.\n- The system allows normal or less critical updates (Event name, purpose, description, registration needs) to be saved without additional approval.\n- The system triggers a warning modal when critical fields which may affect existing arrangements (proposed date and time, expected attendance, venue requirements, accessibility needs, equipment requirements) are modified on the event.\n- The system prompts the user to review or confirm the impact of critical changes before they are saved.\n- The system saves changes, logs a \"Critical Edit\" entry in the Activity History when the user confirms the modal prompt.\n- The system discards all pending edits and status if the user clicks \"Cancel\"."
+  },
+  {
+    "story": "SCRUM-24",
+    "title": "Create Venue Catalogue (SCRUM-24)",
+    "source_sheet": "Sprint 2",
+    "file": "create-venue-catalogue.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a venue staff, I must be able to create new venues that ConnectSphere has access to, so that new venues is available in the system if needed for an event\n\nAcceptance Criteria:\n- The system allows users to create a new venue in the system\n- The system allow venue staff to input venue information about venue location, capacity, facilities, accessibility, supported room layouts, operating hours and any other important characteristics if needed.\n- The system ensures that there are no duplicate venues with the same name and address when creating a venue.\n- The system discards venue creation if partially filled out or cancelled.\n- The system provides confirmation on success or failure of creating venues."
+  },
+  {
+    "story": "SCRUM-25",
+    "title": "View Venue Catalogue (SCRUM-25)",
+    "source_sheet": "Sprint 2",
+    "file": "view-venue-catalogue.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a venue staff, I must be able to view information about venues ConnectSphere has access to, so that suitable venues can be easily identified for events\n\nAcceptance Criteria:\nEnsures the venue staff can:\n- View information related to an individual venue\n- Search venue and filter according to one or more venue information such as name, venue location, capacity, facilities, accessibility, supported room layouts and operating hours\n- Display error message if information cannot be displayed and reason\n- View a list of all venues\n- Show an error if there are no venues found due to no venues being in the database\n- Show an error message if there are no venues found due to no venues matching the search & filter"
+  },
+  {
+    "story": "SCRUM-26",
+    "title": "Update Venue Catalogue (SCRUM-26)",
+    "source_sheet": "Sprint 2",
+    "file": "update-venue-catalogue.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a venue staff, I must be able to update information about venues ConnectSphere has access to, so that venues are kept up to date to ensure information is correct when checking if a venue is suitable\n\nAcceptance Criteria:\nEnsures the venue staff can:\n- Update existing venue information\n- Ensure the new information is updated in the database\n- Update one or more fields of information without needing to change unchanged fields\n- Save update form to complete later\nEnsure that:\n- If there is a change to venue information, venue staff is informed and must redo the update form"
+  },
+  {
+    "story": "SCRUM-27",
+    "title": "Delete venue Catalogue (SCRUM-27)",
+    "source_sheet": "Sprint 2",
+    "file": "delete-venue-catalogue.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a venue staff, I must be able to delete venues in the ConnectSphere system, so that venues no longer usable are not used for events\n\nAcceptance Criteria:\nEnsures the venue staff can:\n- Must have a confirmation step to prevent accidental deletion\n- System prevents deletion of a venue with upcoming scheduled events and displays the conflicting event(s) to the user\n- There must be an error message and reason if venue staff try to delete an already deleted venue\n- Deleted venue is removed in the system"
+  },
+  {
+    "story": "SCRUM-28",
+    "title": "View Venue Availability Calendar (SCRUM-28)",
+    "source_sheet": "Sprint 3",
+    "file": "venue-availability-calendar.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I must be able to check when venues are available or unavailable so that I can identify which venues are available when needed for an event.\n\nAcceptance Criteria:\nEnsures the Event Coordinator can:\n- View when individual venues are available, tentatively held, confirmed, blocked or unavailable\n- View in calendar format a single venue's availability\n- Calendar can be toggled between calendar views by Day, Week, Month\n- Click into a booking slot for more details\n\nEnsure that:\n- Only authorized users like Event Coordinator and Venue Staff have access to the venue availability calendar function\n- Unauthorized users are unable to access the venue availability dates"
+  },
+  {
+    "story": "SCRUM-29",
+    "title": "Request to Book Venue(s) (SCRUM-29)",
+    "source_sheet": "Sprint 3",
+    "file": "request-venue-bookings.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I want to submit one or more venue booking requests for an event so that I can book one or more venues if needed for a single event.\n\nAcceptance Critera\n- The Event Coordinator can select a venue and submit a booking request.\n- The booking request includes the event date, time, attendance, and relevant venue requirements.\n- The system validates that all required information has been provided before submission.\n- The system provides confirmation message after submitting the request.\n- The Event Coordinator can submit one booking request for each venue if they require multiple venues for an event.\n- The system makes the submitted request available to Venue Staff for review."
+  },
+  {
+    "story": "SCRUM-30",
+    "title": "Review and Approve Venue Booking (SCRUM-30)",
+    "source_sheet": "Sprint 3",
+    "file": "review-venue-booking.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a Venue Staff member, I want to approve or reject pending venue booking requests so that I can determine whether the requested venue can be made available for the event.\n\nAcceptance Criteria:\n- The system allows Venue Staff to view pending venue booking requests.\n- The system displays relevant booking details, including the event date, time, attendance, and venue requirements.\n- Venue Staff can approve or reject a venue booking request.\n- The system requires Venue Staff to provide a reason in the comments when rejecting a request."
+  },
+  {
+    "story": "SCRUM-31",
+    "title": "Detect Venue Booking Conflicts (SCRUM-31)",
+    "source_sheet": "Sprint 3",
+    "file": "venue-booking-conflicts.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a Venue Staff / Event Coordinator, I want the system to identify overlapping or conflicting venue bookings so that I can prevent a venue from being double-booked.\n\nAcceptance Criteria:\n- The system checks a venue booking request against existing bookings for the same venue and time period.\n- The system identifies overlapping bookings for the same venue, if any.\n- The system considers a venue unavailable during the period of a confirmed booking.\n- The system prevents the user from approving a booking that conflicts with an existing confirmed booking.\n- The system clearly displays the conflicting booking information to the user."
+  },
+  {
+    "story": "SCRUM-32",
+    "title": "View an Event as an Attendee (SCRUM-32)",
+    "source_sheet": "Sprint 4",
+    "file": "attendee-events.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Attendee, I want to view information about upcoming events so that I can decide which events I am interested in attending.\n\nAcceptance Criteria:\n- The system allows Attendees to view a list of upcoming events that are open for registration.\n- The system displays relevant event information, including the event name, description, date, time, venue, and other applicable event details.\n- The system displays the latest confirmed event information to Attendees.\n- The system does not display events that are cancelled or no longer available for registration."
+  },
+  {
+    "story": "SCRUM-33",
+    "title": "Register for an Event (SCRUM-33)",
+    "source_sheet": "Sprint 4",
+    "file": "register.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Attendee, I want to register for an event by providing my personal and contact details so that I can attend the event.\n\nAcceptance Criteria:\n- The system allows Attendees to register for an event that is open for registration.\n- The system allows Attendees to provide their required personal and contact details.\n- The system validates that all mandatory registration information has been provided.\n- The system prevents registration when the event has reached its registration capacity.\n- The system confirms successful registration"
+  },
+  {
+    "story": "SCRUM-34",
+    "title": "View Registration Status (SCRUM-34)",
+    "source_sheet": "Sprint 4",
+    "file": "my-registrations.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Attendee, I want to view my registration status so that I can confirm whether I am successfully registered for an event.\n\nAcceptance Criteria:\n\n- The system allows Attendees to view a list of events they have registered for.\n- The system displays the current registration status for each event, such as Confirmed, Waitlisted, or Withdrawn.\n- The system displays relevant event information, including event name, date, time, and venue.\n- The system displays an appropriate message when the Attendee has no registration records."
+  },
+  {
+    "story": "SCRUM-35",
+    "title": "Withdraw Event Registration (SCRUM-35)",
+    "source_sheet": "Sprint 4",
+    "file": "withdraw.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Attendee, I want to withdraw my event registration so that I can cancel my attendance if I am no longer able to attend.\n\nAcceptance Criteria:\n- The system allows Attendees to withdraw their registration before the event start time.\n- The system prevents Attendees from withdrawing their registration of the event start time.\n- The system updates the Attendee's registration status after a successful withdrawal.\n- The system confirms that the registration has been successfully withdrawn.\n- The system updates the available event capacity after a registration is withdrawn."
+  },
+  {
+    "story": "SCRUM-36",
+    "title": "View Registration Information (SCRUM-36)",
+    "source_sheet": "Sprint 4",
+    "file": "registration-records.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Organiser/ Event Coordinator, I want to view registration information for the events I manage so that I can monitor registered attendees and support event planning.\n\nAcceptance Criteria:\n- The system allows Event Organisers and Event Coordinators to view registration information for events they are authorised to manage.\n- The system displays relevant registered attendee information, such as attendee name and contact details.\n- The system displays the total number of registered attendees for each event.\n- The system displays the current registration status of attendees where applicable.\n- Users cannot access registration information for events they are not authorised to manage."
+  },
+  {
+    "story": "SCRUM-37",
+    "title": "Submit Event Change Request (SCRUM-37)",
+    "source_sheet": "Sprint 3",
+    "file": "submit-event-change-request.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Organiser, I want to submit a change request for an already-submitted event, so that I can allow the Event Coordinator to review and process the request\n\nAcceptance Criteria:\nEnsure that the Event Organiser:\n- Can select an existing submitted event and input proposed updates to permitted fields (date, time, expected attendance, venue requirements, or equipment requirements).\n- Is presented with a required text field to enter a reason for the change request.\n- Sees a submission confirmation message and the change request status updated to \"Pending Review\" upon successful submission.\n- Is given an error message and prevented from submitting if no change is made\n- Is prevented from submitting and shown an inline error (\"Please provide a reason for this change request\") if the reason field is left blank.\n- The system triggers a warning modal when critical fields which may affect existing arrangements (proposed date and time, expected attendance, venue requirements, accessibility needs, equipment requirements) are modified on a \"Confirmed\" event.\n- The system prompts the user to review or confirm the impact of critical changes before they are saved.\n- The system saves changes, logs a \"Critical Edit\" entry in the Activity History when the user confirms the modal prompt.\n- The system discards all pending edits and maintains the current \"Confirmed\" status if the user clicks \"Cancel\"."
+  },
+  {
+    "story": "SCRUM-38",
+    "title": "Review Event Change Request (SCRUM-38)",
+    "source_sheet": "Sprint 3",
+    "file": "review-event-change-request.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I want to review and process requests that change important information for an already-submitted event so that I can consider whether I can adjust preparations to handle changes in date, time or any other requirements\n\nAcceptance Criteria:\n\nEnsure that the Event Coordinator:\n- Can view a list of which events have a event change request for events they are in charge of\n- Only event change requests that change important information like date, time, expected attendance, venue requirements, or equipment requirements require approval\n- Non important changes like name, description do not need approval\n- Is clearly informed of which important info is being changed for each change request\n- Accept or Reject a request with a reason if necessary\n- If there are no change requests for their events, they should see a \"No change requests\" message\n- After acceptance, event info should be updated"
+  },
+  {
+    "story": "SCRUM-39",
+    "title": "Notification System (SCRUM-39)",
+    "source_sheet": "Cleaned Sheet",
+    "file": "notification-system-legacy.spec.js",
+    "status": "current-workflow-supersedes-original",
+    "acceptance_criteria_source": "No AC text in raw export; current successor SCRUM-261 supplies the notification-inbox contract."
+  },
+  {
+    "story": "SCRUM-40",
+    "title": "User Login (SCRUM-40)",
+    "source_sheet": "Sprint 1",
+    "file": "login.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a user, I want to login to the website so that I can access the system.\n\nAcceptance Criteria:\n- The system allows users to securely log in using their registered credentials.\n- The system identifies the user's assigned role upon successful authentication.\n- The system provides an error message if the login is unsuccessful."
+  },
+  {
+    "story": "SCRUM-157",
+    "title": "View confirmed event information (SCRUM-157)",
+    "source_sheet": "Sprint 4",
+    "file": "confirmed-event-info.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an authorised user (Event Coordinator, Event Organiser, Venue Staff, Technical Support Staff), I want to view event information after the event has been confirmed so that I can view the confirmed arrangements.\n\nEnsure that Authorized users:\n- Can view confirmed venue, date & time\n- Can view confirmed equipment and/or technical support arranged for the event\n\nEnsure the Event Organiser:\n- Can set registration open date for the event\n\nEnsure that System:\n- Only displays Confirmed events"
+  },
+  {
+    "story": "SCRUM-158",
+    "title": "Re-assign another Event Coordinator to an Event (SCRUM-158)",
+    "source_sheet": "Sprint 2",
+    "file": "reassign-coordinator-legacy.spec.js",
+    "status": "current-workflow-supersedes-original",
+    "acceptance_criteria_source": "As an Event coordinator, I want to reassign another event coordinator to an event that I was in charge of but am unable to handle so that there is an event coordinator in charge of the event.\n\nAcceptance Criteria:\n- The current Event Coordinator can initiate a reassignment request for an event they are responsible for.\n- The current Event Coordinator can select another Event Coordinator to take over the event.\n- The previous Event Coordinator no longer has responsibility for the event after the reassignment.\n- The new Event Coordinator can access the relevant event information and existing arrangements after the reassignment."
+  },
+  {
+    "story": "SCRUM-214",
+    "title": "Set and Update Registration Period (SCRUM-214)",
+    "source_sheet": "Sprint 4",
+    "file": "registration-period.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Organiser, I want to set and update when registration for the event opens and closes so that the event registration period can be managed according to the event\u2019s planning needs.\n\nAcceptance Criteria:\n- The Event Organiser can set a registration opening date and time and a registration closing date and time for their event.\n- The system validates that the registration closing date and time is after the opening date and time.\n- The Event Organiser can update the registration opening and closing dates and times before or during the registration period, where applicable.\n- The Event Organiser can choose whether to enable a waiting list when the event reaches its registration capacity.\n- The system only allows attendees to register when the current date and time falls within the registration period.\n- The updated registration period is reflected in the event information available to attendees.\n- The system displays an appropriate message when registration is not yet open or has closed."
+  },
+  {
+    "story": "SCRUM-215",
+    "title": "Make Operational Safety Decision (SCRUM-215)",
+    "source_sheet": "Sprint 3",
+    "file": "operational-safety-decision.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a Safety Officer, I can approve or reject an event's operational safety arrangements so that only events meeting safety requirements can proceed to preparation.\n\nAcceptance Criteria:\n\n- The Safety Officer can approve an event's safety arrangements, allowing it to proceed to 'Confirmed' stage.\n- The Safety Officer can reject and add remarks on what was not fulfilled, moving them back to the relevant planning stage\n- When changes affect venue or technical arrangements, the affected arrangements must be reviewed and confirmed again before another Operational Safety Check.\n- The system records the Safety Officer's decision and any provided reasons or requested changes."
+  },
+  {
+    "story": "SCRUM-216",
+    "title": "Review Operational Safety Arrangements (SCRUM-216)",
+    "source_sheet": "Sprint 3",
+    "file": "operational-safety-arrangements.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a Safety Officer, I want to review the operational safety of a planned event so that I can determine whether it is safe for the event to proceed.\n\nAcceptance Criteria:\n- The Safety Officer can access events that have completed their venue and technical arrangements and have moved to 'Pending Safety Checks' status.\n- The Safety Officer can review relevant event information, including expected attendance, venue capacity and layout, emergency access, accessibility requirements, equipment placement, crowd movement, and known venue restrictions."
+  },
+  {
+    "story": "SCRUM-217",
+    "title": "Configure Setup and Turnaround Time (SCRUM-217)",
+    "source_sheet": "Sprint 3",
+    "file": "venue-setup-turnaround.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a Venue Staff member, I want to configure the setup and turnaround time for a venue so that sufficient time is allocated before and after events.\n\nAcceptance Criteria:\n- Venue Staff can specify a setup time and turnaround time when creating a venue.\n- Venue Staff can save the configured setup and turnaround times.\n- Venue Staff can update the existing setup and turnaround times.\n- Negative or invalid setup and turnaround times cannot be saved, and an appropriate error message is displayed."
+  },
+  {
+    "story": "SCRUM-218",
+    "title": "View coordinator assignments and active events (SCRUM-218)",
+    "source_sheet": "Sprint 3",
+    "file": "coordinator-access.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator Lead, I want to be able to monitor all coordinator assignments and events before safety check approval so that I can ensure I am able to oversee the events.\n\nAcceptance Criteria:\n- The Event Coordinator Lead can view a list of all Event Coordinators and the events currently assigned to each.\n- The Event Coordinator Lead can view all active events (events that have stages before 'Pending Safety Checks' under their supervision, including the assigned Event Coordinator and event status.\n- Event Coordinators can only view and manage events assigned to them."
+  },
+  {
+    "story": "SCRUM-219",
+    "title": "Assign an Event Coordinator to a Requested Event (SCRUM-219)",
+    "source_sheet": "Sprint 3",
+    "file": "assign-event-coordinator.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a Event Coordinator Lead, I want to be able to view incoming event requests in an unassigned queue and assign Event Coordinators to an event so that I can assign suitable Event Coordinators to be responsible for managing its planning process.\n\nAcceptance Criteria:\n- Newly submitted event requests are placed in an unassigned queue and are not automatically assigned to any Event Coordinator.\n- The Event Coordinator Lead can view all event requests in the unassigned queue, including basic event information.\n- The Event Coordinator Lead can select an event from the queue and assign it to an available Event Coordinator.\n- The system updates the event with the newly assigned Event Coordinator, removes it from the unassigned queue, and displays a confirmation message."
+  },
+  {
+    "story": "SCRUM-220",
+    "title": "Manage Tentative Venue Holds (SCRUM-220)",
+    "source_sheet": "Sprint 3",
+    "file": "manage-tentative-venue-holds.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a Venue Staff member, I want tentative venue holds to have an expiry date and time so that venues are not held indefinitely and can become available for other requests when the required action is not completed.\n\nAcceptance Criteria:\n- Venue Staff can set an expiry date and time when placing a tentative hold on a venue.\n- The system prevents a tentative hold from being created without an expiry date and time.\n- The system automatically expires the tentative hold when the expiry date and time is reached if the required action has not been completed.\n- When a tentative hold expires, the venue becomes available for other booking requests.\n- An expired tentative hold cannot be treated as a confirmed venue booking.\n- The system displays the status of an expired hold as Expired.\n- The system records the expiry of the tentative hold for tracking purposes."
+  },
+  {
+    "story": "SCRUM-222",
+    "title": "Cancel Individual Venue Booking (SCRUM-222)",
+    "source_sheet": "Sprint 3",
+    "file": "cancel-individual-venue-booking.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I want to cancel an individual venue booking without cancelling the other venue booking so that unaffected bookings can remain.\n\nAcceptance Criteria:\n- The Event Coordinator can cancel a specific venue arrangement.\n- Only the selected venue booking is cancelled.\n- Other venue booking remain active.\n- The event remains active unless the entire event is cancelled."
+  },
+  {
+    "story": "SCRUM-223",
+    "title": "Modify an individual venue arrangement (SCRUM-223)",
+    "source_sheet": "Sprint 3",
+    "file": "modify-individual-venue-booking.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I want to modify an individual venue booking without affecting the other venues so that changes can be made independently.\n\nAcceptance Criteria:\n- The Event Coordinator can select a specific venue booking to modify.\n- Modified venue booking are rechecked for suitability, availability and conflicts.\n- Other venue booking remain unchanged.\n- The updated booking remains associated with the same event.\n\n"
+  },
+  {
+    "story": "SCRUM-225",
+    "title": "Mark Venue as Temporarily Unavailable (SCRUM-225)",
+    "source_sheet": "Sprint 3",
+    "file": "mark-venue-unavailable.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a Venue Staff member, I want to mark a venue as temporarily unavailable so that the venue cannot be used when operational issues occur.\n\nAcceptance Criteria:\n- Venue Staff can mark an available venue as temporarily unavailable.\n- Venue Staff can specify the start and end date/time of the unavailability period.\n- Venue Staff can provide a reason for the venue's unavailability.\n- New bookings outside the venue's unavailable period remain unaffected.\n- New bookings that overlap the venue's unavailable period cannot be confirmed."
+  },
+  {
+    "story": "SCRUM-226",
+    "title": "Re-assign another Event Coordinator to an Event (SCRUM-226)",
+    "source_sheet": "Sprint 3",
+    "file": "reassign-event-coordinator.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event coordinator lead, I want to reassign another event coordinator to an event in the event the original event coordinator is unable to handle so that there is an event coordinator in charge of the event.\n\nAcceptance Criteria:\n- The Event Coordinator lead can select another Event Coordinator to take over an event.\n- The previous Event Coordinator previously assigned no longer has responsibility for the event after the reassignment.\n- The new Event Coordinator can access the relevant event information and existing arrangements after the reassignment."
+  },
+  {
+    "story": "SCRUM-227",
+    "title": "Identify Affected Bookings (SCRUM-227)",
+    "source_sheet": "Sprint 3",
+    "file": "identify-affected-bookings.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a Venue Staff member, I want the system to identify bookings affected by a venue becoming unavailable so that the relevant Event Coordinators can make alternative arrangements.\n\nAcceptance Criteria:\n- Existing bookings that overlap the venue's unavailable period are identified as affected bookings.\n- The Event Coordinator responsible for each affected event is informed that the booked venue has become unavailable"
+  },
+  {
+    "story": "SCRUM-261",
+    "title": "Notification Inbox and Delivery (SCRUM-261)",
+    "source_sheet": "Sprint 4",
+    "file": "notification-inbox.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an authenticated user, I want to receive and view in-app notifications relevant to me so that I can identify important updates and access the affected item.\n\nAcceptance Criteria:\n-The delivery provides the shared notification infrastructure\n- The infrastructure should enable backend to create notifications, store past notifications, and deliver/receive notifications to relevant parties\n- Notifications should be displayed in two ways: \n1. A notification button which will make a popup appear once clicked. The popup should only display newest notifications (i.e. past 10 notifications, scrollable, 5 notifications visible at one time only, bottom of the popup should have a button to link to the full notification page) \n2. A full dedicated notification page, displaying all past notifications, highlighting those that have yet to be opened, and displaying the rest as per normal. In this page the user should be able to see all notifications from the past 14 days, max 20 on each page.\n- The infrastructure should enable users to retrieve and access past notifications received\n- Mark the notification as read once opened (on the second page).\n\n"
+  },
+  {
+    "story": "SCRUM-262",
+    "title": "Notification for Event Requests (SCRUM-262)",
+    "source_sheet": "Sprint 4",
+    "file": "event-request-notifications.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Organiser, I want to receive notifications about my event request submission and its approval or rejection, so that I know the status and outcome of my request.\n\nAcceptance Criteria:\n- The system sends a confirmation notification to the Event Organiser when an event request is successfully submitted.\n- The system notifies the Event Organiser when the request is approved or rejected"
+  },
+  {
+    "story": "SCRUM-263",
+    "title": "Notification for Coordinator Assignment (SCRUM-263)",
+    "source_sheet": "Sprint 4",
+    "file": "coordinator-assignment-notifications.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I want to receive a notification when an event is assigned or reassigned to me, so that I know which events I am responsible for managing.\n\nAcceptance Criteria:\n- The system notifies the Event Coordinator when an event is assigned or reassigned to them.\n- The notification includes the event name and relevant event information.\n- The system notifies the previous Event Coordinator when responsibility for an event is transferred, where applicable."
+  },
+  {
+    "story": "SCRUM-264",
+    "title": "Notification for Venue Booking Request and Reservation (SCRUM-264)",
+    "source_sheet": "Sprint 4",
+    "file": "venue-booking-notifications.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I want to receive notifications about my venue booking request and its outcome, so that I can track the progress of venue arrangements for my event.\n\nAcceptance Criteria:\n- The system confirms to the Event Coordinator when a venue booking request is successfully submitted.\n- The system notifies the relevant Venue Staff when a new venue booking request is submitted for an event they are assigned to.\n- The system notifies the Event Coordinator when the booking request is approved or rejected.\n- The notification includes relevant booking details, such as the event name, venue, and booking status."
+  },
+  {
+    "story": "SCRUM-265",
+    "title": "Notification for Event Change Request (SCRUM-265)",
+    "source_sheet": "Sprint 4",
+    "file": "event-change-notifications.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Organiser, I want to receive notifications about event change requests and their outcomes, so that I know whether the requested changes have been received, approved, or rejected.\n\nAcceptance Criteria:\n- The system confirms to the Event Organiser when an event change request is successfully submitted.\n- The system notifies the assigned Event Coordinator when a change request is submitted.\n- The notification includes relevant details for the requested changes.\n- The system notifies the Event Organiser when the change request is approved or rejected.\n- If approved, system notifies the relevant users of the approved changes."
+  },
+  {
+    "story": "SCRUM-266",
+    "title": "Notification for Equipment Request and Reservation (SCRUM-266)",
+    "source_sheet": "Sprint 4",
+    "file": "equipment-request-notifications.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I want to receive notifications when my equipment request is submitted and when its status changes, so that I can keep track of the technical arrangements for my event.\n\nAcceptance Criteria:\n- The system confirms to the Event Coordinator when an equipment request is successfully submitted.\n- The system notifies the relevant Technical Support Staff when a new equipment request is submitted.\n- The notification includes the relevant details for equipment request.\n- The system notifies the Event Coordinator when the equipment request status changes to Rejected or Accepted."
+  },
+  {
+    "story": "SCRUM-267",
+    "title": "Notification for Attendees Registration (SCRUM-267)",
+    "source_sheet": "Sprint 4",
+    "file": "attendee-registration-notifications.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Attendee, I want to receive notifications about my event registration and withdrawal, so that I know whether my registration has been successfully completed or cancelled.\n\nAcceptance Criteria:\n- The system sends a confirmation notification when an Attendee successfully registers for an event.\n- The notification includes the event name, date, time, and venue when available.\n- If the event is full and a waiting list is enabled, the system informs the Attendee whether they have been added to the waiting list instead of receiving a confirmed registration.\n- The system sends a notification if the event is cancelled\n- The system sends a confirmation notification to the Attendee when their event registration is successfully withdrawn\n"
+  },
+  {
+    "story": "SCRUM-268",
+    "title": "Notification for Tentative Holds (SCRUM-268)",
+    "source_sheet": "Sprint 4",
+    "file": "notification-tentative-holds.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I want to receive notifications about tentative venue holds and their expiry, so that I can take the required action before the venue becomes available to other requests.\n\nAcceptance Criteria:\n- The system notifies the Event Coordinator when a tentative hold is placed on a venue by venue staff for their event.\n- The notification includes the venue, event name, and hold expiry date and time.\n- The system sends a reminder notification to the Event Coordinator before the tentative hold expires, and a separate notification when the hold has expired."
+  },
+  {
+    "story": "SCRUM-269",
+    "title": "Notification for Venue Unavailability (SCRUM-269)",
+    "source_sheet": "Sprint 4",
+    "file": "venue-unavailability-notifications.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator, I want to receive notifications when my booking for a venue is affected after venue staff declares that venue is unavailable at any point in time of the booking, so that I can review the impact and make alternative arrangements for my event.\n\nAcceptance Criteria:\n- The system notifies the relevant Event Coordinator when a venue booked for their event becomes unavailable.\n- The notification identifies the affected venue and event.\n- The system notifies the Event Coordinator if a venue's unavailability affects a pending booking request."
+  },
+  {
+    "story": "SCRUM-270",
+    "title": "Notification for Safety Officer Checking (SCRUM-270)",
+    "source_sheet": "Sprint 4",
+    "file": "safety-check-notifications.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a Safety Officer, I want to receive a notification when an event request is submitted for safety review, so that I can review the event promptly and make an informed decision.\n\nAcceptance Criteria:\n- Notify the Safety Officer when an event request is submitted for safety review.\n- Display the event name, event date, and event request link."
+  },
+  {
+    "story": "SCRUM-271",
+    "title": "Notification for Staff Assignment (SCRUM-271)",
+    "source_sheet": "Sprint 4",
+    "file": "staff-assignment-notifications.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As a venue/technical support/safety officer, I want to receive a notification when an event is assigned to me, so that I know which events I am responsible for managing.\n\nAcceptance Criteria:\n- The system notifies the venue/technical support/safety officer staff when an event is assigned to them.\n- The notification includes the event name and relevant event information.\n- Coordinator is informed when venue/technical support/safety officer staff is assigned to their event"
+  },
+  {
+    "story": "SCRUM-272",
+    "title": "Automatically Assign Relevant Staff to an Approved Event (SCRUM-272)",
+    "source_sheet": "Sprint 4",
+    "file": "automatic-staff-assignment.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an authorised user, I want the system to automatically assign Venue Staff, Technical Support Staff, and a Safety Officer to an approved event so that the relevant staff can manage venue arrangements, technical requirements, and operational safety.\n\nAcceptance Criteria:\n- The system automatically and randomly assigns the relevant Venue Staff, Technical Support Staff, and Safety Officer when an event request is approved.\n- The system records the assigned staff members and updates the event information accordingly."
+  },
+  {
+    "story": "SCRUM-273",
+    "title": "View Event Information to show relevant staff (SCRUM-273)",
+    "source_sheet": "Sprint 4",
+    "file": "view-assigned-event-staff.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an authorised user, I want to view the Venue Staff, Technical Support Staff, and Safety Officer assigned to an event so that I know which staff members are responsible for the venue arrangements, technical requirements, and operational safety.\n\nAcceptance Criteria:\n- The Event Information page displays the names and roles of the assigned Venue Staff, Technical Support Staff, and Safety Officer for the selected event."
+  },
+  {
+    "story": "SCRUM-275",
+    "title": "Notification for Event Coordinator Lead (SCRUM-275)",
+    "source_sheet": "Sprint 4",
+    "file": "coordinator-lead-notifications.spec.js",
+    "status": "scenarios-created",
+    "acceptance_criteria_source": "As an Event Coordinator Lead, I want to receive notifications about any received event request submission, so that I know when \n\nAcceptance Criteria:\n- The system sends a notification to the Event Coordinator Lead when an event request is successfully submitted.\n- The Event Coordinator Lead can view the name of Event Organiser, and name of Event when the notification is displayed.\n- Clicking into the notification will navigate directly to the respective event request page to allow Event Coordinator Lead to see full event request details\n"
+  }
+]

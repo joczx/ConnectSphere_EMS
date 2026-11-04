@@ -7,7 +7,8 @@
 import { test, expect } from '@playwright/test';
 import { admin, eventCard, fixtures, signIn, userId } from './helpers.js';
 
-const data = fixtures();
+let data;
+test.beforeAll(() => { data = fixtures(); });
 // The tests share one event: the refused attempt must come before the registration.
 test.describe.configure({ mode: 'serial' });
 

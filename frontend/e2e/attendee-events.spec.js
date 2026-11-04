@@ -8,7 +8,8 @@ import { test, expect } from '@playwright/test';
 import { DateTime } from 'luxon';
 import { apiAs, eventCard, fixtures, registrationDate, signIn } from './helpers.js';
 
-const data = fixtures();
+let data;
+test.beforeAll(() => { data = fixtures(); });
 
 test.beforeEach(async ({ page }) => {
   await signIn(page, 'Attendee');

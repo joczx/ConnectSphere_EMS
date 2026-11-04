@@ -11,7 +11,8 @@
 import { test, expect } from '@playwright/test';
 import { eventCard, fixtures, signIn } from './helpers.js';
 
-const data = fixtures();
+let data;
+test.beforeAll(() => { data = fixtures(); });
 
 // E2E-WDR-001 (AC1, AC3, AC4, AC5): the Attendee withdraws before the event starts;
 // the page confirms it, the place is released and the status becomes Withdrawn.

@@ -10,7 +10,8 @@ import { test, expect } from '@playwright/test';
 import { DateTime } from 'luxon';
 import { account, apiAs, eventCard, fixtures, inputTime, registrationDate, signIn } from './helpers.js';
 
-const data = fixtures();
+let data;
+test.beforeAll(() => { data = fixtures(); });
 
 async function openForm(page, event) {
   await signIn(page, 'Event Organiser');

@@ -6,7 +6,8 @@
 import { test, expect } from '@playwright/test';
 import { eventCard, fixtures, registrationDate, signIn } from './helpers.js';
 
-const data = fixtures();
+let data;
+test.beforeAll(() => { data = fixtures(); });
 
 // E2E-MYR-001 (AC1, AC2, AC3): each registration is listed with its status and the
 // event's dates, times and venue.

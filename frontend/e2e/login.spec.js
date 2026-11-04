@@ -1,3 +1,4 @@
+// SCRUM-40 User Login: registered credentials, assigned role and login errors.
 import { test, expect } from '@playwright/test';
 import { account, signIn } from './helpers.js';
 
@@ -5,6 +6,7 @@ import { account, signIn } from './helpers.js';
 test('valid login opens the home page', async ({ page }) => {
   await signIn(page, 'Event Coordinator');
   await expect(page).toHaveURL(/#\/home$/);
+  await expect(page.locator('.account-menu-roles')).toContainText('Event Coordinator');
 });
 
 // E2E-LOGIN-002 (AC3): a wrong password shows an error on screen.

@@ -7,7 +7,8 @@
 import { test, expect } from '@playwright/test';
 import { eventDate, fixtures, signIn } from './helpers.js';
 
-const data = fixtures();
+let data;
+test.beforeAll(() => { data = fixtures(); });
 const ROLES = ['Event Organiser', 'Event Coordinator', 'Venue Staff', 'Technical Support Staff'];
 
 for (const [index, role] of ROLES.entries()) {
