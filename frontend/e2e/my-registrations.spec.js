@@ -29,6 +29,8 @@ test('shows a message when there are no registrations', async ({ page }) => {
   await signIn(page, data.empty_attendee);
   await page.goto('/#/my-registrations');
 
-  await expect(page.getByRole('status').filter({ hasText: 'registration records' }))
-    .toHaveText('You have no registration records.');
+  const emptyState = page.getByRole('status').filter({ hasText: 'registration records' });
+  await expect(emptyState.getByRole('heading', { name: 'You have no registration records.' }))
+    .toBeVisible();
+  await expect(emptyState).toContainText('Browse upcoming events to find something you would like to join.');
 });

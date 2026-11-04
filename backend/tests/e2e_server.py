@@ -2,6 +2,7 @@
 
 From backend/:  python -m tests.e2e_server
 """
+import os
 from pathlib import Path
 
 from dotenv import dotenv_values, load_dotenv
@@ -19,4 +20,4 @@ load_dotenv(TEST_ENV, override=True)
 
 from app import create_app  # noqa: E402
 
-create_app().run(port=5000)
+create_app().run(port=int(os.environ.get("E2E_BACKEND_PORT", "5000")))

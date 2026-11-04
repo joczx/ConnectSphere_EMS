@@ -62,11 +62,13 @@ test('registers with personal and contact details and confirms it', async ({ pag
 // is refused with a message.
 test('prevents registration when the event is full', async ({ page }) => {
   const card = await openForm(page, data.full);
-  await expect(card).toContainText('Available places: 0');
+  await expect(card).toContainText(`0 available places / ${data.full.capacity_needed} total`);
   await fillDetails(card);
   await card.getByRole('button', { name: 'Submit registration' }).click();
 
-  await expect(page.getByRole('main').getByRole('alert'))
-    .toHaveText('This event is full. The waiting list is disabled.');
+  const alert = page.getByRole('main').getByRole('alert');
+  await expect(alert.getByRole('heading', { name: 'Something went wrong' })).toBeVisible();
+  await expect(alert.getByText('This event is full. The waiting list is disabled.', { exact: true }))
+    .toBeVisible();
   expect(await registrationOf(data.full)).toEqual([]);
 });

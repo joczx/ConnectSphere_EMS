@@ -19,14 +19,18 @@ test('withdraws a registration, confirms it and releases the place', async ({ pa
   await signIn(page, 'Attendee');
   await page.goto('/#/event-registration');
   const card = eventCard(page, data.withdraw);
-  await expect(card).toContainText(`Available places: ${data.withdraw.capacity_needed - 1}`);
+  await expect(card).toContainText(
+    `${data.withdraw.capacity_needed - 1} available places / ${data.withdraw.capacity_needed} total`,
+  );
 
   await card.getByRole('button', { name: 'Withdraw registration' }).click();
 
   await expect(page.getByRole('main').getByRole('alert'))
     .toContainText('Your registration has been successfully withdrawn.');
   await expect(card).toContainText('Your registration has been withdrawn.');
-  await expect(card).toContainText(`Available places: ${data.withdraw.capacity_needed}`);
+  await expect(card).toContainText(
+    `${data.withdraw.capacity_needed} available places / ${data.withdraw.capacity_needed} total`,
+  );
 
   await page.goto('/#/my-registrations');
   await expect(eventCard(page, data.withdraw)).toContainText('Registration status: Withdrawn');
