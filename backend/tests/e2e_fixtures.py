@@ -15,6 +15,7 @@ import json
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
 from pathlib import Path
 
 from dotenv import dotenv_values, load_dotenv
@@ -162,10 +163,20 @@ def teardown(state_file):
     # database was reset), and deleting it again would fail, so skip those.
     flow.users, flow.equipment = [user for user in state["users"] if _account_exists(user)], state["equipment"]
     # Remove registrations before their events.
+    names = []
     for request_id in flow.requests:
+        names += [row["event_name"] for row in admin_request(
+            f"/rest/v1/event_request?select=event_name&event_request_id=eq.{request_id}")]
         for event in admin_request(f"/rest/v1/events?select=event_id&event_request_id=eq.{request_id}"):
             admin_request(f"/rest/v1/event_registration?event_id=eq.{event['event_id']}", method="DELETE")
+    # Flow.clean() deletes every notification newer than flow.since, which would also
+    # delete other runs' notifications (a CI run, or later local runs when this is a
+    # stopped run's state). Keep it from deleting any, then delete only those about
+    # this run's events; each event name is unique to the run.
+    flow.since = 2 ** 62
     flow.clean()
+    for name in names:
+        admin_request(f"/rest/v1/notifications?body=like.*{quote(name)}*", method="DELETE")
     path.unlink()
 
 
