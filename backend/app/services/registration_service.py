@@ -28,6 +28,15 @@ def _catalogue_now():
     return datetime.now(timezone.utc)
 
 
+def registration_status(event, now):
+    """Derive availability from the period rather than trusting an old RPC label."""
+    opens = datetime.fromisoformat(event['registration_opens_at'].replace('Z', '+00:00'))
+    closes = datetime.fromisoformat(event['registration_closes_at'].replace('Z', '+00:00'))
+    if now < opens:
+        return 'not_open'
+    return 'open' if now < closes else 'closed'
+
+
 def _visible_event(event, now):
     if event.get('status') != 'confirmed':
         return False
@@ -48,6 +57,7 @@ def attendee_catalogue(token):
     result = registration_call('attendee_registration_events', token, {})
     now = _catalogue_now()
     return {**result, 'events': [
-        {field: event[field] for field in CATALOGUE_FIELDS if field in event}
+        {**{field: event[field] for field in CATALOGUE_FIELDS if field in event},
+         'registration_status': registration_status(event, now)}
         for event in result['events'] if _visible_event(event, now)
     ]}

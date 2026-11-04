@@ -152,6 +152,6 @@ their own tests; Python mocks cannot establish full implementation of those ACs.
 Supabase calls are mocked. These tests assert the Python API contract; they do
 not prove database role/assignment enforcement, actual registration timing,
 capacity calculation, notification delivery, or the visible UI labels/messages.
-In SCRUM-157, AC4 supplies an already-confirmed-only list; the shared events API
-does not itself filter mixed statuses. Passing unit tests and 100% Python
+In SCRUM-157, AC4 checks mixed-status filtering through `/api/events?status=confirmed`;
+the unfiltered management list still includes all lifecycle stages. Passing unit tests and 100% Python
 function coverage do not establish that every story is fully implemented.

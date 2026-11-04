@@ -25,7 +25,7 @@ def event():
     return {
         'event_id': 41, 'event_name': 'Community Technology Fair',
         'description': 'Community technology demonstrations and workshops.',
-        'status': 'confirmed',
+        'status': 'confirmed', 'registration_status': 'open',
         'start_datetime': '2027-06-15T10:00:00+08:00',
         'end_datetime': '2027-06-15T16:00:00+08:00',
         'venue_id': '10000000-0000-0000-0000-000000000001',
@@ -188,3 +188,23 @@ def test_unavailable_catalogue_is_reported_not_shown_as_empty(result, status, me
     assert response.json['error'].startswith(message)
     assert 'events' not in response.json
 
+
+@pytest.mark.parametrize('now,expected', [
+    ('2027-05-01T00:59:59.999999Z', 'not_open'),
+    ('2027-05-01T01:00:00Z', 'open'),
+    ('2027-06-14T09:59:59.999999Z', 'open'),
+    ('2027-06-14T10:00:00Z', 'closed'),
+])
+def test_registration_availability_status_uses_timezone_aware_boundaries(event, now, expected):
+    from app.services.registration_service import registration_status
+    assert registration_status(event, datetime.fromisoformat(now.replace('Z', '+00:00'))) == expected
+
+
+@pytest.mark.parametrize('upstream', [None, 'not_open', 'closed'])
+def test_catalogue_restores_fresh_status_with_missing_or_stale_rpc_label(event, upstream):
+    supplied = {key: value for key, value in event.items() if key != 'registration_status'}
+    if upstream is not None:
+        supplied['registration_status'] = upstream
+    response = get_catalogue([supplied])
+    assert response.status_code == 200
+    assert response.json['events'][0]['registration_status'] == 'open'
