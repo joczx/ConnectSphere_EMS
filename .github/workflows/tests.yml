@@ -7,6 +7,22 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install ruff
+        run: python -m pip install ruff
+      # Rules are pinned in backend/ruff.toml.
+      - name: Lint backend
+        run: ruff check backend
+
   test-cases-ci:
     runs-on: ubuntu-latest
     steps:
@@ -133,6 +149,7 @@ jobs:
   package:
     name: Build Release Package
     needs:
+      - lint
       - test-cases-ci
       - integration-tests
       - e2e-tests
@@ -142,6 +159,7 @@ jobs:
     # actual test or audit failure.
     if: |
       always() &&
+      needs.lint.result == 'success' &&
       needs.test-cases-ci.result == 'success' &&
       needs.audit.result == 'success' &&
       (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped') &&
@@ -254,3 +272,24 @@ jobs:
               cat frontend.log
               exit 1
             }
+
+  # Continuous delivery, not deployment: the project does not deploy anywhere,
+  # so these two jobs only announce the release. The production environment
+  # has required reviewers, so the run pauses at "Waiting for review" until a
+  # named person has looked at the evidence above and approved the release.
+  staging:
+    name: Staging
+    needs: smoke
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - run: echo "Release package for ${{ github.sha }} would be deployed to staging here."
+
+  production:
+    name: Production
+    needs: staging
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: echo "Release package for ${{ github.sha }} approved for production."
