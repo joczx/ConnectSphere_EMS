@@ -5,11 +5,13 @@ Dependencies are mocked. No HTTP client or database is used.
 Browser save/reopen behaviour requires separate acceptance checks.
 """
 import pytest
+import unittest
 from app.schemas import event_request as schema
 from test_create_submit_event_request import valid_payload
 from unittest.mock import Mock, patch
 from app.services import event_request_service as service
 from app.services import event_request_workflow as workflow
+from app.services import event_request_review_service as reviews
 from app.routes import event_requests as routes
 from flask import Flask
 
@@ -187,3 +189,112 @@ def test_accessibility_flags_cannot_be_cleared(field):
     assert field in errors
 
 
+class DraftLifecycleTests(unittest.TestCase):
+    """Listing, editing, deleting and submitting drafts, and what happens once a request is no longer one."""
+
+    def run_on(self, table):
+        return patch.object(service, '_execute', side_effect=lambda operation, **kwargs: operation(table).data)
+
+    def request_table(self, rows):
+        table = Mock()
+        for method in ('select', 'eq', 'order'):
+            getattr(table, method).return_value = table
+        table.execute.return_value.data = rows
+        return table
+
+    # TC-DER-021: Check that drafts can be listed by status alone, without naming an organiser.
+    def test_drafts_can_be_listed_by_status_without_an_organiser(self):
+        stored = [{'event_request_id': 42, 'status': 'draft'}]
+        table = self.request_table(stored)
+
+        with Flask(__name__).test_request_context('/?status=draft'), self.run_on(table):
+            response = routes.index()
+
+        self.assertEqual(response.get_json(), {'event_requests': stored})
+        table.eq.assert_called_once_with('status', 'draft')
+
+    # TC-DER-022: Check that an organiser's list without a status filter returns every request they own.
+    def test_organiser_list_without_a_status_returns_every_request_they_own(self):
+        organiser = valid_payload()['event_organiser_id']
+        stored = [{'event_request_id': 42, 'status': 'draft'}, {'event_request_id': 43, 'status': 'submitted'}]
+        table = self.request_table(stored)
+
+        with self.run_on(table):
+            self.assertEqual(service.list_event_requests(organiser), stored)
+
+        table.eq.assert_called_once_with('event_organiser_id', organiser)
+
+    # TC-DER-023: Check that saving a draft edit needs the changed fields as JSON.
+    def test_draft_edit_without_json_is_refused(self):
+        with Flask(__name__).test_request_context(method='PATCH'), \
+                patch.object(routes, 'edit_event_request') as edit, \
+                self.assertRaises(service.EventRequestError) as caught:
+            routes.edit(42)
+
+        self.assertEqual(caught.exception.message, 'Send the fields you want to change as JSON.')
+        edit.assert_not_called()
+
+    # TC-DER-024: Check that an unwanted draft can be deleted.
+    def test_unwanted_draft_can_be_deleted(self):
+        with Flask(__name__).test_request_context(method='DELETE'), patch.object(routes, 'delete_draft') as delete:
+            self.assertEqual(routes.delete(42), ('', 204))
+
+        delete.assert_called_once_with(42)
+
+    # TC-DER-026: Check that a complete draft is moved to submitted for review.
+    def test_complete_draft_is_submitted_for_review(self):
+        draft = {**valid_payload(), 'event_request_id': 42, 'status': 'draft'}
+        table = Mock()
+        table.update.return_value.eq.return_value.execute.return_value.data = [{**draft, 'status': 'submitted'}]
+
+        with patch.object(service, 'get_event_request', return_value=draft), self.run_on(table):
+            row, resubmitted = workflow.send_for_review(42)
+
+        self.assertEqual(row['status'], schema.STATUS_SUBMITTED)
+        self.assertFalse(resubmitted)
+        self.assertEqual(table.update.call_args.args[0]['status'], schema.STATUS_SUBMITTED)
+
+    # TC-DER-027: Check that submitting a draft that no longer exists is reported as not found.
+    def test_submitting_a_draft_that_no_longer_exists_is_not_found(self):
+        with patch.object(service, 'get_event_request', return_value=None), \
+                self.assertRaises(service.EventRequestError) as caught:
+            workflow.send_for_review(42)
+
+        self.assertEqual(caught.exception.status_code, 404)
+
+    # TC-DER-028: Check that a request which has left draft is not saved as a draft edit.
+    def test_request_that_has_left_draft_is_not_saved_as_a_draft_edit(self):
+        for status, reason in (('submitted', 'being reviewed'), ('planning', 'can no longer be edited')):
+            with self.subTest(status=status), \
+                    patch.object(service, 'require_event_request',
+                                 return_value={'event_request_id': 42, 'status': status}), \
+                    patch.object(reviews, 'latest_review', return_value=None), \
+                    patch.object(service, 'apply_edit') as apply:
+                with self.assertRaises(service.EventRequestError) as caught:
+                    workflow.edit(42, {'event_name': 'New name'})
+                self.assertEqual(caught.exception.status_code, 409)
+                self.assertIn(reason, caught.exception.message)
+                apply.assert_not_called()
+
+        returned = {'event_request_id': 42, 'status': 'rejected', 'event_organiser_id': valid_payload()['event_organiser_id']}
+        changes = {'event_name': {'from': 'Old name', 'to': 'New name'}}
+        with patch.object(service, 'require_event_request', return_value=returned), \
+                patch.object(service, 'apply_edit', return_value=({**returned, 'event_name': 'New name'}, changes)), \
+                patch.object(reviews, 'execute_on', return_value=[{'amendment_id': 9}]):
+            _, amendment = workflow.edit(42, {'event_name': 'New name'})
+
+        self.assertEqual(amendment, {'amendment_id': 9})
+
+    # TC-DER-029: Check that a request which has left draft cannot be submitted again.
+    def test_request_that_has_left_draft_cannot_be_submitted_again(self):
+        for status, reason in (('submitted', 'already with the Event Coordinator'), ('planning', 'cannot be submitted again')):
+            with self.subTest(status=status), \
+                    patch.object(service, 'require_event_request',
+                                 return_value={'event_request_id': 42, 'status': status}), \
+                    patch.object(reviews, 'latest_review', return_value=None), \
+                    patch.object(service, 'mark_submitted') as submit:
+                with self.assertRaises(service.EventRequestError) as caught:
+                    workflow.send_for_review(42)
+                self.assertEqual(caught.exception.status_code, 409)
+                self.assertIn(reason, caught.exception.message)
+                submit.assert_not_called()

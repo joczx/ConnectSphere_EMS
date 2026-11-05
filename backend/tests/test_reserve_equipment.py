@@ -1,7 +1,9 @@
 """Reserve Equipment HTTP contracts; overlap/concurrency require PostgreSQL."""
 from unittest.mock import patch
 import pytest
+import unittest
 from app import create_app
+from app.services.event_store import StoreError
 
 
 @pytest.fixture
@@ -74,3 +76,16 @@ def test_nontechnical_staff_cannot_list_reservable_events(client):
         response = client.get('/api/equipment/reservable-events')
     assert response.status_code == 403
     assert 'events' not in response.json
+
+
+class ReservationPermissionTests(unittest.TestCase):
+    # TC-ERES-020: Tells the user a reservation was refused for lack of permission rather than reporting an outage.
+    def test_reservation_refused_for_lack_of_permission_says_so(self):
+        with patch('app.routes.equipment.authenticated_token', return_value='organiser-token'), \
+             patch('app.routes.equipment.supabase_request', side_effect=StoreError(403)):
+            response = create_app().test_client().post(
+                '/api/equipment/reservations', json={'event_id': '1', 'equipment_id': '10', 'quantity': 2}
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json, {'error': 'You do not have permission to access this equipment action.'})

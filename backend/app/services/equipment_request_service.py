@@ -1,4 +1,3 @@
-from datetime import datetime
 
 from app.services.event_store import StoreError, supabase_request
 

@@ -42,4 +42,6 @@ frontend/e2e/.fixtures-state.json
 release/
 staged/
 *.zip
-*.logfrontend/e2e/.fixtures-state.stopped-*.json
+*.log
+frontend/e2e/.fixtures-state.stopped-*.json
+
