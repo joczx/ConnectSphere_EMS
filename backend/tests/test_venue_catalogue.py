@@ -916,3 +916,100 @@ class RemoveUnavailabilityTests(unittest.TestCase):
     def test_a_refusal_is_passed_on(self):
         response, _ = self.delete(self.BLOCK, {"error": "Only Venue Staff can remove an unavailable period.", "status": 403})
         self.assertEqual(response.status_code, 403)
+
+
+class CreateVenueValidationTests(unittest.TestCase):
+    """Create Venue Catalogue (SCRUM-24): each venue characteristic is checked before the venue is saved."""
+
+    def errors_for(self, **changes):
+        return parse_create(valid_venue(**changes))[1]
+
+    # TC-CVCAT-014: Verifies text fields report a missing, non-text, blank or overlong value, and a blank or omitted
+    # optional field is left empty.
+    def test_text_fields_report_missing_non_text_blank_and_overlong_values(self):
+        for field, value, message in (
+            ("venue_name", None, "This field is required."),
+            ("venue_name", 123, "This field must be text."),
+            ("venue_name", "   ", "This field is required."),
+            ("street_name", "x" * 151, "This field must be 150 characters or fewer."),
+        ):
+            with self.subTest(field=field, value=value):
+                self.assertEqual(self.errors_for(**{field: value})[field], message)
+
+        record, errors = parse_create(valid_venue(building_name="   ", unit_number=None))
+        self.assertNotIn("building_name", errors)
+        self.assertNotIn("unit_number", errors)
+        self.assertIsNone(record["building_name"])
+        self.assertIsNone(record["unit_number"])
+
+    # TC-CVCAT-015: Verifies an accessibility answer must be true or false.
+    def test_accessibility_answers_must_be_true_or_false(self):
+        for field, value in (("wheelchair_accessible", "yes"), ("blind_accessible", None)):
+            with self.subTest(field=field, value=value):
+                self.assertEqual(self.errors_for(**{field: value})[field],
+                                 "Choose whether this accessibility feature is available.")
+
+    # TC-CVCAT-016: Verifies facilities and room layouts need at least one valid option.
+    def test_facilities_and_layouts_need_at_least_one_valid_option(self):
+        for field, value, message in (
+            ("facilities", "wifi", "Choose at least one option."),
+            ("facilities", [], "Choose at least one option."),
+            ("supported_room_layouts", [1], "Choose valid options."),
+            ("facilities", ["   "], "Choose at least one option."),
+        ):
+            with self.subTest(field=field, value=value):
+                self.assertEqual(self.errors_for(**{field: value})[field], message)
+
+    # TC-CVCAT-017: Verifies operating hours are needed for every day, each with opening and closing times.
+    def test_operating_hours_need_every_day_with_opening_and_closing_times(self):
+        hours = valid_venue()["operating_hours"]
+        for value, message in (
+            ("always open", "Enter operating hours for every day."),
+            ({**hours, "monday": "open"}, "Enter valid operating hours for Monday."),
+            ({**hours, "tuesday": {"open": "09:00"}}, "Enter opening and closing times for Tuesday."),
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(self.errors_for(operating_hours=value)["operating_hours"], message)
+
+
+class MarkVenueUnavailableTests(unittest.TestCase):
+    """Mark Venue as Temporarily Unavailable (SCRUM-225)."""
+
+    # TC-MVU-006: Verifies Venue Staff can mark a venue unavailable for a period with a reason and are told it is done.
+    def test_venue_staff_mark_a_venue_unavailable_and_are_told_so(self):
+        body = {"starts_at": "2026-12-01T08:00:00+08:00", "ends_at": "2026-12-01T18:00:00+08:00",
+                "reason": "Floor resurfacing"}
+        block = {"block_id": str(uuid4()), "reason": "Floor resurfacing"}
+        with patch("app.routes.venues.authenticated_token", return_value="staff-token"), patch(
+            "app.routes.venues.supabase_request", return_value={"block": block, "affected": []}
+        ) as query:
+            response = create_app().test_client().post(f"/api/venues/{VENUE_ID}/unavailability", json=body)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json, {"message": "Venue marked unavailable.", "block": block, "affected": []})
+        self.assertEqual(query.call_args.kwargs["payload"]["p_reason"], "Floor resurfacing")
+
+
+class AffectedBookingsTests(unittest.TestCase):
+    """Identify Affected Bookings (SCRUM-227)."""
+
+    # TC-IAB-002: Verifies no bookings are reported as affected when the period has no time zone,
+    # the reason is blank, or the database refuses the block.
+    def test_no_affected_bookings_are_reported_when_the_block_is_not_made(self):
+        body = {"starts_at": "2026-12-01T08:00:00+08:00", "ends_at": "2026-12-01T18:00:00+08:00", "reason": "Burst pipe"}
+        refusal = {"error": "Only Venue Staff can mark a venue unavailable.", "status": 403}
+        for changes, result, status in (
+            ({"starts_at": "2026-12-01T08:00:00"}, None, 400),
+            ({"reason": "   "}, None, 400),
+            ({}, refusal, 403),
+        ):
+            with self.subTest(changes=changes):
+                with patch("app.routes.venues.authenticated_token", return_value="staff-token"), patch(
+                    "app.routes.venues.supabase_request", return_value=result
+                ) as query:
+                    response = create_app().test_client().post(
+                        f"/api/venues/{VENUE_ID}/unavailability", json={**body, **changes}
+                    )
+                self.assertEqual(response.status_code, status)
+                self.assertNotIn("affected", response.json)
+                self.assertEqual(query.called, result is not None)

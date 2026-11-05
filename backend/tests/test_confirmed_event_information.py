@@ -8,6 +8,7 @@ confirmed catalogue query; the unfiltered management list retains every stage.
 from unittest.mock import patch
 
 import pytest
+import unittest
 
 from app import create_app
 from app.services.event_store import StoreError
@@ -197,3 +198,16 @@ def test_equipment_information_requires_authentication(client):
         response = client.get('/api/events/41/equipment-requests')
     assert response.status_code == 401
     query.assert_not_called()
+
+
+class EventListWithoutFilterTests(unittest.TestCase):
+    # TC-SCRUM157-016 / AC4: without the confirmed filter the event list keeps every stage, so only the
+    # confirmed catalogue query narrows it to confirmed events.
+    def test_event_list_without_the_confirmed_filter_keeps_every_stage(self):
+        rows = [{'event_id': 41, 'status': 'confirmed'}, {'event_id': 50, 'status': 'planning'},
+                {'event_id': 51, 'status': 'cancelled'}]
+        with patch('app.routes.events.supabase_request', side_effect=[{'id': 'organiser'}, rows]):
+            response = create_app().test_client().get('/api/events', headers={'Authorization': 'Bearer verified'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {'events': rows})

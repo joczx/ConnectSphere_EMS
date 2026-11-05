@@ -1,8 +1,11 @@
 import unittest
+import io
+from urllib.error import HTTPError
 from unittest.mock import patch
 
 from app import create_app
 from app.services.event_store import StoreError
+from app.services.event_store import supabase_request
 
 EVENT_ID = 'b21bdd3b-5fbb-4588-b070-f9a7e923ef02'
 
@@ -117,6 +120,92 @@ class EventViewTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertIn('permission to reassign', response.json['error'])
+
+SUPABASE_ENV = {'SUPABASE_URL': 'https://example.test', 'SUPABASE_ANON_KEY': 'test-key'}
+
+
+class EventInformationTests(unittest.TestCase):
+    """View Event Information During Planning (SCRUM-10)."""
+
+    def setUp(self):
+        self.client = create_app().test_client()
+        self.headers = {'Authorization': 'Bearer user-token'}
+
+    # TC-VEI-034 (AC1, AC2): the event list can be narrowed to confirmed events.
+    @patch('app.routes.events.supabase_request')
+    def test_event_list_can_be_narrowed_to_confirmed_events(self, query):
+        planning = {'event_id': EVENT_ID, 'status': 'planning'}
+        confirmed = {'event_id': '7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f', 'status': 'confirmed'}
+        query.side_effect = [{'id': 'user'}, [planning, confirmed]]
+
+        response = self.client.get('/api/events?status=confirmed', headers=self.headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['events'], [confirmed])
+
+    # TC-VEI-035 (AC4): a session that Supabase Auth refuses with 400 or 403 has to sign in again.
+    def test_session_refused_by_supabase_auth_has_to_sign_in_again(self):
+        for status in (400, 403):
+            with self.subTest(status=status):
+                refusal = HTTPError('https://example.test/auth/v1/user', status, 'Refused', {}, io.BytesIO(b''))
+                with patch.dict('os.environ', SUPABASE_ENV), \
+                        patch('app.services.event_store.urlopen', side_effect=refusal):
+                    response = self.client.get('/api/events', headers=self.headers)
+
+                self.assertEqual(response.status_code, 401)
+                self.assertEqual(response.json, {'error': 'Please sign in again.'})
+
+    # TC-VEI-036 (AC1): an event store error carries a message the event page can show.
+    def test_event_store_errors_carry_a_message_the_page_can_show(self):
+        self.assertEqual(StoreError(401).to_dict(), {'error': 'Please sign in again.'})
+        self.assertEqual(StoreError(503).to_dict(), {'error': 'Event service is temporarily unavailable.'})
+        self.assertEqual(StoreError(403, 'Not your event.').to_dict(), {'error': 'Not your event.'})
+
+    # TC-VEI-037 (AC3): a write names its method and asks for the saved row back, so the latest version is shown.
+    def test_event_write_returns_the_saved_row(self):
+        with patch.dict('os.environ', SUPABASE_ENV), patch('app.services.event_store.urlopen') as send:
+            send.return_value.__enter__.return_value = io.BytesIO(b'[{"event_id": 7, "event_name": "Renamed"}]')
+            rows = supabase_request('/rest/v1/events?event_id=eq.7', token='user-token',
+                                    payload={'event_name': 'Renamed'}, method='PATCH')
+
+        self.assertEqual(rows, [{'event_id': 7, 'event_name': 'Renamed'}])
+        sent = send.call_args.args[0]
+        self.assertEqual(sent.get_method(), 'PATCH')
+        self.assertEqual(sent.get_header('Prefer'), 'return=representation')
+        self.assertEqual(sent.get_header('Authorization'), 'Bearer user-token')
+
+
+class EventCoordinatorReassignmentTests(unittest.TestCase):
+    """Re-assign another Event Coordinator to an Event (SCRUM-158)."""
+
+    def setUp(self):
+        self.client = create_app().test_client()
+        self.headers = {'Authorization': 'Bearer user-token'}
+
+    # TC-RAEC-007 (AC1, AC2): the event, the replacement coordinator and the event's existence are checked
+    # before anything is written.
+    @patch('app.routes.events.supabase_request')
+    def test_reassignment_is_checked_before_anything_is_written(self, query):
+        query.return_value = {'id': 'current-coordinator'}
+        for path, body, status, error in (
+            ('/api/events/not-an-event/coordinator', {'event_coordinator_id': 'new-coordinator'}, 404,
+             'Event not found or access unavailable.'),
+            (f'/api/events/{EVENT_ID}/coordinator', {}, 400, 'Please choose a replacement Event Coordinator.'),
+            (f'/api/events/{EVENT_ID}/coordinator', {'event_coordinator_id': '   '}, 400,
+             'Please choose a replacement Event Coordinator.'),
+        ):
+            with self.subTest(path=path, body=body):
+                response = self.client.patch(path, headers=self.headers, json=body)
+                self.assertEqual(response.status_code, status)
+                self.assertEqual(response.json, {'error': error})
+
+        query.side_effect = [{'id': 'current-coordinator'}, []]
+        response = self.client.patch(f'/api/events/{EVENT_ID}/coordinator', headers=self.headers,
+                                     json={'event_coordinator_id': 'new-coordinator'})
+
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn('PATCH', [call.kwargs.get('method') for call in query.call_args_list])
+
 
 if __name__ == '__main__':
     unittest.main()

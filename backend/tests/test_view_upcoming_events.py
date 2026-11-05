@@ -8,9 +8,11 @@ tests. Venue lookup and UI rendering remain outside these Python unit tests.
 from unittest.mock import patch
 from datetime import datetime, timezone
 import pytest
+import unittest
 
 from app import create_app
 from app.services.event_store import StoreError
+from app.services.registration_service import _catalogue_now
 
 
 @pytest.fixture(autouse=True)
@@ -208,3 +210,15 @@ def test_catalogue_restores_fresh_status_with_missing_or_stale_rpc_label(event, 
     response = get_catalogue([supplied])
     assert response.status_code == 200
     assert response.json['events'][0]['registration_status'] == 'open'
+
+
+class CatalogueClockTests(unittest.TestCase):
+    # TC-SCRUM32-016 (AC1): whether registration is open is judged against the current time in UTC.
+    # _catalogue_now was imported before the module's clock fixture patches it, so this is the real clock.
+    def test_open_registration_is_judged_against_the_current_utc_time(self):
+        before = datetime.now(timezone.utc)
+        now = _catalogue_now()
+        after = datetime.now(timezone.utc)
+
+        self.assertIs(now.tzinfo, timezone.utc)
+        self.assertTrue(before <= now <= after)

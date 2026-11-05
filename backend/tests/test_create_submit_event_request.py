@@ -10,6 +10,7 @@ UI rendering and database uniqueness require separate acceptance checks.
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import unittest
 
 from app.schemas import event_request as schema
 from app.services import event_request_service as service
@@ -389,3 +390,71 @@ def test_create_handler_rejects_malformed_body(body):
     create.assert_not_called()
 
 
+class EventRequestSubmissionTests(unittest.TestCase):
+    """Optional details, saving without submitting, reviewing before submitting, and the outcome."""
+
+    def run_on(self, table):
+        return patch.object(service, '_execute', side_effect=lambda operation, **kwargs: operation(table).data)
+
+    # TC-CER-058: Check that cleared attendance and room layout are stored empty and accessibility needs must be true or false.
+    def test_cleared_details_are_stored_empty_and_accessibility_must_be_true_or_false(self):
+        record, errors = schema.parse_payload(
+            {'capacity_needed': '  ', 'room_layout': None, 'need_wheelchair_accessibility': 'yes'}
+        )
+
+        self.assertIsNone(record['capacity_needed'])
+        self.assertIsNone(record['room_layout'])
+        self.assertEqual(errors, {'need_wheelchair_accessibility': 'Must be true or false.'})
+
+    # TC-CER-059: Check that expected attendance typed as digits is stored as a whole number.
+    def test_expected_attendance_typed_as_digits_is_stored_as_a_number(self):
+        record, errors = schema.parse_payload({'capacity_needed': ' 150 '})
+
+        self.assertEqual(errors, {})
+        self.assertEqual(record['capacity_needed'], 150)
+
+    # TC-CER-060: Check that saving without submitting skips the mandatory-field check and records no submission.
+    def test_saving_without_submitting_skips_the_mandatory_check_and_records_no_submission(self):
+        table = Mock()
+        table.insert.return_value.execute.return_value.data = [{'event_request_id': 7, 'status': 'draft'}]
+
+        with self.run_on(table):
+            with self.assertRaises(service.EventRequestError):
+                service.create_event_request({'event_name': 'Orientation Night'})
+            service.create_event_request({'event_name': 'Orientation Night'}, submit=False)
+
+        table.insert.assert_called_once()
+        inserted = table.insert.call_args.args[0]
+        self.assertEqual(inserted['status'], schema.STATUS_DRAFT)
+        self.assertNotIn('submitted_at', inserted)
+
+    # TC-CER-061: Check that the organiser can open a saved request to review its details before submitting.
+    def test_saved_request_can_be_opened_to_review_before_submitting(self):
+        stored = {**valid_payload(), 'event_request_id': 42, 'status': 'draft'}
+
+        with Flask(__name__).app_context(), patch.object(routes, 'get_event_request', return_value=stored):
+            response = routes.read(42)
+
+        self.assertEqual(response.get_json(), stored)
+
+    # TC-CER-062: Check that a submission the database did not save is reported rather than confirmed.
+    def test_submission_not_saved_by_the_database_is_reported(self):
+        table = Mock()
+        table.update.return_value.eq.return_value.execute.return_value.data = []
+
+        with self.run_on(table), self.assertRaises(service.EventRequestError) as caught:
+            service.mark_submitted(42)
+
+        self.assertEqual(caught.exception.status_code, 502)
+        self.assertIn('could not be submitted', caught.exception.message)
+
+    # TC-CER-063 / TC-DER-025: Check that submitting through the submit endpoint returns a confirmation.
+    def test_submit_endpoint_confirms_the_submission(self):
+        row = {'event_request_id': 42, 'status': 'submitted'}
+
+        with Flask(__name__).app_context(), \
+                patch.object(routes, 'send_for_review', return_value=(row, False)) as submit:
+            response = routes.submit(42)
+
+        submit.assert_called_once_with(42)
+        self.assertEqual(response.get_json(), {'message': 'Event request submitted successfully.', 'event_request': row})

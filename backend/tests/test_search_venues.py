@@ -72,3 +72,19 @@ class VenueNameSearchTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.headers["Cache-Control"], "no-store")
+
+
+class VenueNameSearchLimitTests(unittest.TestCase):
+    def setUp(self):
+        self.client = create_app().test_client()
+
+    # TC-SFV-015 (AC1): a venue name longer than 100 characters is refused before the catalogue is searched.
+    def test_name_search_longer_than_100_characters_is_refused(self):
+        with patch("app.routes.venues.authenticated_token", return_value="user-token"), patch(
+            "app.routes.venues.supabase_request"
+        ) as query:
+            response = self.client.get("/api/venues", query_string={"name": "a" * 101})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json, {"error": "Venue name search must be 100 characters or fewer."})
+        query.assert_not_called()
