@@ -8,8 +8,12 @@ touch Supabase.
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import unittest
+from unittest.mock import patch
 
 from app.schemas import event as schema
+from app.services import event_service
+from app.services.event_service import EventError
 
 FUTURE = datetime.now(timezone.utc) + timedelta(days=30)
 
@@ -195,3 +199,18 @@ def test_moving_the_start_into_the_past_is_refused():
     errors = schema.check_timing(an_event(), {"start_datetime": past.isoformat()})
 
     assert "start_datetime" in errors
+
+
+class OrganiserDirectEditTests(unittest.TestCase):
+    # TC-UEI-037 (AC1): An Event Organiser cannot edit the event directly and is told to submit a change request.
+    def test_organiser_is_sent_to_the_change_request_process(self):
+        organiser = "5d7e2a18-3c94-4f60-b2a1-8e4c6d0f9b73"
+
+        with patch.object(event_service, "load_event", return_value=an_event(event_organiser_id=organiser)), \
+                patch.object(event_service, "supabase_request") as query, \
+                self.assertRaises(EventError) as caught:
+            event_service.update_event(6, {"purpose": "Updated"}, "token", actor_id=organiser)
+
+        self.assertEqual(caught.exception.status, 403)
+        self.assertIn("event change request", caught.exception.message)
+        query.assert_not_called()

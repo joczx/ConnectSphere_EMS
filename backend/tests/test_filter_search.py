@@ -91,3 +91,43 @@ class VenueFilterSearchTests(unittest.TestCase):
         self.assertTrue(matches_operating_hours(venue, filters))
         venue["operating_hours"]["tuesday"] = {"closed": True}
         self.assertFalse(matches_operating_hours(venue, filters))
+
+
+class EventVenueSearchTests(unittest.TestCase):
+    """Searching venues for one event in planning."""
+
+    EVENT = {
+        "event_id": 4, "event_name": "Orientation", "status": "planning", "capacity_needed": 100,
+        "room_layout": None, "required_facilities": [], "need_wheelchair_accessibility": False,
+        "need_blind_accessibility": False, "start_datetime": None, "end_datetime": None,
+    }
+    VENUES = [{"venue_id": "large-hall", "capacity": 200}, {"venue_id": "seminar-room", "capacity": 50}]
+
+    def setUp(self):
+        self.client = create_app().test_client()
+
+    def search(self, event_id):
+        with patch("app.routes.venues.authenticated_token", return_value="user-token"), \
+             patch("app.routes.venues.search_venues", return_value=self.VENUES), \
+             patch("app.routes.venues.load_event", return_value=self.EVENT) as load, \
+             patch("app.routes.venues.mark_for_event", side_effect=lambda assessed, *args: assessed):
+            return self.client.get("/api/venues/search", query_string={"event_id": event_id}), load
+
+    # TC-SFV-016 (AC1, AC2): a search for an event marks each venue as meeting its requirements or not.
+    def test_search_for_an_event_marks_each_venue_against_its_requirements(self):
+        response, load = self.search("4")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([venue["eligible"] for venue in response.json["venues"]], [True, False])
+        self.assertEqual(response.json["eligible_count"], 1)
+        self.assertEqual(response.json["event"]["event_name"], "Orientation")
+        self.assertIn("Expected attendance", [item["label"] for item in response.json["requirements"]])
+        self.assertEqual(load.call_args.args[:2], ("4", "user-token"))
+
+    # TC-SFV-017 (AC1): a search naming an event id that is neither a number nor a UUID is refused.
+    def test_search_for_an_invalid_event_id_is_refused(self):
+        response, load = self.search("not-an-event")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json, {"error": "Event not found or access unavailable."})
+        load.assert_not_called()

@@ -1,4 +1,5 @@
 from unittest.mock import patch
+import unittest
 import pytest
 from app import create_app
 from app.schemas.venue_booking import parse_booking
@@ -358,3 +359,15 @@ def test_event_bookings_pass_on_the_database_refusal(query):
 def test_event_bookings_require_sign_in(query):
     assert client().get(f'{BOOKINGS_URL}/events/4').status_code == 401
     query.assert_not_called()
+
+
+class BookingViewRefusalTests(unittest.TestCase):
+    @patch('app.routes.venue_bookings.supabase_request')
+    def test_viewing_a_booking_the_caller_may_not_see_passes_on_the_refusal(self, query):
+        """TC-RBV-060 / AC6: a booking the caller may not view is refused with the database's own reason."""
+        query.side_effect = [{'id': 'organiser'}, {'error': NOT_FOUND['error'], 'status': 404}]
+
+        response = client().get(f'{BOOKINGS_URL}/{BOOKING}', headers=HEADERS)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json, NOT_FOUND)

@@ -111,5 +111,50 @@ class ViewEventStaffTests(unittest.TestCase):
         self.assertEqual(response.json['users'], {VENUE_STAFF: 'vera.venue'})
 
 
+class ViewEventStaffLookupTests(unittest.TestCase):
+    def setUp(self):
+        self.client = create_app().test_client()
+        self.headers = {'Authorization': 'Bearer user-token'}
+
+    # TC-VES-006 (AC1, edge): an event identified by a UUID shows its staff, and an id that is
+    # neither a number nor a UUID is refused before the database is read.
+    @patch('app.routes.events.supabase_request')
+    def test_staff_are_shown_for_a_uuid_event_and_an_invalid_id_is_refused(self, query):
+        event_uuid = '44bc334e-6a1f-4c2b-9d3e-5f7a8b9c0d1e'
+        assigned = {
+            'event_id': event_uuid,
+            'venue_staff_id': VENUE_STAFF,
+            'technical_support_id': TECHNICAL_SUPPORT,
+            'safety_officer_id': SAFETY_OFFICER,
+        }
+        query.side_effect = [USER, [assigned]]
+
+        response = self.client.get(f'/api/events/{event_uuid}', headers=self.headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['event'], assigned)
+
+        query.side_effect = [USER]
+        response = self.client.get('/api/events/not-an-event', headers=self.headers)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn('event', response.json)
+        self.assertEqual(query.call_count, 3)
+
+    # TC-VES-007 (AC1, edge): a staff account with neither a name nor an email is left out
+    # rather than shown blank.
+    @patch('app.routes.users.supabase_request')
+    def test_staff_account_without_a_name_or_email_is_left_out(self, query):
+        query.side_effect = [USER, [
+            {'user_id': VENUE_STAFF, 'name': 'Vera Venue', 'email': 'vera@example.com'},
+            {'user_id': TECHNICAL_SUPPORT, 'name': None, 'email': None},
+        ]]
+
+        response = self.client.get(f'/api/users?ids={VENUE_STAFF},{TECHNICAL_SUPPORT}', headers=self.headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['users'], {VENUE_STAFF: 'Vera Venue'})
+
+
 if __name__ == '__main__':
     unittest.main()

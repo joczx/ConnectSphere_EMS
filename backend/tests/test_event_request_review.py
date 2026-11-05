@@ -6,10 +6,13 @@ Browser rendering and live database delivery require separate acceptance checks.
 """
 from unittest.mock import Mock, patch
 import pytest
+import unittest
 from flask import Flask
 from app.schemas import event_request as request_schema
 from app.schemas import event_request_review as review
 from app.routes.event_requests import event_requests_bp
+from app.routes import event_requests as routes
+from app.services import event_request_service as service
 from app.services import db
 from app.services import event_request_review_service as review_service
 from test_create_submit_event_request import valid_payload
@@ -105,3 +108,38 @@ def test_ac5_empty_status_update_must_not_confirm_success(review_http):
     response = http.post('/api/event-requests/42/review', json={'outcome': 'approved'})
     assert response.status_code == 409
     assert 'message' not in response.json
+
+
+class ReviewQueueTests(unittest.TestCase):
+    """What reaches an Event Coordinator for review, and a review sent without its details."""
+
+    # TC-RER-035 (AC3): A review sent without a JSON body is refused before a reviewer is looked up.
+    def test_review_without_json_is_refused_before_a_reviewer_is_looked_up(self):
+        with Flask(__name__).test_request_context(method='POST'), \
+                patch.object(routes, 'authenticated_user') as reviewer, \
+                patch.object(routes, 'review_event_request') as review_request, \
+                self.assertRaises(service.EventRequestError) as caught:
+            routes.review(42)
+
+        self.assertEqual(caught.exception.message, 'Send the review outcome and comments as JSON.')
+        reviewer.assert_not_called()
+        review_request.assert_not_called()
+
+    # TC-RER-036 (AC1): The review queue can be narrowed to one organiser's submitted requests,
+    # and an unknown status is refused before the database is read.
+    def test_review_queue_narrows_to_one_organiser_and_refuses_an_unknown_status(self):
+        organiser = valid_payload()['event_organiser_id']
+        stored = [{'event_request_id': 42, 'status': 'submitted'}]
+        table = Mock()
+        for method in ('select', 'eq', 'order'):
+            getattr(table, method).return_value = table
+        table.execute.return_value.data = stored
+
+        with patch.object(service, '_execute', side_effect=lambda operation, **kwargs: operation(table).data):
+            self.assertEqual(service.list_event_requests(organiser, 'submitted'), stored)
+            with self.assertRaises(service.EventRequestError):
+                service.list_event_requests(status='awaiting_review')
+
+        self.assertEqual([call.args for call in table.eq.call_args_list],
+                         [('event_organiser_id', organiser), ('status', 'submitted')])
+        table.execute.assert_called_once()

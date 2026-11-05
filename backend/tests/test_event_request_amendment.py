@@ -5,6 +5,7 @@ Supabase.
 """
 
 import pytest
+import unittest
 from unittest.mock import Mock, patch
 from flask import Flask
 
@@ -12,6 +13,8 @@ from app.schemas import event_request as schema
 from app.routes import event_requests as routes
 from app.services.event_request_service import EventRequestError
 from app.services import event_request_workflow as workflow
+from app.services import event_request_review_service as reviews
+from app.services import event_request_service as service
 from app.services.event_request_workflow import _split_note, can_amend
 
 
@@ -205,3 +208,35 @@ def test_amended_request_can_be_resubmitted_for_review(monkeypatch):
     assert was_resubmission is True
     find_blocking_errors.assert_called_once_with(amended)
     mark_submitted.assert_called_once_with(42)
+
+
+class AmendmentResubmissionTests(unittest.TestCase):
+    """Only a request sent back by the Coordinator is amended, and it is resubmitted only when complete."""
+
+    RETURNED = {'event_request_id': 42, 'status': 'rejected', 'event_organiser_id': '8c2d7e15-4b93-4a06-8f21-6e0b3d9a7c54'}
+
+    # TC-AER-018: Check that an amended request still missing details cannot be resubmitted.
+    def test_amended_request_missing_details_cannot_be_resubmitted(self):
+        missing = {'purpose': 'Purpose is required.'}
+
+        with patch.object(service, 'require_event_request', return_value=self.RETURNED), \
+                patch.object(service, 'find_blocking_errors', return_value=missing), \
+                patch.object(service, 'mark_submitted') as submit, \
+                self.assertRaises(EventRequestError) as caught:
+            workflow.send_for_review(42)
+
+        self.assertEqual(caught.exception.errors, missing)
+        submit.assert_not_called()
+
+    # TC-AER-019: Check that only a request sent back by the Coordinator records an amendment; a draft edit does not.
+    def test_only_a_returned_request_records_an_amendment(self):
+        changes = {'event_name': {'from': 'Old name', 'to': 'New name'}}
+        for existing, expected in (({**self.RETURNED, 'status': 'draft'}, None), (self.RETURNED, {'amendment_id': 9})):
+            with self.subTest(status=existing['status']), \
+                    patch.object(service, 'require_event_request', return_value=existing), \
+                    patch.object(service, 'apply_edit', return_value=({**existing, 'event_name': 'New name'}, changes)), \
+                    patch.object(reviews, 'execute_on', return_value=[{'amendment_id': 9}]) as record:
+                row, amendment = workflow.edit(42, {'event_name': 'New name', 'note': 'Renamed as asked.'})
+                self.assertEqual(row['event_name'], 'New name')
+                self.assertEqual(amendment, expected)
+                self.assertEqual(record.called, expected is not None)

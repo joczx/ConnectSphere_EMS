@@ -1,8 +1,11 @@
 """Unit tests for bearer-token verification and authentication failures."""
 
 from unittest.mock import MagicMock
+from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 import io
+import json
+import unittest
 
 import pytest
 from flask import Flask
@@ -125,3 +128,48 @@ def test_store_error_uses_safe_default_messages():
     assert StoreError(401).to_dict() == {"error": "Please sign in again."}
     assert StoreError(503).to_dict() == {"error": "Event service is temporarily unavailable."}
     assert StoreError(403, "Access denied", code="42501").code == "42501"
+
+
+SUPABASE_ENV = {"SUPABASE_URL": "https://example.test", "SUPABASE_ANON_KEY": "test-key"}
+SIGN_IN = "/auth/v1/token?grant_type=password"
+CREDENTIALS = {"email": "alex@example.com", "password": "correct-horse"}
+
+
+class SignInRequestTests(unittest.TestCase):
+    """How a sign-in reaches Supabase Auth and how a refusal comes back (AC1, AC3)."""
+
+    def setUp(self):
+        environment = patch.dict("os.environ", SUPABASE_ENV)
+        environment.start()
+        self.addCleanup(environment.stop)
+        transport = patch("app.services.event_store.urlopen")
+        self.urlopen = transport.start()
+        self.addCleanup(transport.stop)
+
+    # TC-AUTH-038: Sign-in credentials are posted as JSON, and an empty reply from Supabase Auth is not an error.
+    def test_sign_in_posts_the_credentials_and_accepts_an_empty_reply(self):
+        self.urlopen.return_value.__enter__.return_value = io.BytesIO(b"")
+
+        self.assertEqual(event_store.supabase_request(SIGN_IN, payload=CREDENTIALS, method="POST"), [])
+
+        sent = self.urlopen.call_args.args[0]
+        self.assertEqual(sent.get_method(), "POST")
+        self.assertEqual(sent.get_header("Prefer"), "return=representation")
+        self.assertEqual(json.loads(sent.data), CREDENTIALS)
+
+    # TC-AUTH-039: A refused sign-in keeps Supabase's error code for the app, but never its wording.
+    def test_refused_sign_in_keeps_the_error_code_but_not_the_wording(self):
+        for body, code in (
+            (b'{"code": "invalid_credentials", "message": "Invalid login credentials"}', "invalid_credentials"),
+            (b'["unexpected"]', None),
+            (b"<html>Bad request</html>", None),
+        ):
+            with self.subTest(body=body):
+                self.urlopen.side_effect = HTTPError(
+                    "https://example.test" + SIGN_IN, 400, "Bad Request", {}, io.BytesIO(body)
+                )
+                with self.assertRaises(StoreError) as caught:
+                    event_store.supabase_request(SIGN_IN, payload=CREDENTIALS, method="POST")
+                self.assertEqual(caught.exception.status, 401)
+                self.assertEqual(caught.exception.code, code)
+                self.assertEqual(caught.exception.message, "Please sign in again.")
