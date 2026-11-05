@@ -51,7 +51,9 @@ test('shows the latest event information after it changes', async ({ page, reque
 
   await page.getByRole('button', { name: 'Refresh' }).click();
 
-  await expect(eventCard(page, data.open)).toContainText(`Registration opens: ${registrationDate(opens.toISO())}`);
+  const card = eventCard(page, data.open);
+  await expect(card.getByText('Registration opens', { exact: true })).toBeVisible();
+  await expect(card.getByText(registrationDate(opens.toISO()), { exact: true })).toBeVisible();
 });
 
 // E2E-ATT-004 (AC4): cancelled and closed events are not displayed.

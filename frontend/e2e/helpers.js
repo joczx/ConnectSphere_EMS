@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { expect } from '@playwright/test';
 import { DateTime } from 'luxon';
 
+const apiOrigin = process.env.E2E_API_ORIGIN || 'http://127.0.0.1:5000';
+
 export const account = role => {
   const key = 'INTEGRATION_' + role.toUpperCase().replaceAll(' ', '_');
   return { email: process.env[`${key}_EMAIL`], password: process.env[`${key}_PASSWORD`] };
@@ -59,9 +61,9 @@ export const eventCard = (page, event) =>
 
 // Calls the Flask API directly as `role`, for arranging a step a test is not about.
 export async function apiAs(request, role, method, path, data) {
-  const login = await request.post('http://127.0.0.1:5000/api/login', { data: account(role) });
+  const login = await request.post(`${apiOrigin}/api/login`, { data: account(role) });
   const { access_token: token } = await login.json();
-  const response = await request.fetch('http://127.0.0.1:5000' + path, {
+  const response = await request.fetch(apiOrigin + path, {
     method, data, headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok()) throw new Error(`${method} ${path}: ${response.status()} ${await response.text()}`);

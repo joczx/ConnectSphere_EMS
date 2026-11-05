@@ -135,3 +135,14 @@ def test_registration_submits_details_using_authenticated_identity(status, messa
     assert response.json == {'registration': {'status': status}, 'message': message}
     rpc.assert_called_once_with('/rest/v1/rpc/register_for_event', token='verified', method='POST',
         payload={'p_event_id': 1, **{'p_' + k: v for k, v in attendee_details().items()}})
+
+@pytest.mark.parametrize('result', [[], {}], ids=['non-object-result', 'missing-registration'])
+def test_registration_without_record_does_not_invent_success_confirmation(result):
+    client = create_app().test_client()
+    with patch('app.routes.events.supabase_request', return_value={'id': 'attendee'}), \
+         patch('app.services.registration_service.supabase_request', return_value=result):
+        response = client.post('/api/events/1/registrations', json=attendee_details(),
+                               headers={'Authorization': 'Bearer verified'})
+    assert response.status_code == 200
+    assert response.json == result
+    assert 'You are registered' not in response.get_data(as_text=True)

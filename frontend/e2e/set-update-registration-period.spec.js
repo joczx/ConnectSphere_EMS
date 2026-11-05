@@ -64,8 +64,10 @@ test('sets the period and waiting list, and Attendees see the change', async ({ 
     await signIn(page, 'Attendee');
     await openCatalogue(page);
     const card = eventCard(page, data.not_open);
-    await expect(card).toContainText(`Registration opens: ${registrationDate(opens.toISO())}`);
-    await expect(card).toContainText(`Registration closes: ${registrationDate(closes.toISO())}`);
+    await expect(card.getByText('Registration opens', { exact: true })).toBeVisible();
+    await expect(card.getByText(registrationDate(opens.toISO()), { exact: true })).toBeVisible();
+    await expect(card.getByText('Registration closes', { exact: true })).toBeVisible();
+    await expect(card.getByText(registrationDate(closes.toISO()), { exact: true })).toBeVisible();
     await expect(card).toContainText('Waiting list: Enabled');
     await expect(card).toContainText('Registration is open.');
     await expect(card.getByRole('button', { name: /^Register/ })).toBeEnabled();

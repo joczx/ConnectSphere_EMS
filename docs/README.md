@@ -1,5 +1,7 @@
 # Project documentation
 
+- [Automatic withdrawal after event cancellation: migration and tests](event-cancellation-registration.md)
+
 - [Registration stories: unit-test files, case counts and run commands](registration-unit-tests.md)
 - [SCRUM-32: attendee catalogue integration tests and findings](attendee-catalogue-integration-tests.md)
 - [SCRUM-33: registration integration tests and case mapping](event-registration-integration-tests.md)

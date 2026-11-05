@@ -103,3 +103,37 @@ def test_supabase_missing_credentials_and_outside_request(monkeypatch):
     with pytest.raises(RuntimeError, match='SUPABASE_URL'):
         supabase_client.get_supabase()
     assert supabase_client._bearer_token() is None
+
+
+def test_edit_without_version_saves_and_records_activity(monkeypatch, existing):
+    updated = {**existing, 'event_name': 'New'}
+    query = Mock(return_value=[updated])
+    audit = Mock(return_value={'activity_id': 7})
+    monkeypatch.setattr(service, 'supabase_request', query)
+    monkeypatch.setattr(service, '_record_activity', audit)
+    row, activity = service.update_event(1, {'event_name': 'New'}, 'token')
+    assert row == updated
+    assert activity == {'activity_id': 7}
+    assert query.call_args.args == ('/rest/v1/events?event_id=eq.1',)
+    assert query.call_args.kwargs['method'] == 'PATCH'
+    assert query.call_args.kwargs['payload']['event_name'] == 'New'
+    assert query.call_args.kwargs['payload']['updated_at']
+    assert audit.call_args.args[2] == {'event_name': {'from': 'Old', 'to': 'New'}}
+
+
+@pytest.mark.parametrize('version', [None, 'unchanged-version'])
+def test_empty_write_without_newer_version_is_permission_refusal(monkeypatch, existing, version):
+    existing['updated_at'] = 'unchanged-version'
+    loader = Mock(return_value=existing)
+    query = Mock(return_value=[])
+    audit = Mock()
+    monkeypatch.setattr(service, 'load_event', loader)
+    monkeypatch.setattr(service, 'supabase_request', query)
+    monkeypatch.setattr(service, '_record_activity', audit)
+    with pytest.raises(service.EventError) as caught:
+        service.update_event(1, {'event_name': 'New'}, 'token', expected_updated_at=version)
+    assert caught.value.status == 403
+    assert not caught.value.stale
+    assert 'permission' in caught.value.message
+    assert loader.call_count == (2 if version else 1)
+    audit.assert_not_called()
